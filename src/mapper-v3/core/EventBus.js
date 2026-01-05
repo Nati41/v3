@@ -148,6 +148,8 @@ export const Events = {
     FIELD_MOVED: 'field:moved',
     FIELD_RESIZED: 'field:resized',
     FIELD_MAPPED: 'field:mapped',  // When unmapped field gets position
+    FIELD_LOCATE: 'field:locate',  // V3.2: Request to scroll/highlight a field
+    FIELD_REVIEW_REQUESTED: 'field:reviewRequested',  // V3.2: Open review screen
 
     // Radio Group events (V2 compatibility)
     RADIO_GROUP_CREATED: 'radioGroup:created',

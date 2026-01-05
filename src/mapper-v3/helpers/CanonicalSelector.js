@@ -187,23 +187,36 @@ export const CONTEXT_OPTIONS = [
 
 // Format hints for common field types
 export const FORMAT_HINTS = {
-    id_number: { format: 'israeli_id', placeholder: '9 ספרות', pattern: '^\\d{9}$' },
-    birth_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date' },
-    start_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date' },
-    end_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date' },
-    signature_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date' },
-    phone: { format: 'phone_il', placeholder: '0X-XXXXXXX', type: 'tel' },
-    phone_mobile: { format: 'phone_mobile_il', placeholder: '05X-XXXXXXX', type: 'tel' },
-    phone_landline: { format: 'phone_il', placeholder: '0X-XXXXXXX', type: 'tel' },
-    email: { format: 'email', placeholder: 'email@example.com', type: 'email' },
-    zip_code: { format: 'zip_il', placeholder: '7 ספרות', pattern: '^\\d{7}$' },
-    bank_account: { format: 'numeric', placeholder: 'מספרים בלבד' },
-    bank_branch: { format: 'numeric', placeholder: '3 ספרות', pattern: '^\\d{3}$' },
-    bank_code: { format: 'numeric', placeholder: '2 ספרות', pattern: '^\\d{2}$' },
-    company_id: { format: 'israeli_company', placeholder: 'ח.פ / ע.מ', pattern: '^\\d{9}$' },
-    salary: { format: 'currency_ils', placeholder: '₪' },
-    salary_gross: { format: 'currency_ils', placeholder: '₪' },
-    salary_net: { format: 'currency_ils', placeholder: '₪' }
+    // ID Numbers
+    id_number: { format: 'israeli_id', placeholder: '9 ספרות', pattern: '^\\d{9}$', boxCount: 9, structure: 'boxes' },
+    passport_number: { format: 'passport', placeholder: 'מספר דרכון', boxCount: 9, structure: 'boxes' },
+    company_id: { format: 'israeli_company', placeholder: 'ח.פ / ע.מ', pattern: '^\\d{9}$', boxCount: 9, structure: 'boxes' },
+
+    // Dates
+    birth_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date', boxCount: 8, structure: 'boxes' },
+    start_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date', boxCount: 8, structure: 'boxes' },
+    end_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date', boxCount: 8, structure: 'boxes' },
+    signature_date: { format: 'DD/MM/YYYY', placeholder: 'DD/MM/YYYY', type: 'date', boxCount: 8, structure: 'boxes' },
+
+    // Phone Numbers
+    phone: { format: 'phone_il', placeholder: '0X-XXXXXXX', type: 'tel', boxCount: 10, structure: 'boxes' },
+    phone_mobile: { format: 'phone_mobile_il', placeholder: '05X-XXXXXXX', type: 'tel', boxCount: 10, structure: 'boxes' },
+    phone_landline: { format: 'phone_il', placeholder: '0X-XXXXXXX', type: 'tel', boxCount: 10, structure: 'boxes' },
+    fax: { format: 'phone_il', placeholder: 'פקס', type: 'tel', boxCount: 10, structure: 'boxes' },
+
+    // Address
+    zip_code: { format: 'zip_il', placeholder: '7 ספרות', pattern: '^\\d{7}$', boxCount: 7, structure: 'boxes' },
+
+    // Bank Details
+    bank_account: { format: 'numeric', placeholder: 'מספרים בלבד', boxCount: 9, structure: 'boxes' },
+    bank_branch: { format: 'numeric', placeholder: '3 ספרות', pattern: '^\\d{3}$', boxCount: 3, structure: 'boxes' },
+    bank_code: { format: 'numeric', placeholder: '2 ספרות', pattern: '^\\d{2}$', boxCount: 2, structure: 'boxes' },
+
+    // Text fields (no boxes)
+    email: { format: 'email', placeholder: 'email@example.com', type: 'email', structure: 'text' },
+    salary: { format: 'currency_ils', placeholder: '₪', structure: 'text' },
+    salary_gross: { format: 'currency_ils', placeholder: '₪', structure: 'text' },
+    salary_net: { format: 'currency_ils', placeholder: '₪', structure: 'text' }
 };
 
 // Categories for radio/checkbox groups
@@ -333,6 +346,16 @@ export class CanonicalSelector {
         // Date fields
         if (canonical.includes('date') || canonical.includes('birth')) return 'date';
 
+        // Number fields - IDs, phone numbers, bank details, etc.
+        const numberFields = [
+            'id_number', 'passport_number', 'company_id',
+            'phone', 'phone_mobile', 'phone_landline', 'mobile', 'fax',
+            'bank_code', 'bank_branch', 'bank_account', 'account_number',
+            'zip_code', 'house_number', 'apartment',
+            'children_count', 'amount', 'number', 'tax_credit_points'
+        ];
+        if (numberFields.includes(canonical)) return 'number';
+
         // Checkbox/radio fields (options within categories)
         if (canonical.startsWith('gender_') ||
             canonical.startsWith('marital_') ||
@@ -340,6 +363,10 @@ export class CanonicalSelector {
             canonical.startsWith('health_fund_')) {
             return 'checkbox';
         }
+
+        // Radio group categories (the group itself, not options)
+        const radioCategories = ['gender', 'marital_status', 'income_type', 'health_fund', 'resident_status'];
+        if (radioCategories.includes(canonical)) return 'radio';
 
         // Signature
         if (canonical === 'signature') return 'signature';

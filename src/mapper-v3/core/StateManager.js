@@ -281,7 +281,7 @@ export class StateManager {
     /**
      * Add a new field
      *
-     * Field Schema (V3 with Semantic):
+     * Field Schema (V3.2 with Draft Flow):
      * - id: Unique field ID
      * - type: 'text' | 'number' | 'date' | 'checkbox' | 'radio' | 'signature'
      * - page: Page number
@@ -293,12 +293,20 @@ export class StateManager {
      * - context: Context hint (e.g., 'employee', 'employer', 'spouse')
      * - category: Category for enum fields (e.g., 'marital_status', 'gender')
      * - format: Format hint for validation (e.g., 'DD/MM/YYYY', 'phone_il')
+     *
+     * V3.2 Draft Flow fields:
+     * - status: 'draft' | 'reviewed' | 'complete' (default: 'complete' for backward compat)
+     * - detectedType: Auto-detected field type
+     * - detectedStructure: { intent, boxCount, confidence, reason }
      */
     addField(fieldData) {
         const id = `fld_${++this.state.counters.field}_${Date.now()}`;
 
         // Default context to 'employee' if not specified (V3 requirement)
         const context = fieldData.context || 'employee';
+
+        // V3.2: Default status to 'complete' for backward compatibility
+        const status = fieldData.status || 'complete';
 
         const field = {
             id,
@@ -313,8 +321,13 @@ export class StateManager {
             context: context,  // Always set, defaults to 'employee'
             category: fieldData.category || null,
             format: fieldData.format || null,
+            // V3.2 Draft flow fields
+            status: status,
+            detectedType: fieldData.detectedType || null,
+            detectedStructure: fieldData.detectedStructure || null,
             ...fieldData,
-            context: context  // Ensure context is always set even if spread overwrites
+            context: context,  // Ensure context is always set even if spread overwrites
+            status: status    // Ensure status is always set
         };
 
         const newFields = [...this.state.fields, field];
@@ -466,6 +479,84 @@ export class StateManager {
      */
     getMappedFields() {
         return this.getCurrentPageFields().filter(f => f.isMapped && f.bbox);
+    }
+
+    // ============ V3.2 DRAFT FLOW HELPERS ============
+
+    /**
+     * Get all draft fields (pending review)
+     * @param {number} page - Optional page filter (null = all pages)
+     * @returns {Array} Fields with status 'draft'
+     */
+    getDraftFields(page = null) {
+        let fields = this.state.fields.filter(f => f.status === 'draft');
+        if (page !== null) {
+            fields = fields.filter(f => f.page === page);
+        }
+        return fields;
+    }
+
+    /**
+     * Get draft fields for current page
+     */
+    getCurrentPageDraftFields() {
+        return this.getDraftFields(this.state.document.currentPage);
+    }
+
+    /**
+     * Check if there are any draft fields pending review
+     */
+    hasDraftFields() {
+        return this.state.fields.some(f => f.status === 'draft');
+    }
+
+    /**
+     * Mark a field as reviewed (transition from draft to reviewed)
+     * @param {string} fieldId - Field ID
+     * @param {Object} reviewData - Data from review { label_he, label_en, type, ... }
+     */
+    markFieldReviewed(fieldId, reviewData = {}) {
+        return this.updateField(fieldId, {
+            ...reviewData,
+            status: 'reviewed'
+        });
+    }
+
+    /**
+     * Mark a field as complete (fully configured with semantic data)
+     * @param {string} fieldId - Field ID
+     * @param {Object} semanticData - Semantic data { canonical, context, category, format }
+     */
+    markFieldComplete(fieldId, semanticData = {}) {
+        return this.updateField(fieldId, {
+            ...semanticData,
+            status: 'complete'
+        });
+    }
+
+    /**
+     * Batch mark multiple fields as reviewed
+     * @param {Array} fieldUpdates - Array of { fieldId, label_he, label_en, type, ... }
+     */
+    batchMarkFieldsReviewed(fieldUpdates) {
+        const updates = {};
+        const newFields = [...this.state.fields];
+
+        for (const { fieldId, ...data } of fieldUpdates) {
+            const index = newFields.findIndex(f => f.id === fieldId);
+            if (index !== -1) {
+                newFields[index] = {
+                    ...newFields[index],
+                    ...data,
+                    status: 'reviewed'
+                };
+            }
+        }
+
+        updates['fields'] = newFields;
+        this.batch(updates, true);
+
+        console.log(`[StateManager] Batch marked ${fieldUpdates.length} fields as reviewed`);
     }
 
     // ============ SELECTION ============

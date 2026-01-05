@@ -36,6 +36,7 @@ import { labelOverlay } from '../overlay/LabelOverlay.js';
 import { autoBoxer } from './AutoBoxer.js';
 import { bboxRefiner } from './BboxRefiner.js';
 import { REFINER_CONFIG } from './RefinerConfig.js';
+import { canonicalSelector } from '../helpers/CanonicalSelector.js';
 
 export class DrawController {
     constructor() {
@@ -1216,20 +1217,73 @@ export class DrawController {
             this.pendingFieldId = null;
 
         } else {
-            // Normal flow: Create new field → THEN open dialog for semantic data
-            field = state.addField({
-                type: fieldType,
-                bbox: bbox,
-                isMapped: true,
-                ...fieldData
-            });
+            // ═══════════════════════════════════════════════════════════════
+            // NEW FLOW (V3.2): Create DRAFT field with auto-detection
+            // NO POPUP - semantic data will be collected in Review screen
+            // ═══════════════════════════════════════════════════════════════
 
-            console.log('[DrawController] Created field:', field.id, 'bbox:', bbox);
+            // Auto-detect structure using FieldIntentResolver
+            const detectedStructure = this._autoDetectStructure(fieldType, bbox);
 
-            // V3.1: REQUIRE canonical via dialog for ALL fields
-            // Open NameConfirmDialog to collect semantic data
-            this._openCanonicalDialog(field, fieldType);
-            return;  // Dialog handles the rest
+            // V3.2: Check if we have pending field data from label selection
+            if (this.pendingFieldData) {
+                // Create draft with label data from 🎯 selection
+                field = state.addField({
+                    type: this.pendingFieldData.type || fieldType,
+                    bbox: bbox,
+                    isMapped: true,
+                    status: 'draft',
+                    // Label data from selection
+                    label_he: this.pendingFieldData.label_he,
+                    label_en: this.pendingFieldData.label_en,
+                    // Semantic data from auto-detection
+                    canonical: this.pendingFieldData.canonical,
+                    context: this.pendingFieldData.context,
+                    category: this.pendingFieldData.category,
+                    format: this.pendingFieldData.format,
+                    // Box count and structure from CanonicalSelector
+                    boxCount: this.pendingFieldData.boxCount,
+                    structure: this.pendingFieldData.structure || detectedStructure,
+                    // Structure detection
+                    detectedType: this.pendingFieldData.type || fieldType,
+                    detectedStructure: detectedStructure,
+                    source: this.pendingFieldData.source,
+                    ...fieldData
+                });
+
+                const typeLabel = this._getTypeLabel(this.pendingFieldData.type || fieldType);
+                console.log('[DrawController] Created DRAFT field with label:', field.id, this.pendingFieldData.label_he, 'boxCount:', this.pendingFieldData.boxCount);
+
+                // Show feedback with field name and box count if applicable
+                let toastMsg = `✓ ${this.pendingFieldData.label_he} (${typeLabel})`;
+                if (this.pendingFieldData.boxCount) {
+                    toastMsg += ` - ${this.pendingFieldData.boxCount} תיבות`;
+                }
+                this._showToast(toastMsg, 'success');
+
+                // Clear pending data
+                this.pendingFieldData = null;
+
+                // V3.2: Return to label selection mode for next field
+                this._returnToLabelSelectionMode();
+
+            } else {
+                // No pending label - create draft with auto-detection only
+                field = state.addField({
+                    type: fieldType,
+                    bbox: bbox,
+                    isMapped: true,
+                    status: 'draft',
+                    detectedType: fieldType,
+                    detectedStructure: detectedStructure,
+                    ...fieldData
+                });
+
+                console.log('[DrawController] Created DRAFT field (no label):', field.id, 'detected:', detectedStructure);
+
+                // Show visual feedback
+                this._showDraftFeedback(field, detectedStructure);
+            }
         }
 
         // Reset state
@@ -1334,15 +1388,16 @@ export class DrawController {
     }
 
     // ============ NAME CAPTURE FLOW ============
+    // V3.2: Integrated flow - Label selection → Draw → Review (NO POPUP)
 
     /**
      * Start field name capture using click-select (click first word, click last word)
-     * This is the new unified way to capture field names
+     * V3.2: NO POPUP - stores pending field data for next draw
      */
     startFieldNameCapture() {
-        console.log('[DrawController] Starting field name capture with click-select');
+        console.log('[DrawController] Starting field name capture with click-select (V3.2 - no popup)');
 
-        labelOverlay.startFieldNameSelection(async (result) => {
+        labelOverlay.startFieldNameSelection((result) => {
             if (!result || !result.text) {
                 console.log('[DrawController] Field name capture cancelled');
                 return;
@@ -1351,50 +1406,191 @@ export class DrawController {
             const hebrewName = result.text;
             const englishName = fieldNamer.hebrewToEnglish(hebrewName);
 
-            console.log('[DrawController] Field name selected:', hebrewName);
+            console.log('[DrawController] Field name selected:', hebrewName, '→', englishName);
 
-            // Show confirmation dialog
-            try {
-                const dialogResult = await nameConfirmDialog.show({
-                    hebrewName: hebrewName,
-                    englishName: englishName,
-                    source: 'click-select',
-                    fieldType: 'text'
-                });
+            // V3.2: Auto-detect field type and format using CanonicalSelector
+            const detectedInfo = this._detectFieldInfoFromLabel(hebrewName);
 
-                if (dialogResult) {
-                    // User confirmed - create the unmapped field with semantic data
-                    const field = state.addUnmappedField({
-                        label_he: dialogResult.label_he,
-                        label_en: dialogResult.label_en,
-                        type: dialogResult.type,
-                        source: 'click-select',
-                        // V3 Semantic fields
-                        canonical: dialogResult.canonical || null,
-                        context: dialogResult.context || null,
-                        category: dialogResult.category || null,
-                        format: dialogResult.format || null
-                    });
+            // Store pending field data (NOT creating field yet - will create on draw)
+            this.pendingFieldData = {
+                label_he: hebrewName,
+                label_en: englishName,
+                type: detectedInfo.type,
+                canonical: detectedInfo.canonical,
+                context: detectedInfo.context,
+                category: detectedInfo.category,
+                format: detectedInfo.format,
+                boxCount: detectedInfo.boxCount,
+                structure: detectedInfo.structure,
+                source: 'click-select'
+            };
 
-                    // Store field ID for position mapping
-                    this.pendingFieldId = field.id;
+            console.log('[DrawController] Pending field data:', this.pendingFieldData);
 
-                    // Switch to appropriate draw tool
-                    const toolMap = {
-                        'text': Tools.DRAW_TEXT,
-                        'number': Tools.DRAW_TEXT,
-                        'date': Tools.DRAW_TEXT,
-                        'checkbox': Tools.DRAW_CHECKBOX,
-                        'signature': Tools.DRAW_TEXT
-                    };
-                    state.setTool(toolMap[dialogResult.type] || Tools.DRAW_TEXT);
+            // Switch to appropriate draw tool based on detected type
+            const toolMap = {
+                'text': Tools.DRAW_TEXT,
+                'number': Tools.DRAW_TEXT,
+                'date': Tools.DRAW_TEXT,
+                'checkbox': Tools.DRAW_CHECKBOX,
+                'radio': Tools.DRAW_RADIO,
+                'signature': Tools.DRAW_TEXT
+            };
+            state.setTool(toolMap[detectedInfo.type] || Tools.DRAW_TEXT);
 
-                    this._showToast(`עכשיו סמן את מיקום השדה "${dialogResult.label_he}"`, 'info');
-                }
-            } catch (error) {
-                console.error('[DrawController] Dialog error:', error);
-            }
+            // Show toast with detected info
+            const typeLabel = this._getTypeLabel(detectedInfo.type);
+            this._showToast(`נבחר: ${hebrewName} (${typeLabel}) - עכשיו צייר את השדה`, 'info');
         });
+    }
+
+    /**
+     * V3.2: Detect field info from Hebrew label using CanonicalSelector
+     * @param {string} hebrewText - Hebrew field name
+     * @returns {Object} Detected field info { type, canonical, context, category, format, boxCount, structure }
+     */
+    _detectFieldInfoFromLabel(hebrewText) {
+        // Use imported canonicalSelector
+        if (!canonicalSelector) {
+            console.warn('[DrawController] CanonicalSelector not available, using defaults');
+            return {
+                type: 'text',
+                canonical: null,
+                context: 'employee',
+                category: null,
+                format: null,
+                boxCount: null,
+                structure: 'text'
+            };
+        }
+
+        // Get canonical suggestion
+        const suggestions = canonicalSelector.suggestCanonical(hebrewText, 1);
+        const canonical = suggestions.length > 0 && suggestions[0].score >= 50
+            ? suggestions[0].canonical
+            : null;
+
+        // Detect type from canonical
+        let type = 'text';
+        if (canonical) {
+            type = canonicalSelector.detectFieldType(canonical) || 'text';
+        }
+
+        // Get format hint (includes boxCount and structure)
+        const formatHint = canonical ? canonicalSelector.getFormatHint(canonical) : null;
+
+        // Detect context
+        let context = canonical ? canonicalSelector.suggestContext(canonical) : null;
+        if (!context && canonicalSelector.detectContextFromLabel) {
+            context = canonicalSelector.detectContextFromLabel(hebrewText);
+        }
+        if (!context) {
+            context = 'employee'; // Default
+        }
+
+        // Detect category for enum fields
+        const category = canonical && canonicalSelector.getCategoryForCanonical
+            ? canonicalSelector.getCategoryForCanonical(canonical)
+            : null;
+
+        // Extract boxCount and structure from format hint
+        const boxCount = formatHint?.boxCount || null;
+        const structure = formatHint?.structure || 'text';
+
+        console.log(`[DrawController] Detected from "${hebrewText}":`, {
+            canonical, type, context, category,
+            format: formatHint?.format,
+            boxCount, structure
+        });
+
+        return {
+            type,
+            canonical,
+            context,
+            category,
+            format: formatHint?.format || null,
+            boxCount,
+            structure
+        };
+    }
+
+    /**
+     * V3.2: Get Hebrew label for field type
+     */
+    _getTypeLabel(type) {
+        const labels = {
+            'text': 'טקסט',
+            'number': 'מספר',
+            'date': 'תאריך',
+            'checkbox': 'Checkbox',
+            'radio': 'Radio',
+            'signature': 'חתימה'
+        };
+        return labels[type] || type;
+    }
+
+    /**
+     * V3.2: Clear pending field data
+     */
+    clearPendingFieldData() {
+        this.pendingFieldData = null;
+        console.log('[DrawController] Cleared pending field data');
+    }
+
+    /**
+     * V3.2: Return to label selection mode after drawing
+     * Allows continuous label→draw→label→draw flow
+     */
+    _returnToLabelSelectionMode() {
+        // Small delay to let the field creation complete
+        setTimeout(() => {
+            console.log('[DrawController] Returning to label selection mode');
+
+            // Restart label selection for next field
+            labelOverlay.startFieldNameSelection((result) => {
+                if (!result || !result.text) {
+                    console.log('[DrawController] Label selection ended');
+                    state.setTool(Tools.SELECT);
+                    return;
+                }
+
+                const hebrewName = result.text;
+                const englishName = fieldNamer.hebrewToEnglish(hebrewName);
+
+                console.log('[DrawController] Next field name selected:', hebrewName, '→', englishName);
+
+                // Auto-detect field info
+                const detectedInfo = this._detectFieldInfoFromLabel(hebrewName);
+
+                // Store pending field data
+                this.pendingFieldData = {
+                    label_he: hebrewName,
+                    label_en: englishName,
+                    type: detectedInfo.type,
+                    canonical: detectedInfo.canonical,
+                    context: detectedInfo.context,
+                    category: detectedInfo.category,
+                    format: detectedInfo.format,
+                    boxCount: detectedInfo.boxCount,
+                    structure: detectedInfo.structure,
+                    source: 'click-select'
+                };
+
+                // Switch to appropriate draw tool
+                const toolMap = {
+                    'text': Tools.DRAW_TEXT,
+                    'number': Tools.DRAW_TEXT,
+                    'date': Tools.DRAW_TEXT,
+                    'checkbox': Tools.DRAW_CHECKBOX,
+                    'radio': Tools.DRAW_RADIO,
+                    'signature': Tools.DRAW_TEXT
+                };
+                state.setTool(toolMap[detectedInfo.type] || Tools.DRAW_TEXT);
+
+                const typeLabel = this._getTypeLabel(detectedInfo.type);
+                this._showToast(`נבחר: ${hebrewName} (${typeLabel}) - צייר את השדה`, 'info');
+            });
+        }, 100);
     }
 
     /**
@@ -2181,6 +2377,98 @@ export class DrawController {
             eventBus.emit('radio:labelSelected', { text: '', source: 'error' });
             this._showToast('שגיאה בזיהוי טקסט', 'error');
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V3.2 DRAFT FLOW - Auto-detection without popup
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Auto-detect field structure using FieldIntentResolver
+     * @param {string} fieldType - Field type from tool
+     * @param {Array} bbox - Normalized bbox [x, y, w, h]
+     * @returns {Object} Detected structure { intent, boxCount, confidence }
+     */
+    _autoDetectStructure(fieldType, bbox) {
+        // Use global FieldIntentResolver (loaded in shared/)
+        if (typeof window.FieldIntentResolver === 'undefined') {
+            console.warn('[DrawController] FieldIntentResolver not available, using defaults');
+            return {
+                intent: fieldType === 'checkbox' ? 'checkbox' :
+                        fieldType === 'radio' ? 'radio' : 'flowText',
+                boxCount: null,
+                confidence: 0.5
+            };
+        }
+
+        // Convert bbox array to object format expected by resolver
+        const bboxObj = bbox ? {
+            x: bbox[0],
+            y: bbox[1],
+            width: bbox[2],
+            height: bbox[3]
+        } : null;
+
+        const result = window.FieldIntentResolver.resolveRenderIntent({
+            value: null,  // No value yet - detection based on bbox shape
+            fieldMeta: { type: fieldType },
+            bbox: bboxObj,
+            context: 'standalone'
+        });
+
+        return {
+            intent: result.intent,
+            boxCount: result.expectedLength,
+            confidence: result.confidence,
+            reason: result.reason
+        };
+    }
+
+    /**
+     * Show visual feedback for draft field (instead of popup)
+     * @param {Object} field - Created draft field
+     * @param {Object} structure - Detected structure
+     */
+    _showDraftFeedback(field, structure) {
+        // Build feedback message based on detected structure
+        let icon, message;
+
+        switch (structure.intent) {
+            case 'perGlyphBoxes':
+                icon = '📊';
+                message = structure.boxCount
+                    ? `${structure.boxCount} תיבות`
+                    : 'שדה תיבות';
+                break;
+            case 'checkbox':
+                icon = '☑️';
+                message = 'Checkbox';
+                break;
+            case 'radio':
+                icon = '🔘';
+                message = 'Radio';
+                break;
+            default:
+                icon = '📝';
+                message = 'טקסט';
+        }
+
+        // Show brief toast (1.5 seconds)
+        this._showToast(`${icon} ${message}`, 'success');
+
+        // Reset state and return to select mode
+        this.isDrawing = false;
+        state.setMode(Modes.IDLE);
+        state.setTool(Tools.SELECT);
+
+        // Select the created field
+        if (field) {
+            state.selectField(field.id);
+        }
+
+        eventBus.emit(Events.DRAW_END, { field, isDraft: true });
+
+        console.log(`[DrawController] Draft feedback: ${icon} ${message} (confidence: ${structure.confidence?.toFixed(2) || 'N/A'})`);
     }
 
     /**

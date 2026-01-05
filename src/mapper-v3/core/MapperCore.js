@@ -4,6 +4,7 @@
  */
 import { state, Tools, Modes } from './StateManager.js';
 import { eventBus, Events } from './EventBus.js';
+import { fieldReviewScreen } from '../ui/FieldReviewScreen.js';
 
 export class MapperCore {
     constructor() {
@@ -130,6 +131,12 @@ export class MapperCore {
             if (e.key === 'r' || e.key === 'R') {
                 eventBus.emit('tool:startRadioGroup');
             }
+
+            // V3.2: Shift+R = Open Review screen for draft fields
+            if (e.key === 'R' && e.shiftKey) {
+                e.preventDefault();
+                this.openReviewScreen();
+            }
         });
     }
 
@@ -151,6 +158,26 @@ export class MapperCore {
 
         eventBus.on(Events.FIELD_DELETED, (field) => {
             console.log('[MapperCore] Field deleted:', field.id);
+        });
+
+        // V3.2: Listen for review screen request
+        eventBus.on(Events.FIELD_REVIEW_REQUESTED, () => {
+            this.openReviewScreen();
+        });
+
+        // V3.2: Listen for page change - prompt review if drafts exist
+        eventBus.on(Events.PDF_PAGE_CHANGED, (data) => {
+            const oldPage = data.oldPage;
+            if (!oldPage) return; // First page load
+            const draftsOnOldPage = state.getDraftFields(oldPage);
+
+            if (draftsOnOldPage.length > 0) {
+                // Show toast to remind about pending drafts
+                eventBus.emit(Events.TOAST_SHOW, {
+                    message: `יש ${draftsOnOldPage.length} שדות לאישור בעמוד ${oldPage}. לחץ Shift+R לביקורת`,
+                    type: 'info'
+                });
+            }
         });
     }
 
@@ -232,6 +259,52 @@ export class MapperCore {
      */
     selectField(fieldId) {
         state.selectField(fieldId);
+    }
+
+    // ============ V3.2 DRAFT FLOW API ============
+
+    /**
+     * Open the field review screen
+     * @param {Object} options - Options
+     * @param {number} options.page - Filter by page (null = all pages)
+     * @returns {Promise<Object>} Result { approved, skipped, fields }
+     */
+    async openReviewScreen({ page = null } = {}) {
+        const draftCount = page !== null
+            ? state.getDraftFields(page).length
+            : state.getDraftFields().length;
+
+        if (draftCount === 0) {
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: 'אין שדות לאישור',
+                type: 'info'
+            });
+            return { approved: false, skipped: false, fields: [] };
+        }
+
+        // Initialize and show review screen
+        fieldReviewScreen.init();
+        const result = await fieldReviewScreen.show({ page });
+
+        console.log('[MapperCore] Review screen result:', result);
+        return result;
+    }
+
+    /**
+     * Check if there are draft fields pending review
+     * @returns {boolean}
+     */
+    hasDraftFields() {
+        return state.hasDraftFields();
+    }
+
+    /**
+     * Get count of draft fields
+     * @param {number} page - Optional page filter
+     * @returns {number}
+     */
+    getDraftCount(page = null) {
+        return state.getDraftFields(page).length;
     }
 
     // ============ RADIO GROUP API ============
