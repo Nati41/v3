@@ -1,0 +1,967 @@
+/**
+ * OverlayRenderer - Field overlay rendering for Mapper V3
+ * Ported from old mapper with correct coordinate conversion
+ */
+import { state, RadioGroupSteps } from '../core/StateManager.js';
+import { eventBus, Events } from '../core/EventBus.js';
+import { pdfEngine, PDF_DPI, CHECKBOX_SIZE, RADIO_SIZE } from './PDFEngine.js';
+
+export class OverlayRenderer {
+    constructor() {
+        this.overlayLayer = null;
+        this.drawingLayer = null;
+        this.fieldElements = new Map(); // fieldId -> DOM element
+        this.tableElements = new Map(); // tableId -> DOM element
+        this._pendingRenderFields = [];  // Queue for fields waiting for dimensions
+    }
+
+    /**
+     * Initialize the renderer
+     * @param {Object} options - Configuration
+     */
+    init(options = {}) {
+        this.options = {
+            layerId: 'overlay-layer',
+            drawingLayerId: 'drawing-layer',
+            ...options
+        };
+
+        this.overlayLayer = document.getElementById(this.options.layerId);
+        this.drawingLayer = document.getElementById(this.options.drawingLayerId);
+
+        if (!this.overlayLayer) {
+            console.warn('[OverlayRenderer] Overlay layer not found:', this.options.layerId);
+        }
+
+        // Listen for state changes
+        this._setupListeners();
+
+        console.log('[OverlayRenderer] Initialized');
+    }
+
+    /**
+     * Setup event listeners
+     */
+    _setupListeners() {
+        // Re-render on page change and update layer size
+        eventBus.on(Events.PDF_PAGE_CHANGED, () => {
+            this._updateLayerSize();
+            this.renderAll();
+        });
+
+        // Also update on PDF load
+        eventBus.on(Events.PDF_LOADED, () => {
+            this._updateLayerSize();
+            // Process any pending fields
+            this._processPendingFields();
+        });
+
+        // CRITICAL: Re-render tables on window resize
+        // This fixes the issue where tables move when browser window is resized
+        let resizeTimeout = null;
+        window.addEventListener('resize', () => {
+            // Debounce resize events
+            if (resizeTimeout) clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                console.log('[OverlayRenderer] Window resize detected - re-rendering');
+                this._updateLayerSize();
+                this.renderAll();
+            }, 150);
+        });
+
+        // Re-render when fields change
+        eventBus.on(Events.FIELD_CREATED, (field) => {
+            if (field.isMapped) {
+                this.renderField(field);
+            }
+        });
+
+        eventBus.on(Events.FIELD_UPDATED, (field) => {
+            if (field.isMapped) {
+                this.renderField(field);
+            }
+        });
+
+        eventBus.on(Events.FIELD_DELETED, (field) => {
+            this.removeField(field.id);
+        });
+
+        // Update selection styling
+        eventBus.on(Events.FIELD_SELECTED, ({ fieldId }) => {
+            this._updateSelection(fieldId);
+        });
+
+        eventBus.on(Events.FIELD_DESELECTED, ({ fieldId }) => {
+            this._updateSelection(null);
+        });
+
+        // ============ UNDO/REDO SUPPORT ============
+        // Re-render all fields when history changes (undo/redo)
+        eventBus.on(Events.HISTORY_UNDO, () => {
+            console.log('[OverlayRenderer] Undo detected - re-rendering all fields');
+            this.renderAll();
+        });
+
+        eventBus.on(Events.HISTORY_REDO, () => {
+            console.log('[OverlayRenderer] Redo detected - re-rendering all fields');
+            this.renderAll();
+        });
+
+        // ============ TABLE EVENTS ============
+        eventBus.on(Events.TABLE_CREATED, (table) => {
+            console.log('[OverlayRenderer] Table created:', table.tableId);
+            this.renderTable(table);
+        });
+
+        eventBus.on(Events.TABLE_UPDATED, (table) => {
+            console.log('[OverlayRenderer] Table updated:', table.tableId);
+            this.renderTable(table);
+        });
+
+        eventBus.on(Events.TABLE_DELETED, (table) => {
+            console.log('[OverlayRenderer] Table deleted:', table.tableId);
+            this.removeTable(table.tableId);
+        });
+
+        // Re-render tables on zoom change
+        eventBus.on(Events.ZOOM_CHANGED, () => {
+            this._updateLayerSize();
+            this.renderAll();
+        });
+    }
+
+    /**
+     * Process any pending fields that were queued before dimensions were available
+     */
+    _processPendingFields() {
+        if (this._pendingRenderFields.length === 0) return;
+
+        console.log(`[OverlayRenderer] Processing ${this._pendingRenderFields.length} pending fields`);
+
+        const fields = [...this._pendingRenderFields];
+        this._pendingRenderFields = [];
+
+        fields.forEach(field => {
+            this.renderField(field);
+        });
+    }
+
+    /**
+     * Render all fields for current page
+     */
+    renderAll() {
+        if (!this.overlayLayer) return;
+
+        // Clear existing overlays
+        this.clear();
+
+        // Check if PDF dimensions are available
+        const pdfDims = pdfEngine.getPdfPageDimensions();
+        if (!pdfDims) {
+            console.warn('[OverlayRenderer] No PDF dimensions available, deferring render');
+            return;
+        }
+
+        // Get fields for current page
+        const currentPage = state.get('document.currentPage');
+        const fields = state.get('fields').filter(f =>
+            f.isMapped &&
+            f.page === currentPage &&
+            (f.bbox || f.anchor)
+        );
+
+        console.log(`[OverlayRenderer] Rendering ${fields.length} fields for page ${currentPage}`);
+
+        fields.forEach(field => {
+            this.renderField(field);
+        });
+
+        // Also render tables for current page
+        this.renderAllTables();
+
+        // Also render radio builder circles if active
+        this.renderRadioBuilderCircles();
+    }
+
+    /**
+     * Render all tables for current page
+     */
+    renderAllTables() {
+        const currentPage = state.get('document.currentPage');
+        const tables = state.get('tables').filter(t => t.page === currentPage);
+
+        console.log(`[OverlayRenderer] Rendering ${tables.length} tables for page ${currentPage}`);
+
+        tables.forEach(table => {
+            this.renderTable(table);
+        });
+    }
+
+    /**
+     * Render a single table overlay
+     * Draws: table border, header line, column lines, row lines
+     * @param {Object} table - Table object from state
+     */
+    renderTable(table) {
+        if (!this.overlayLayer) return;
+
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) {
+            console.warn('[OverlayRenderer] Cannot render table - no PDF dimensions');
+            return;
+        }
+
+        // Remove existing element if any
+        this.removeTable(table.tableId);
+
+        // Skip incomplete tables
+        // CRITICAL: Only sampleRowBBox is REQUIRED (source of truth for geometry)
+        // headerRowBBox/headerBBox is OPTIONAL (only affects table bbox top)
+        if (!table.bbox || !table.sampleRowBBox) {
+            console.log('[OverlayRenderer] Skipping incomplete table (missing bbox or sampleRowBBox):', table.tableId);
+            return;
+        }
+
+        // Get headerRowBBox with backwards compatibility
+        const headerRowBBox = table.headerRowBBox || table.headerBBox;
+
+        // Create table container element
+        const tableEl = document.createElement('div');
+        tableEl.className = 'table-overlay';
+        tableEl.dataset.tableId = table.tableId;
+
+        // Get scale factors
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+        const layerWidth = Math.max(this.overlayLayer.offsetWidth, 1);
+        const layerHeight = Math.max(this.overlayLayer.offsetHeight, 1);
+        const scaleX = layerWidth / pdfW;
+        const scaleY = layerHeight / pdfH;
+
+        // Convert table bbox to screen coordinates
+        const tableScreen = this._tableCoordToScreen(table.bbox, pdfW, pdfH, scaleX, scaleY);
+
+        // Position table container
+        tableEl.style.cssText = `
+            position: absolute;
+            left: ${tableScreen.x}px;
+            top: ${tableScreen.y}px;
+            width: ${tableScreen.width}px;
+            height: ${tableScreen.height}px;
+            pointer-events: none;
+            z-index: 5;
+        `;
+
+        // ============ DRAW TABLE BORDER ============
+        const border = document.createElement('div');
+        border.className = 'table-border';
+        border.style.cssText = `
+            position: absolute;
+            inset: 0;
+            border: 2px solid #10b981;
+            background: rgba(16, 185, 129, 0.05);
+            pointer-events: none;
+        `;
+        tableEl.appendChild(border);
+
+        // ============ DRAW HEADER LINE (OPTIONAL) ============
+        // Only draw if headerRowBBox is defined (it's optional now)
+        if (headerRowBBox) {
+            const headerScreen = this._tableCoordToScreen(headerRowBBox, pdfW, pdfH, scaleX, scaleY);
+
+            // Header line is at the bottom of header bbox
+            const headerLineY = (headerScreen.y + headerScreen.height) - tableScreen.y;
+
+            // Header fill - subtle green tint
+            const headerFill = document.createElement('div');
+            headerFill.className = 'table-header-fill';
+            headerFill.style.cssText = `
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: ${headerLineY}px;
+                background: rgba(16, 185, 129, 0.15);
+                pointer-events: none;
+                z-index: 1;
+            `;
+            tableEl.appendChild(headerFill);
+
+            // Header line - green separator
+            const headerLine = document.createElement('div');
+            headerLine.className = 'table-header-line';
+            headerLine.style.cssText = `
+                position: absolute;
+                left: 0;
+                top: ${headerLineY}px;
+                width: 100%;
+                height: 2px;
+                background: #10b981;
+                pointer-events: none;
+                z-index: 2;
+            `;
+            tableEl.appendChild(headerLine);
+        }
+
+        // ============ DRAW COLUMN LINES ============
+        if (table.columns && table.columns.length > 0) {
+            table.columns.forEach((col, index) => {
+                if (!col.bbox) return;
+
+                const colScreen = this._tableCoordToScreen(col.bbox, pdfW, pdfH, scaleX, scaleY);
+                const colLineX = colScreen.x - tableScreen.x;
+
+                // Left border of column
+                const colLine = document.createElement('div');
+                colLine.className = 'table-column-line';
+                colLine.style.cssText = `
+                    position: absolute;
+                    left: ${colLineX}px;
+                    top: 0;
+                    width: 1px;
+                    height: 100%;
+                    background: rgba(16, 185, 129, 0.5);
+                    pointer-events: none;
+                `;
+                tableEl.appendChild(colLine);
+
+                // Right border of last column
+                if (index === table.columns.length - 1) {
+                    const rightLineX = colLineX + colScreen.width;
+                    const rightLine = document.createElement('div');
+                    rightLine.className = 'table-column-line';
+                    rightLine.style.cssText = `
+                        position: absolute;
+                        left: ${rightLineX}px;
+                        top: 0;
+                        width: 1px;
+                        height: 100%;
+                        background: rgba(16, 185, 129, 0.5);
+                        pointer-events: none;
+                    `;
+                    tableEl.appendChild(rightLine);
+                }
+            });
+        }
+
+        // ============ DRAW ROW LINES ============
+        // FIX: Use percentage-based positioning relative to table container
+        // This prevents cumulative drift from floating-point multiplication
+        if (table.rowCount > 0 && table.sampleRowBBox) {
+            const sampleRowScreen = this._tableCoordToScreen(table.sampleRowBBox, pdfW, pdfH, scaleX, scaleY);
+
+            // Calculate the data area within the table container
+            // sampleRowScreen.y is the absolute Y of sample row on the overlay
+            // We need to convert to relative position within the table container
+            const dataAreaTop = sampleRowScreen.y - tableScreen.y;  // Relative to table container
+            const totalDataHeight = tableScreen.height - dataAreaTop;  // From sample row to table bottom
+
+            // Draw row lines using percentage positioning to avoid drift
+            // Each row occupies exactly (100 / rowCount)% of the data area
+            for (let i = 1; i < table.rowCount; i++) {
+                // Calculate Y position as percentage of total data height
+                // This avoids cumulative floating-point errors
+                const percentFromDataTop = (i / table.rowCount) * 100;
+                const relativeY = dataAreaTop + (totalDataHeight * i / table.rowCount);
+
+                const rowLine = document.createElement('div');
+                rowLine.className = 'table-row-line';
+                rowLine.style.cssText = `
+                    position: absolute;
+                    left: 0;
+                    top: ${relativeY}px;
+                    width: 100%;
+                    height: 1px;
+                    background: rgba(16, 185, 129, 0.4);
+                    pointer-events: none;
+                `;
+                // Add to table container (not overlay layer) for proper relative positioning
+                tableEl.appendChild(rowLine);
+            }
+        }
+
+        // ============ ADD TABLE LABEL ============
+        const label = document.createElement('div');
+        label.className = 'table-label';
+        label.textContent = `טבלה (${table.columns?.length || 0} עמודות × ${table.rowCount} שורות)`;
+        label.style.cssText = `
+            position: absolute;
+            top: -24px;
+            left: 0;
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
+            pointer-events: none;
+        `;
+        tableEl.appendChild(label);
+
+        // Add to layer
+        this.overlayLayer.appendChild(tableEl);
+        this.tableElements.set(table.tableId, tableEl);
+
+        console.log(`✅ [OverlayRenderer] Rendered table: ${table.tableId}`, tableScreen);
+    }
+
+    /**
+     * Convert table coordinates to screen pixels
+     * FIXED: Properly handles normalized (0-1) coordinates
+     * @param {Object} bbox - { x, y, width, height } in normalized 0-1 values
+     * @param {number} pdfW - PDF width in points (unused, kept for compatibility)
+     * @param {number} pdfH - PDF height in points (unused, kept for compatibility)
+     * @param {number} scaleX - X scale factor (unused, kept for compatibility)
+     * @param {number} scaleY - Y scale factor (unused, kept for compatibility)
+     * @returns {Object} { x, y, width, height } in screen pixels
+     */
+    _tableCoordToScreen(bbox, pdfW, pdfH, scaleX, scaleY) {
+        if (!bbox) return { x: 0, y: 0, width: 0, height: 0 };
+
+        let { x, y, width, height } = bbox;
+
+        // Get current overlay layer dimensions
+        const layerWidth = this.overlayLayer?.offsetWidth || 1;
+        const layerHeight = this.overlayLayer?.offsetHeight || 1;
+
+        // Check if coordinates are normalized (0-1) or already screen pixels
+        // Normalized coords have all values <= 1
+        const isNormalized = x <= 1 && y <= 1 && width <= 1 && height <= 1;
+
+        if (isNormalized) {
+            // Convert normalized (0-1) to current screen pixels
+            // This automatically handles window resize
+            return {
+                x: Math.round(x * layerWidth),
+                y: Math.round(y * layerHeight),
+                width: Math.round(width * layerWidth),
+                height: Math.round(height * layerHeight)
+            };
+        } else {
+            // Legacy: Already in screen pixels - use directly
+            // NOTE: This may cause issues on resize for old tables
+            console.warn('[OverlayRenderer] Table has screen pixel coords (legacy), may not resize correctly');
+            return { x, y, width, height };
+        }
+    }
+
+    /**
+     * Remove a table overlay
+     * @param {string} tableId - Table ID
+     */
+    removeTable(tableId) {
+        const element = this.tableElements.get(tableId);
+        if (element) {
+            element.remove();
+            this.tableElements.delete(tableId);
+        }
+    }
+
+    /**
+     * Render a single field overlay
+     * Uses the EXACT coordinate conversion from old mapper
+     * @param {Object} field - Field object
+     */
+    renderField(field) {
+        if (!this.overlayLayer) return;
+
+        // ============ CRITICAL: Check pdfPageDimensions ============
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) {
+            // Queue field for later rendering
+            if (!this._pendingRenderFields.includes(field)) {
+                this._pendingRenderFields.push(field);
+                console.log('📝 Field queued (no dimensions yet):', field.id);
+            }
+            return;
+        }
+
+        // Remove existing element if any
+        this.removeField(field.id);
+
+        // Create overlay element
+        const overlay = document.createElement('div');
+        overlay.className = 'field-overlay';
+
+        // Add type-specific class
+        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'signature') {
+            overlay.classList.add(`type-${field.type}`);
+        }
+
+        // Add table field class
+        if (field.tableGroupId) {
+            overlay.classList.add('table-field');
+        }
+
+        overlay.dataset.fieldId = field.id;
+
+        // ========== COORDINATE CONVERSION (from old mapper overlay-engine.js) ==========
+        let x, y, width, height;
+
+        // Get PDF dimensions in unscaled points (remove DPI scaling)
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+
+        // Get layer dimensions in pixels
+        const layerWidth = Math.max(this.overlayLayer.offsetWidth, 1);
+        const layerHeight = Math.max(this.overlayLayer.offsetHeight, 1);
+
+        // Calculate scale factors: PDF points → display pixels
+        const scaleX = layerWidth / pdfW;
+        const scaleY = layerHeight / pdfH;
+
+        if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+            // ============ BBOX FORMAT: [x, y, width, height] ============
+            let [bboxX, bboxY, bboxW, bboxH] = field.bbox;
+
+            // Detect if values are normalized (0-1) or absolute PDF points
+            const isNormalized = bboxX <= 1 && bboxY <= 1 && bboxW <= 1 && bboxH <= 1;
+
+            if (isNormalized) {
+                // Convert normalized to absolute PDF points
+                bboxX *= pdfW;
+                bboxY *= pdfH;
+                bboxW *= pdfW;
+                bboxH *= pdfH;
+            }
+
+            // Convert PDF points to canvas pixels
+            // NOTE: PDF Y is from bottom, canvas Y is from top
+            // The bbox Y is stored as bottom-left in PDF coordinates
+            x = Math.round(bboxX * scaleX);
+            y = Math.round((pdfH - bboxY - bboxH) * scaleY);  // ← Y-AXIS FLIP
+            width = Math.round(bboxW * scaleX);
+            height = Math.round(bboxH * scaleY);
+
+        } else if ((field.type === 'checkbox' || field.type === 'radio') &&
+                   field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
+            // ============ ANCHOR FORMAT: [xPercent, yPercent] for checkbox/radio ============
+            // NOTE: yPercent is stored as "from bottom" (Y-flipped during save)
+            const [anchorX, anchorY] = field.anchor;
+
+            // Convert anchor (0-1) to canvas pixels
+            // anchorY is already Y-flipped, so we flip it back for canvas
+            const canvasCenterX = anchorX * layerWidth;
+            const canvasCenterY = (1 - anchorY) * layerHeight;  // ← Y-AXIS FLIP BACK
+
+            width = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
+            height = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
+            x = Math.round(canvasCenterX - width / 2);
+            y = Math.round(canvasCenterY - height / 2);
+
+            console.log('🔲 Checkbox/Radio render:', {
+                id: field.id, anchorX, anchorY,
+                canvasCenterX, canvasCenterY,
+                x, y, layerWidth, layerHeight
+            });
+
+        } else {
+            console.warn('[OverlayRenderer] Invalid coordinates for field:', field.id);
+            return;
+        }
+
+        // Apply position and size
+        overlay.style.left = `${x}px`;
+        overlay.style.top = `${y}px`;
+        overlay.style.width = `${width}px`;
+        overlay.style.height = `${height}px`;
+        overlay.style.zIndex = '1';
+
+        // Add resize handles (hidden by default)
+        this._addResizeHandles(overlay);
+
+        // Check if selected
+        if (state.get('selection.fieldId') === field.id) {
+            overlay.classList.add('selected');
+            this._showResizeHandles(overlay);
+            overlay.style.zIndex = '10';
+        }
+
+        // Event handlers
+        overlay.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('resize-handle')) {
+                state.selectField(field.id);
+            }
+        });
+
+        overlay.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            this._showContextMenu(field, e.clientX, e.clientY);
+        });
+
+        // Add to layer
+        this.overlayLayer.appendChild(overlay);
+        this.fieldElements.set(field.id, overlay);
+
+        console.log(`✅ [OverlayRenderer] Rendered field: ${field.id}`, { x, y, width, height });
+    }
+
+    /**
+     * Convert screen coordinates to bbox (for saving field position)
+     * Uses the EXACT formula from old mapper drag-engine.js
+     * @param {Object} screen - { x, y, width, height } in screen pixels
+     * @returns {Array} bbox [x, y, width, height] in normalized 0-1 values
+     */
+    screenToBbox(screen) {
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) return [0, 0, 0, 0];
+
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+
+        const layerWidth = Math.max(this.overlayLayer?.offsetWidth || 1, 1);
+        const layerHeight = Math.max(this.overlayLayer?.offsetHeight || 1, 1);
+
+        // Scale factors: display pixels → PDF points
+        const scaleX = pdfW / layerWidth;
+        const scaleY = pdfH / layerHeight;
+
+        // Convert to PDF points
+        const xPdf = screen.x * scaleX;
+        const widthPdf = screen.width * scaleX;
+        const yPdfTop = screen.y * scaleY;
+        const heightPdf = screen.height * scaleY;
+
+        // Y-AXIS FLIP: convert canvas top to PDF bottom
+        const yPdfBottom = pdfH - (yPdfTop + heightPdf);
+
+        // Normalize to 0-1
+        const xPercent = xPdf / pdfW;
+        const yPercent = yPdfBottom / pdfH;
+        const wPercent = widthPdf / pdfW;
+        const hPercent = heightPdf / pdfH;
+
+        return [xPercent, yPercent, wPercent, hPercent];
+    }
+
+    /**
+     * Convert screen coordinates to anchor (for checkbox/radio)
+     * @param {number} centerX - Center X in screen pixels
+     * @param {number} centerY - Center Y in screen pixels
+     * @returns {Array} anchor [xPercent, yPercent]
+     */
+    screenToAnchor(centerX, centerY) {
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) return [0, 0];
+
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+
+        const layerWidth = Math.max(this.overlayLayer?.offsetWidth || 1, 1);
+        const layerHeight = Math.max(this.overlayLayer?.offsetHeight || 1, 1);
+
+        // Scale factors
+        const scaleX = pdfW / layerWidth;
+        const scaleY = pdfH / layerHeight;
+
+        // Convert to PDF points
+        const xPdf = centerX * scaleX;
+        const yPdfTop = centerY * scaleY;
+        const yPdfBottom = pdfH - yPdfTop;
+
+        // Normalize to 0-1
+        const xPercent = xPdf / pdfW;
+        const yPercent = yPdfBottom / pdfH;
+
+        return [xPercent, yPercent];
+    }
+
+    /**
+     * Convert bbox (normalized 0-1) back to screen coordinates
+     * Inverse of screenToBbox - used for auto-detection scan areas
+     * @param {Array|Object} bbox - [x, y, width, height] or {x, y, width, height} in normalized 0-1 values
+     * @returns {Object} { x, y, width, height } in screen pixels
+     */
+    bboxToScreen(bbox) {
+        // Handle both array format [x, y, w, h] and object format {x, y, width, height}
+        let bboxX, bboxY, bboxW, bboxH;
+
+        if (Array.isArray(bbox) && bbox.length === 4) {
+            [bboxX, bboxY, bboxW, bboxH] = bbox;
+        } else if (bbox && typeof bbox === 'object' && 'x' in bbox && 'y' in bbox) {
+            bboxX = bbox.x;
+            bboxY = bbox.y;
+            bboxW = bbox.width || bbox.w || 0;
+            bboxH = bbox.height || bbox.h || 0;
+        } else {
+            return { x: 0, y: 0, width: 0, height: 0 };
+        }
+
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) return { x: 0, y: 0, width: 0, height: 0 };
+
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+
+        const layerWidth = Math.max(this.overlayLayer?.offsetWidth || 1, 1);
+        const layerHeight = Math.max(this.overlayLayer?.offsetHeight || 1, 1);
+
+        // Scale factors: PDF points → display pixels
+        const scaleX = layerWidth / pdfW;
+        const scaleY = layerHeight / pdfH;
+
+        // Detect if values are normalized (0-1) or absolute
+        const isNormalized = bboxX <= 1 && bboxY <= 1 && bboxW <= 1 && bboxH <= 1;
+
+        let x, y, width, height;
+
+        if (isNormalized) {
+            // Normalized coordinates (0-1) are TOP-BASED (like HTML/CSS)
+            // No Y flip needed - convert directly to screen pixels
+            x = Math.round(bboxX * layerWidth);
+            y = Math.round(bboxY * layerHeight);
+            width = Math.round(bboxW * layerWidth);
+            height = Math.round(bboxH * layerHeight);
+        } else {
+            // Absolute PDF coordinates are BOTTOM-BASED
+            // Need Y flip for PDF coordinate system
+            x = Math.round(bboxX * scaleX);
+            y = Math.round((pdfH - bboxY - bboxH) * scaleY);
+            width = Math.round(bboxW * scaleX);
+            height = Math.round(bboxH * scaleY);
+        }
+
+        return { x, y, width, height };
+    }
+
+    /**
+     * Remove a field overlay
+     * @param {string} fieldId - Field ID
+     */
+    removeField(fieldId) {
+        const element = this.fieldElements.get(fieldId);
+        if (element) {
+            element.remove();
+            this.fieldElements.delete(fieldId);
+        }
+    }
+
+    /**
+     * Clear all overlays
+     */
+    clear() {
+        if (this.overlayLayer) {
+            this.overlayLayer.innerHTML = '';
+        }
+        this.fieldElements.clear();
+        this.tableElements.clear();
+    }
+
+    /**
+     * Render radio group builder circles (numbered indicators)
+     * Called during radio group building to show ①②③ on marked circles
+     */
+    renderRadioBuilderCircles() {
+        const builder = state.getRadioGroupBuilder();
+        if (!builder.active || builder.step === RadioGroupSteps.MARK_TITLE) {
+            return;
+        }
+
+        const circleIndicators = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+
+        builder.circles.forEach((circle, index) => {
+            const screen = this.bboxToScreen(circle.bbox);
+
+            // Create indicator element
+            const indicator = document.createElement('div');
+            indicator.className = 'radio-builder-indicator';
+            indicator.innerHTML = `
+                <div class="circle-marker"></div>
+                <div class="circle-number">${circleIndicators[index] || (index + 1)}</div>
+            `;
+
+            indicator.style.cssText = `
+                position: absolute;
+                left: ${screen.x}px;
+                top: ${screen.y}px;
+                width: ${screen.width}px;
+                height: ${screen.height}px;
+                pointer-events: none;
+                z-index: 100;
+            `;
+
+            // Style the marker
+            const marker = indicator.querySelector('.circle-marker');
+            marker.style.cssText = `
+                position: absolute;
+                inset: 0;
+                border: 3px solid #3b82f6;
+                border-radius: 50%;
+                background: rgba(59, 130, 246, 0.2);
+            `;
+
+            // Style the number
+            const number = indicator.querySelector('.circle-number');
+            number.style.cssText = `
+                position: absolute;
+                top: -10px;
+                right: -10px;
+                width: 24px;
+                height: 24px;
+                background: #3b82f6;
+                color: white;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                font-weight: bold;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            `;
+
+            this.overlayLayer.appendChild(indicator);
+        });
+    }
+
+    /**
+     * Public render method - renders all overlays including radio builder circles
+     */
+    render() {
+        this.renderAll();
+    }
+
+    /**
+     * Add resize handles to overlay
+     * @param {HTMLElement} overlay - Overlay element
+     */
+    _addResizeHandles(overlay) {
+        const positions = ['nw', 'ne', 'sw', 'se'];
+
+        positions.forEach(pos => {
+            const handle = document.createElement('div');
+            handle.className = `resize-handle ${pos}`;
+            handle.style.display = 'none';
+            overlay.appendChild(handle);
+        });
+    }
+
+    /**
+     * Show resize handles on overlay
+     * @param {HTMLElement} overlay - Overlay element
+     */
+    _showResizeHandles(overlay) {
+        overlay.querySelectorAll('.resize-handle').forEach(h => {
+            h.style.display = 'block';
+        });
+    }
+
+    /**
+     * Hide resize handles on overlay
+     * @param {HTMLElement} overlay - Overlay element
+     */
+    _hideResizeHandles(overlay) {
+        overlay.querySelectorAll('.resize-handle').forEach(h => {
+            h.style.display = 'none';
+        });
+    }
+
+    /**
+     * Update selection styling
+     * @param {string|null} selectedId - Selected field ID or null
+     */
+    _updateSelection(selectedId) {
+        // Remove selection from all
+        this.fieldElements.forEach((element, fieldId) => {
+            element.classList.remove('selected');
+            element.style.zIndex = '1';
+            this._hideResizeHandles(element);
+        });
+
+        // Add selection to current
+        if (selectedId) {
+            const element = this.fieldElements.get(selectedId);
+            if (element) {
+                element.classList.add('selected');
+                element.style.zIndex = '10';
+                this._showResizeHandles(element);
+            }
+        }
+    }
+
+    /**
+     * Show context menu for field
+     * @param {Object} field - Field object
+     * @param {number} x - Screen X
+     * @param {number} y - Screen Y
+     */
+    _showContextMenu(field, x, y) {
+        const menu = document.getElementById('context-menu');
+        if (!menu) return;
+
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        menu.classList.remove('hidden');
+
+        // Store current field for actions
+        menu.dataset.fieldId = field.id;
+
+        // Close on click outside
+        const closeMenu = (e) => {
+            if (!menu.contains(e.target)) {
+                menu.classList.add('hidden');
+                document.removeEventListener('click', closeMenu);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeMenu), 0);
+    }
+
+    /**
+     * Get overlay layer dimensions
+     * @returns {Object} { width, height }
+     */
+    getLayerDimensions() {
+        return {
+            width: this.overlayLayer?.offsetWidth || 0,
+            height: this.overlayLayer?.offsetHeight || 0
+        };
+    }
+
+    /**
+     * Update the overlay layer size to match the PDF image
+     * FIXED: Uses clientWidth/clientHeight (actual rendered size after resize)
+     * PUBLIC method - can be called from outside (window resize, zoom change)
+     */
+    updateLayerSize() {
+        // Look for the <img> in pdf-container (legacy PNG rendering)
+        const pdfContainer = document.getElementById('pdf-container');
+        const img = pdfContainer?.querySelector('img');
+
+        if (img && this.overlayLayer) {
+            // CRITICAL: Use clientWidth/clientHeight - actual rendered size
+            const width = img.clientWidth;
+            const height = img.clientHeight;
+
+            this.overlayLayer.style.width = `${width}px`;
+            this.overlayLayer.style.height = `${height}px`;
+
+            if (this.drawingLayer) {
+                this.drawingLayer.style.width = `${width}px`;
+                this.drawingLayer.style.height = `${height}px`;
+            }
+
+            console.log(`[OverlayRenderer] Layer size updated: ${width}x${height}`);
+        }
+    }
+
+    // Alias for internal use
+    _updateLayerSize() {
+        this.updateLayerSize();
+    }
+
+    /**
+     * Get field element by ID
+     * @param {string} fieldId - Field ID
+     * @returns {HTMLElement|null}
+     */
+    getFieldElement(fieldId) {
+        return this.fieldElements.get(fieldId) || null;
+    }
+}
+
+// Singleton instance
+export const overlayRenderer = new OverlayRenderer();

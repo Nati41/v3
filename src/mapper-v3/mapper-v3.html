@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapper V3 - Field Mapping Tool</title>
+
+    <!-- PDF.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <!-- Tesseract.js for OCR fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/mapper-v3.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p>Loading Mapper V3...</p>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div id="mapper-container" class="mapper-container">
+        <!-- Header / Toolbar -->
+        <header id="toolbar" class="toolbar">
+            <div class="toolbar-group">
+                <button id="btn-open-pdf" class="toolbar-btn" title="Open PDF">
+                    <span class="icon">📄</span>
+                    <span class="label">Open PDF</span>
+                </button>
+                <button id="btn-import-json" class="toolbar-btn" title="Import JSON">
+                    <span class="icon">📥</span>
+                    <span class="label">Import</span>
+                </button>
+                <button id="btn-export-json" class="toolbar-btn" title="Export JSON">
+                    <span class="icon">📤</span>
+                    <span class="label">Export</span>
+                </button>
+            </div>
+
+            <div class="toolbar-separator"></div>
+
+            <div class="toolbar-group tools" data-mapper-only>
+                <button id="btn-tool-select" class="toolbar-btn tool-btn active" data-tool="select" title="Select (V)">
+                    <span class="icon">👆</span>
+                </button>
+                <button id="btn-tool-capture" class="toolbar-btn tool-btn" data-tool="capture_name" title="Capture Field Name (N)">
+                    <span class="icon">🎯</span>
+                </button>
+                <button id="btn-tool-text" class="toolbar-btn tool-btn" data-tool="draw_text" title="Draw Text Field (T)">
+                    <span class="icon">📝</span>
+                </button>
+                <button id="btn-tool-checkbox" class="toolbar-btn tool-btn" data-tool="draw_checkbox" title="Draw Checkbox (C)">
+                    <span class="icon">☑️</span>
+                </button>
+                <button id="btn-tool-radio" class="toolbar-btn tool-btn" data-tool="draw_radio" title="Draw Radio (R)">
+                    <span class="icon">🔘</span>
+                </button>
+                <button id="btn-tool-table" class="toolbar-btn tool-btn" data-tool="draw_table" title="Draw Table">
+                    <span class="icon">📊</span>
+                </button>
+            </div>
+
+            <div class="toolbar-separator"></div>
+
+            <div class="toolbar-group">
+                <button id="btn-undo" class="toolbar-btn" title="Undo (Ctrl+Z)" disabled>
+                    <span class="icon">↩️</span>
+                </button>
+                <button id="btn-redo" class="toolbar-btn" title="Redo (Ctrl+Y)" disabled>
+                    <span class="icon">↪️</span>
+                </button>
+            </div>
+
+            <div class="toolbar-separator"></div>
+
+            <div class="toolbar-group page-nav">
+                <button id="btn-prev-page" class="toolbar-btn" title="Previous Page" disabled>
+                    <span class="icon">◀</span>
+                </button>
+                <span id="page-indicator" class="page-indicator">1 / 1</span>
+                <button id="btn-next-page" class="toolbar-btn" title="Next Page" disabled>
+                    <span class="icon">▶</span>
+                </button>
+            </div>
+
+            <div class="toolbar-separator"></div>
+
+            <div class="toolbar-group zoom-controls">
+                <button id="btn-zoom-out" class="toolbar-btn" title="Zoom Out (Ctrl+-)">
+                    <span class="icon">➖</span>
+                </button>
+                <span id="zoom-info" class="zoom-indicator">100%</span>
+                <button id="btn-zoom-in" class="toolbar-btn" title="Zoom In (Ctrl++)">
+                    <span class="icon">➕</span>
+                </button>
+                <button id="btn-zoom-fit" class="toolbar-btn" title="Fit to Window">
+                    <span class="icon">⛶</span>
+                </button>
+                <button id="btn-zoom-reset" class="toolbar-btn" title="Reset Zoom (Ctrl+0)">
+                    <span class="icon">↺</span>
+                </button>
+            </div>
+
+            <div class="toolbar-spacer"></div>
+
+            <div class="toolbar-group">
+                <span id="status-indicator" class="status-indicator">Ready</span>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside id="sidebar-container" class="sidebar">
+                <div class="sidebar-header">
+                    <h2>Fields</h2>
+                    <div class="sidebar-controls">
+                        <input type="text" id="field-search" class="field-search" placeholder="Search...">
+                    </div>
+                </div>
+                <div id="field-list" class="field-list">
+                    <p class="empty-message">No fields yet. Load a PDF to start mapping.</p>
+                </div>
+            </aside>
+
+            <!-- PDF Viewer - EXACT structure from legacy mapper -->
+            <section id="pdf-section" class="canvas-area">
+                <div id="canvas-viewport" class="canvas-viewport">
+                    <div id="transform-container" class="transform-container">
+                        <div id="canvas-container" class="canvas-container">
+                            <!-- PDF Container - holds the <img> element (PNG of PDF) -->
+                            <div id="pdf-container"></div>
+
+                            <!-- Overlay Layer (for field rectangles) - EXACT from legacy mapping-layer -->
+                            <div id="overlay-layer" class="overlay-layer"></div>
+
+                            <!-- Drawing Preview Layer -->
+                            <div id="drawing-layer" class="drawing-layer"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Properties Panel -->
+            <aside id="properties-panel" class="properties-panel hidden">
+                <div class="panel-header">
+                    <h3>Field Properties</h3>
+                    <button id="btn-close-properties" class="btn-close">×</button>
+                </div>
+                <div id="properties-content" class="properties-content">
+                    <!-- Dynamically filled -->
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Hidden file inputs -->
+    <input type="file" id="pdf-file-input" accept=".pdf" hidden>
+    <input type="file" id="json-file-input" accept=".json" hidden>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu hidden">
+        <button data-action="edit">Edit</button>
+        <button data-action="duplicate">Duplicate</button>
+        <button data-action="delete">Delete</button>
+    </div>
+
+    <!-- Table Flow Panel (minimal UI) -->
+    <div id="table-flow-panel" class="table-flow-panel hidden">
+        <div class="table-flow-header">
+            <h3 id="table-flow-title">מיפוי טבלה</h3>
+            <button id="table-flow-cancel" class="btn-close">×</button>
+        </div>
+        <div class="table-flow-content">
+            <div id="table-flow-step-info" class="step-info">
+                <span id="table-flow-step-num">שלב 1/6</span>
+                <span id="table-flow-step-desc">סמן את אזור הכותרת</span>
+            </div>
+            <div id="table-flow-message" class="flow-message"></div>
+            <div id="table-flow-row-count" class="row-count-input hidden">
+                <label>מספר שורות:</label>
+                <input type="number" id="table-row-count-input" min="1" max="100" placeholder="הזן מספר">
+            </div>
+            <div id="table-flow-columns" class="columns-list hidden">
+                <h4>עמודות:</h4>
+                <ul id="table-columns-list"></ul>
+            </div>
+            <div id="table-flow-summary" class="flow-summary hidden"></div>
+        </div>
+        <div class="table-flow-actions">
+            <button id="table-flow-back" class="btn-secondary" disabled>הקודם</button>
+            <button id="table-flow-next" class="btn-primary" disabled>הבא</button>
+        </div>
+    </div>
+
+    <!-- Column Details Dialog (for table) -->
+    <div id="column-details-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box">
+            <h3>פרטי עמודה</h3>
+            <div class="form-group">
+                <label>שם העמודה:</label>
+                <input type="text" id="column-name-input" placeholder="לדוגמא: שם פרטי">
+            </div>
+            <div class="form-group">
+                <label>סוג שדה:</label>
+                <select id="column-type-select">
+                    <option value="text">טקסט</option>
+                    <option value="number">מספר</option>
+                    <option value="date">תאריך</option>
+                    <option value="checkbox">תיבת סימון</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>מצב תצוגה:</label>
+                <div class="layout-toggle-buttons" id="column-layout-toggle">
+                    <button type="button" class="layout-toggle active" data-mode="flow">זרימה</button>
+                    <button type="button" class="layout-toggle" data-mode="slots">תיבות</button>
+                </div>
+            </div>
+            <div class="form-group slot-count-group hidden" id="column-slot-count-group">
+                <label>מספר תיבות:</label>
+                <div class="slot-count-control">
+                    <button type="button" class="slot-adjust" data-delta="-1">−</button>
+                    <input type="number" id="column-slot-count" value="9" min="1" max="30">
+                    <button type="button" class="slot-adjust" data-delta="1">+</button>
+                </div>
+            </div>
+            <div class="dialog-actions">
+                <button id="column-cancel-btn" class="btn-secondary">ביטול</button>
+                <button id="column-confirm-btn" class="btn-primary">אישור</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Smart Table Detection Dialog -->
+    <div id="smart-table-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box smart-table-dialog">
+            <h3>זוהתה טבלה פוטנציאלית</h3>
+            <p id="smart-table-description" class="dialog-description"></p>
+
+            <div id="smart-table-columns" class="smart-table-columns">
+                <!-- Column list will be populated dynamically -->
+            </div>
+
+            <div class="dialog-actions">
+                <button id="smart-table-skip" class="btn-secondary">השאר כשדות רגילים</button>
+                <button id="smart-table-convert" class="btn-primary">המר לטבלה</button>
+            </div>
+
+            <div id="smart-table-nav" class="smart-table-nav hidden">
+                <span id="smart-table-counter">1 / 1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Intent Resolver for renderHint in export -->
+    <script src="./shared/FieldIntentResolver.js"></script>
+
+    <!-- Layout Helper - Safe accessors for field layout (Phase 3) -->
+    <script src="./shared/LayoutHelper.js"></script>
+
+    <!-- Application Bootstrap -->
+    <script type="module">
+        // Import core modules
+        import { mapper } from './core/MapperCore.js';
+        import { state, Tools, Modes } from './core/StateManager.js';
+        import { eventBus, Events } from './core/EventBus.js';
+
+        // Import engines
+        import { pdfEngine } from './engines/PDFEngine.js';
+        import { overlayRenderer } from './engines/OverlayRenderer.js';
+        import { dragController } from './engines/DragController.js';
+        import { drawController } from './engines/DrawController.js';
+        import { viewportController } from './engines/ViewportController.js';
+
+        // Import UI
+        import { sidebarController } from './ui/SidebarController.js';
+        import { nameConfirmDialog } from './ui/NameConfirmDialog.js';
+        import { radioGroupDialog } from './ui/RadioGroupDialog.js';
+        import { tableFlowUI } from './ui/TableFlowUI.js';
+
+        // Import overlay modules
+        import { labelOverlay } from './overlay/LabelOverlay.js';
+
+        // Import word selector (new word-based selection)
+        import { wordSelector } from './engines/WordSelector.js';
+
+        // Import text extraction (for name capture)
+        import { textExtractor } from './engines/TextExtractor.js';
+        import { fieldNamer } from './engines/FieldNamer.js';
+
+        // Make available globally for debugging
+        window.mapper = mapper;
+        window.state = state;
+        window.eventBus = eventBus;
+        window.Events = Events;
+        window.Tools = Tools;
+        window.Modes = Modes;
+        window.pdfEngine = pdfEngine;
+        window.overlayRenderer = overlayRenderer;
+        window.viewportController = viewportController;
+        window.drawController = drawController;
+        window.tableFlowUI = tableFlowUI;
+        window.labelOverlay = labelOverlay;
+        window.wordSelector = wordSelector;
+
+        // ============ LABEL DETECTION V2 FLAGS ============
+        // Enable V2 engine with boundary-aware detection
+        window.USE_LABEL_V2 = true;
+        window.LABEL_V2_BOUNDARY = true;
+        window.LABEL_DEBUG = true;  // Set to false to disable debug logs
+        // window.LABEL_VALIDATE = true;  // Uncomment to compare V2 vs legacy
+
+        // Initialize when DOM ready
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('[Mapper V3] Starting...');
+
+            try {
+                // Initialize PDF.js
+                pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+                // Initialize mapper core
+                await mapper.init({
+                    containerId: 'mapper-container',
+                    dpi: 300
+                });
+
+                // Initialize engines
+                pdfEngine.init({ dpi: 300 });
+                overlayRenderer.init();
+                dragController.init();
+                drawController.init();
+                viewportController.init();
+
+                // Initialize UI
+                sidebarController.init();
+                nameConfirmDialog.init();
+                radioGroupDialog.init();
+                tableFlowUI.init();
+
+                // Initialize overlay modules
+                labelOverlay.init();
+                wordSelector.init();
+
+                // Register engines with mapper
+                mapper.registerEngine('pdf', pdfEngine);
+                mapper.registerEngine('overlay', overlayRenderer);
+                mapper.registerEngine('drag', dragController);
+                mapper.registerEngine('draw', drawController);
+                mapper.registerEngine('viewport', viewportController);
+                mapper.registerUI('sidebar', sidebarController);
+
+                // Setup toolbar buttons
+                setupToolbar();
+
+                // Setup file inputs
+                setupFileInputs();
+
+                // Setup context menu
+                setupContextMenu();
+
+                // Update page indicator on page change
+                eventBus.on(Events.PDF_PAGE_CHANGED, ({ page }) => {
+                    updatePageIndicator();
+                });
+
+                eventBus.on(Events.PDF_LOADED, ({ numPages }) => {
+                    updatePageIndicator();
+                    document.getElementById('btn-prev-page').disabled = false;
+                    document.getElementById('btn-next-page').disabled = false;
+                });
+
+                // ============ Window resize handler ============
+                // Sync overlay layer size with PDF image on window resize
+                let resizeTimeout;
+                window.addEventListener('resize', () => {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        console.log('[Mapper V3] Window resized - syncing overlay layers');
+                        overlayRenderer.updateLayerSize();
+                        overlayRenderer.renderAll();
+                    }, 150);
+                });
+
+                // ============ Zoom change handler ============
+                // Sync overlay layer size after zoom changes
+                let zoomTimeout;
+                eventBus.on(Events.ZOOM_CHANGED, () => {
+                    clearTimeout(zoomTimeout);
+                    zoomTimeout = setTimeout(() => {
+                        console.log('[Mapper V3] Zoom changed - syncing overlay layers');
+                        overlayRenderer.updateLayerSize();
+                        overlayRenderer.renderAll();
+                    }, 150);
+                });
+
+                // ============ Smart Table Detection handler ============
+                // Show dialog when repeating field patterns are detected after import
+                setupSmartTableDialog();
+
+                // Hide loading screen
+                document.getElementById('loading-screen').classList.add('hidden');
+
+                console.log('[Mapper V3] Ready!');
+
+            } catch (error) {
+                console.error('[Mapper V3] Init error:', error);
+                document.getElementById('loading-screen').innerHTML = `
+                    <div class="loading-content error">
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        });
+
+        /**
+         * Update page indicator
+         */
+        function updatePageIndicator() {
+            const current = state.get('document.currentPage') || 1;
+            const total = state.get('document.totalPages') || 1;
+            document.getElementById('page-indicator').textContent = `${current} / ${total}`;
+        }
+
+        /**
+         * Setup toolbar button handlers
+         */
+        function setupToolbar() {
+            // Tool buttons
+            document.querySelectorAll('.tool-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tool = btn.dataset.tool;
+
+                    // Special handling for Capture Name tool - uses click-select
+                    if (tool === 'capture_name') {
+                        console.log('[Toolbar] Capture Name button clicked - starting click-select');
+                        drawController.startFieldNameCapture();
+                        return;
+                    }
+
+                    // Special handling for Radio tool - starts the new radio group flow
+                    if (tool === 'draw_radio') {
+                        console.log('[Toolbar] Radio button clicked - starting radio group flow');
+                        drawController.startRadioGroupFlow();
+                        return;
+                    }
+
+                    // Special handling for Checkbox tool - starts the new checkbox group flow
+                    if (tool === 'draw_checkbox') {
+                        console.log('[Toolbar] Checkbox button clicked - starting checkbox group flow');
+                        drawController.startCheckboxGroupFlow();
+                        return;
+                    }
+
+                    // Special handling for Table tool - starts the table flow
+                    if (tool === 'draw_table') {
+                        console.log('[Toolbar] Table button clicked - starting table flow');
+                        tableFlowUI.start();
+                        return;
+                    }
+
+                    state.setTool(tool);
+                });
+            });
+
+            // Listen for tool changes to update UI
+            eventBus.on(Events.TOOL_CHANGED, ({ tool }) => {
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.tool === tool);
+                });
+            });
+
+            // Undo/Redo buttons
+            document.getElementById('btn-undo').addEventListener('click', () => mapper.undo());
+            document.getElementById('btn-redo').addEventListener('click', () => mapper.redo());
+
+            // Update undo/redo button state
+            eventBus.on(Events.STATE_CHANGED, () => {
+                document.getElementById('btn-undo').disabled = !state.canUndo();
+                document.getElementById('btn-redo').disabled = !state.canRedo();
+            });
+
+            // Page navigation
+            document.getElementById('btn-prev-page').addEventListener('click', async () => {
+                await pdfEngine.prevPage();
+            });
+
+            document.getElementById('btn-next-page').addEventListener('click', async () => {
+                await pdfEngine.nextPage();
+            });
+
+            // Zoom controls
+            document.getElementById('btn-zoom-in').addEventListener('click', () => {
+                viewportController.zoomIn();
+            });
+
+            document.getElementById('btn-zoom-out').addEventListener('click', () => {
+                viewportController.zoomOut();
+            });
+
+            document.getElementById('btn-zoom-fit').addEventListener('click', () => {
+                viewportController.fitToViewport();
+            });
+
+            document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+                viewportController.resetZoom();
+            });
+
+            // Open PDF button
+            document.getElementById('btn-open-pdf').addEventListener('click', () => {
+                document.getElementById('pdf-file-input').click();
+            });
+
+            // Import JSON button
+            document.getElementById('btn-import-json').addEventListener('click', () => {
+                document.getElementById('json-file-input').click();
+            });
+
+            // Export JSON button - exports mapped fields and tables
+            document.getElementById('btn-export-json').addEventListener('click', () => {
+                const data = mapper.exportMappedFields();
+
+                // Check if there are any mapped fields OR tables
+                const hasFields = data.fields && data.fields.length > 0;
+                const hasTables = data.tables && data.tables.length > 0;
+
+                if (!hasFields && !hasTables) {
+                    showToast('No mapped fields or tables to export. Map some data first!', 'warning');
+                    return;
+                }
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${state.get('document.fileName') || 'project'}_mapping.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                // Build export message
+                const parts = [];
+                if (hasFields) parts.push(`${data.fields.length} fields`);
+                if (hasTables) parts.push(`${data.tables.length} tables`);
+                showToast(`Exported ${parts.join(' + ')}`, 'success');
+            });
+
+        }
+
+        /**
+         * Setup file input handlers
+         */
+        function setupFileInputs() {
+            // PDF file input
+            document.getElementById('pdf-file-input').addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        await pdfEngine.load(file);
+                        showToast('PDF loaded successfully', 'success');
+                    } catch (error) {
+                        console.error('Failed to load PDF:', error);
+                        showToast('Failed to load PDF: ' + error.message, 'error');
+                    }
+                }
+                e.target.value = ''; // Reset for re-selection
+            });
+
+            // JSON file input - supports Mapper JSON and Unified Schema (AI templates)
+            document.getElementById('json-file-input').addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+
+                        // Detect format and route to appropriate import
+                        // Unified Import Schema v1 (AI-prepared templates)
+                        if (data.$schema === 'unified-import-v1' || (data.meta?.source && data.fields) || (data.meta?.version && data.fields)) {
+                            console.log('[Import] Detected Unified Import Schema');
+                            state.importUnifiedJson(data);
+                            const stats = `${data.fields?.length || 0} שדות`;
+                            const groups = data.groups?.length ? `, ${data.groups.length} קבוצות` : '';
+                            showToast(`יובאו ${stats}${groups}`, 'success');
+                        } else {
+                            // Standard Mapper JSON format (legacy)
+                            mapper.importProject(data);
+                            showToast('Project imported', 'success');
+                        }
+                    } catch (error) {
+                        console.error('Failed to import JSON:', error);
+                        showToast('Failed to import: ' + error.message, 'error');
+                    }
+                }
+                e.target.value = '';
+            });
+        }
+
+        /**
+         * Show toast notification
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Expose showToast globally
+        window.showToast = showToast;
+
+        /**
+         * Setup context menu
+         */
+        function setupContextMenu() {
+            const menu = document.getElementById('context-menu');
+            if (!menu) return;
+
+            menu.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const action = btn.dataset.action;
+                    const fieldId = menu.dataset.fieldId;
+
+                    if (!fieldId) return;
+
+                    switch (action) {
+                        case 'edit':
+                            // Show properties panel
+                            document.getElementById('properties-panel').classList.remove('hidden');
+                            break;
+                        case 'duplicate':
+                            const field = state.getField(fieldId);
+                            if (field) {
+                                const newField = state.addField({
+                                    ...field,
+                                    id: undefined,
+                                    bbox: field.bbox ? [
+                                        field.bbox[0] + 0.02,
+                                        field.bbox[1] + 0.02,
+                                        field.bbox[2],
+                                        field.bbox[3]
+                                    ] : null
+                                });
+                                showToast('Field duplicated', 'success');
+                            }
+                            break;
+                        case 'delete':
+                            state.deleteField(fieldId);
+                            showToast('Field deleted', 'success');
+                            break;
+                    }
+
+                    menu.classList.add('hidden');
+                });
+            });
+
+            // Close properties panel
+            document.getElementById('btn-close-properties')?.addEventListener('click', () => {
+                document.getElementById('properties-panel').classList.add('hidden');
+            });
+        }
+
+        /**
+         * Setup Smart Table Detection dialog
+         * Shows when repeating field patterns are detected after import
+         */
+        function setupSmartTableDialog() {
+            const dialog = document.getElementById('smart-table-dialog');
+            const description = document.getElementById('smart-table-description');
+            const columnsContainer = document.getElementById('smart-table-columns');
+            const convertBtn = document.getElementById('smart-table-convert');
+            const skipBtn = document.getElementById('smart-table-skip');
+            const navContainer = document.getElementById('smart-table-nav');
+            const counter = document.getElementById('smart-table-counter');
+
+            let candidates = [];
+            let currentIndex = 0;
+
+            // Listen for smart table detection event
+            eventBus.on(Events.SMART_TABLE_DETECTED, ({ candidates: detected }) => {
+                candidates = detected;
+                currentIndex = 0;
+
+                if (candidates.length === 0) return;
+
+                console.log('[SmartTableDialog] Showing dialog for', candidates.length, 'candidates');
+                showCandidate(currentIndex);
+                dialog.classList.remove('hidden');
+            });
+
+            function showCandidate(index) {
+                const candidate = candidates[index];
+                if (!candidate) return;
+
+                // Use Hebrew names for display (baseHe, columnsHe)
+                const tableName = candidate.baseHe || candidate.base;
+                const columnNames = candidate.columnsHe || candidate.columns;
+
+                // Update description - use Hebrew base name
+                description.innerHTML = `
+                    זוהו <strong>${candidate.fieldIds.length}</strong> שדות שנראים כמו טבלה: <strong>"${tableName}"</strong><br>
+                    <span class="table-stats">${candidate.columnCount} עמודות × ${candidate.rowCount} שורות</span>
+                `;
+
+                // Show columns with Hebrew names
+                columnsContainer.innerHTML = `
+                    <div class="columns-label">עמודות שזוהו:</div>
+                    <div class="columns-list">
+                        ${columnNames.map(col => `<span class="column-tag">${col}</span>`).join('')}
+                    </div>
+                    <div class="rows-label">שורות: ${candidate.rows.join(', ')}</div>
+                    <div class="fields-preview">
+                        <details>
+                            <summary>שדות שיומרו (${candidate.fieldIds.length})</summary>
+                            <ul class="fields-list">
+                                ${candidate.fields.slice(0, 10).map(f =>
+                                    `<li>${f.label_he || f.columnHe || f.label_en}</li>`
+                                ).join('')}
+                                ${candidate.fields.length > 10 ? `<li>... ועוד ${candidate.fields.length - 10}</li>` : ''}
+                            </ul>
+                        </details>
+                    </div>
+                `;
+
+                // Update navigation
+                if (candidates.length > 1) {
+                    navContainer.classList.remove('hidden');
+                    counter.textContent = `${index + 1} / ${candidates.length}`;
+                } else {
+                    navContainer.classList.add('hidden');
+                }
+            }
+
+            // Convert button
+            convertBtn.addEventListener('click', () => {
+                const candidate = candidates[currentIndex];
+                if (candidate) {
+                    state.convertSmartTableToTable(candidate);
+                }
+
+                // Move to next or close
+                currentIndex++;
+                if (currentIndex < candidates.length) {
+                    showCandidate(currentIndex);
+                } else {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                }
+            });
+
+            // Skip button
+            skipBtn.addEventListener('click', () => {
+                // Move to next or close
+                currentIndex++;
+                if (currentIndex < candidates.length) {
+                    showCandidate(currentIndex);
+                } else {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                    showToast('שדות נשמרו כשדות רגילים', 'info');
+                }
+            });
+
+            // Close on overlay click
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "$schema": "unified-import-v1",
+  "version": "1.0",
+  "meta": {
+    "version": "1.0",
+    "source": "test",
+    "generatedAt": "2025-12-27T00:00:00Z"
+  },
+  "fields": [
+    { "id": "child1_name", "type": "text", "page": 1, "label_he": "שם ילד 1", "label_en": "child1_name" },
+    { "id": "child1_id", "type": "text", "page": 1, "label_he": "ת.ז. ילד 1", "label_en": "child1_id" },
+    { "id": "child1_birthdate", "type": "date", "page": 1, "label_he": "ת. לידה ילד 1", "label_en": "child1_birthdate" },
+    { "id": "child2_name", "type": "text", "page": 1, "label_he": "שם ילד 2", "label_en": "child2_name" },
+    { "id": "child2_id", "type": "text", "page": 1, "label_he": "ת.ז. ילד 2", "label_en": "child2_id" },
+    { "id": "child2_birthdate", "type": "date", "page": 1, "label_he": "ת. לידה ילד 2", "label_en": "child2_birthdate" },
+    { "id": "child3_name", "type": "text", "page": 1, "label_he": "שם ילד 3", "label_en": "child3_name" },
+    { "id": "child3_id", "type": "text", "page": 1, "label_he": "ת.ז. ילד 3", "label_en": "child3_id" },
+    { "id": "child3_birthdate", "type": "date", "page": 1, "label_he": "ת. לידה ילד 3", "label_en": "child3_birthdate" },
+    { "id": "first_name", "type": "text", "page": 1, "label_he": "שם פרטי", "label_en": "first_name" },
+    { "id": "last_name", "type": "text", "page": 1, "label_he": "שם משפחה", "label_en": "last_name" }
+  ],
+  "groups": [],
+  "tables": []
+}

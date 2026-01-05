@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# system
+*.log
+*.tmp
+
+# backups
+*_backup
+*_old
+backup/
+backup_*/

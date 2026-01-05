@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveFill - מילוי PDF חי</title>
+
+    <!-- David Libre Font - same as Export -->
+    <style>
+        @font-face {
+            font-family: 'David Libre';
+            src: url('./fonts/DavidLibre-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+    </style>
+
+    <!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+</script>
+
+<!-- pdf-lib (גרסה תואמת לדפדפן) -->
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+<!-- fontkit לדפדפן -->
+<script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.0.0"></script>
+
+<!-- רישום fontkit ל-pdf-lib (חובה לעברית) -->
+<script>
+    PDFLib.PDFDocument.prototype.registerFontkit = function (fontkit) {
+        this.fontkit = fontkit;
+    };
+    PDFLib.PDFDocument.registerFontkit = function (fontkit) {
+        PDFLib.PDFDocument.prototype.fontkit = fontkit;
+    };
+    PDFLib.PDFDocument.registerFontkit(fontkit);
+</script>
+
+<!-- Shared CSS -->
+<link rel="stylesheet" href="../../assets/css/app.css">
+<link rel="stylesheet" href="../shared/toast.css">
+<!-- livefill.css removed - causing display issues -->
+
+<style>
+        /**
+         * LiveFill Tool - Professional UI Styles
+         * Version: 2.0
+         */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-primary, 'Heebo', -apple-system, sans-serif);
+            background: var(--bg-primary, #f7f8fa);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Header - Professional Style */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+            box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 1000;
+            gap: 16px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            color: var(--text-inverse, white);
+            flex: 0 0 auto;
+            font-weight: 600;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex: 1;
+        }
+
+        /* Unified Button Styles */
+        .upload-btn {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            color: var(--text-inverse, white);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: var(--radius-md, 8px);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all var(--transition-normal, 0.2s);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .upload-btn:hover {
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-1px);
+        }
+
+        .upload-btn.json {
+            background: rgba(255,255,255,0.2);
+        }
+
+        .upload-btn.json:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .upload-btn.font {
+            background: rgba(255,255,255,0.15);
+        }
+
+        .upload-btn.font:hover {
+            background: rgba(255,255,255,0.25);
+        }
+
+        .export-btn {
+            padding: 8px 16px;
+            background: var(--success-color, #10b981);
+            color: var(--text-inverse, white);
+            border: none;
+            border-radius: var(--radius-md, 8px);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-right: auto;
+            transition: all var(--transition-normal, 0.2s);
+            box-shadow: var(--shadow-sm, 0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .export-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md, 0 4px 8px rgba(0,0,0,0.15));
+        }
+
+        .export-btn:disabled {
+            background: rgba(255,255,255,0.2);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Zoom Controls */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.15);
+            padding: 6px 12px;
+            border-radius: var(--radius-md, 8px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .zoom-slider {
+            width: 120px;
+            accent-color: white;
+        }
+
+        .zoom-value {
+            min-width: 50px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-inverse, white);
+            font-weight: 500;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            margin-top: 60px;
+        }
+
+        /* ===== PDF Viewer Area ===== */
+        .pdf-viewer {
+            flex: 1;
+            overflow: auto;
+            background: var(--bg-tertiary, #f3f4f6);
+            padding: 20px;
+            position: relative;
+        }
+
+        .transform-container {
+            transform-origin: 0 0;
+            transition: none;
+        }
+
+        .pdf-container {
+            margin: 0 auto;
+            background: var(--bg-secondary, white);
+            box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.1));
+            border-radius: var(--radius-lg, 12px);
+            position: relative;
+            width: fit-content;
+        }
+
+        .page-wrapper {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .page-canvas {
+            display: block;
+            border: 1px solid #ddd;
+            /* SIZE IS FIXED - NEVER CHANGES AFTER INITIAL RENDER */
+        }
+
+        .fields-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            /* Overlays move with canvas because they're in the same container */
+        }
+
+        .field-editor {
+            position: absolute;
+            border: 2px solid #4CAF50;
+            background-color: transparent !important;
+            opacity: 0.35;
+            cursor: text;
+            padding: 2px 4px;
+            outline: none;
+            transition: all 0.2s;
+            pointer-events: all;
+            overflow: hidden;
+            white-space: nowrap;
+            direction: rtl;
+            font-family: 'David Libre', Arial, sans-serif;
+        }
+
+        .field-editor:hover {
+            border-color: #2196F3;
+            background-color: transparent !important;
+            opacity: 0.5;
+        }
+
+        .field-editor.selected {
+            border-color: #ff6b6b;
+            background-color: transparent !important;
+            opacity: 0.6;
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+        }
+
+        .field-editor.checkbox,
+        .field-editor.radio {
+            border: 2px solid rgba(30,144,255,0.9); /* soft blue border */
+            background-color: transparent !important;
+            opacity: 0.35;
+            border-radius: 4px;                     /* slight rounding */
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;                        /* small subtle marker */
+            color: rgba(0,0,0,0.6);
+            backdrop-filter: blur(1px);
+            cursor: pointer;
+            padding: 0;
+            font-family: 'Segoe UI Symbol', 'Segoe UI', Arial, sans-serif;
+            line-height: 1;
+        }
+
+        .field-editor.checkbox.checked::after {
+            content: "✓";
+            font-size: 14px;
+            color: red;
+            position: absolute;
+            left: 3px;
+            top: -2px;
+        }
+
+        .field-editor.signature {
+            border-bottom: 2px solid #333 !important;
+            background: transparent !important;
+            font-style: italic;
+        }
+
+        /* ===== Table Cell Editor ===== */
+        /* PRODUCTION MODE: Clean display matching Export */
+        .table-cell-editor {
+            position: absolute;
+            border: none;
+            background-color: transparent;
+            cursor: text;
+            padding: 0;
+            outline: none;
+            overflow: hidden;
+            white-space: nowrap;
+            direction: rtl;
+            font-family: 'David Libre', Arial, sans-serif;
+            pointer-events: auto;
+            z-index: 50;
+            box-sizing: border-box;
+        }
+        /* Row number indicator - displays 1-based (visual) not 0-based (logical) */
+        /* Uses CSS counter since data-row-index must remain 0-based for JS logic */
+        .table-cell-editor::before {
+            /* Calculate: attr value + 1 for display */
+            /* CSS can't do math on attr(), so we use a workaround via JS data attribute */
+            content: attr(data-row-display);
+            position: absolute;
+            top: 0;
+            left: 0;
+            background: #FF0000;
+            color: white;
+            font-size: 9px;
+            padding: 0 3px;
+            font-weight: bold;
+        }
+        .table-cell-editor:hover { border-color: #0000FF !important; background-color: rgba(0, 0, 255, 0.2) !important; }
+        .table-cell-editor:focus { border-color: #00FF00 !important; background: rgba(0, 255, 0, 0.3) !important; }
+        .table-cell-editor.checkbox { cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .table-cell-editor.checkbox.checked::after { content: "✓"; color: red; font-size: 12px; font-weight: bold; }
+
+        /* ===== Sidebar - Professional Style ===== */
+        .sidebar {
+            width: 320px;
+            background: var(--bg-secondary, white);
+            box-shadow: var(--shadow-lg, -4px 0 20px rgba(0,0,0,0.08));
+            padding: 0;
+            overflow-y: auto;
+            transition: transform var(--transition-slow, 0.3s);
+            border-left: 1px solid var(--border-light, #e5e7eb);
+        }
+
+        .sidebar.hidden {
+            transform: translateX(100%);
+        }
+
+        .sidebar h2 {
+            font-size: 16px;
+            margin: 0;
+            padding: 16px 20px;
+            color: var(--text-inverse, white);
+            background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+            font-weight: 600;
+        }
+
+        .sidebar-content {
+            padding: 16px 20px;
+        }
+
+        .control-group {
+            margin-bottom: 16px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary, #4b5563);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        .control-group input,
+        .control-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-light, #e5e7eb);
+            border-radius: var(--radius-md, 8px);
+            font-size: 14px;
+            transition: all var(--transition-fast, 0.15s);
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: var(--primary-color, #667eea);
+            box-shadow: var(--shadow-focus, 0 0 0 3px rgba(102, 126, 234, 0.15));
+        }
+
+        .control-group input[type="range"] {
+            padding: 0;
+            accent-color: var(--primary-color, #667eea);
+        }
+
+        .control-group .range-value {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alignment-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .alignment-btn {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border-light, #e5e7eb);
+            background: var(--bg-secondary, white);
+            cursor: pointer;
+            border-radius: var(--radius-md, 8px);
+            transition: all var(--transition-fast, 0.15s);
+            font-size: 14px;
+        }
+
+        .alignment-btn:hover {
+            background: var(--bg-tertiary, #f3f4f6);
+            border-color: var(--border-medium, #d1d5db);
+        }
+
+        .alignment-btn.active {
+            background: var(--primary-color, #667eea);
+            color: var(--text-inverse, white);
+            border-color: var(--primary-color, #667eea);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: var(--radius-lg, 12px);
+            color: var(--text-inverse, white);
+            font-weight: 500;
+            z-index: 9999;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all var(--transition-slow, 0.3s);
+            box-shadow: var(--shadow-lg, 0 10px 25px rgba(0,0,0,0.15));
+        }
+
+        .status-message.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .status-message.success {
+            background: var(--success-color, #10b981);
+        }
+
+        .status-message.error {
+            background: var(--danger-color, #ef4444);
+        }
+
+        .status-message.info {
+            background: var(--info-color, #3b82f6);
+        }
+
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: #1e1e1e;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 9998;
+            transform: translateY(100%);
+            transition: transform 0.3s;
+        }
+
+        .debug-console.show {
+            transform: translateY(0);
+        }
+
+        .debug-line {
+            margin-bottom: 5px;
+            white-space: pre-wrap;
+        }
+
+        .debug-error {
+            color: #ff6b6b;
+        }
+
+        .debug-success {
+            color: #4CAF50;
+        }
+
+        .debug-warning {
+            color: #ffeb3b;
+        }
+
+        .font-status {
+            display: none;
+            background: #4CAF50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+    .checkbox-editor {
+    /* Removed - styling handled by .field-editor.checkbox */
+}
+
+    /* ========================================
+       Toast Notification System
+       ======================================== */
+    .toast-container {
+        position: fixed;
+        top: 80px;
+        left: 20px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+    }
+
+    .toast {
+        padding: 15px 20px;
+        border-radius: 6px;
+        color: white;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 250px;
+        max-width: 400px;
+        pointer-events: all;
+        animation: slideInRight 0.3s ease-out;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .toast.removing {
+        animation: slideOutRight 0.3s ease-out forwards;
+    }
+
+    .toast-success {
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    }
+
+    .toast-error {
+        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+    }
+
+    .toast-warning {
+        background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+    }
+
+    .toast-info {
+        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+    }
+
+    .toast-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+    }
+
+    @keyframes slideInRight {
+        from {
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+    }
+
+    /* ========================================
+       Progress Modal
+       ======================================== */
+    .progress-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10001;
+        backdrop-filter: blur(4px);
+    }
+
+    .progress-modal.show {
+        display: flex;
+    }
+
+    .progress-content {
+        background: white;
+        padding: 30px 40px;
+        border-radius: 12px;
+        min-width: 400px;
+        max-width: 500px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: scaleIn 0.3s ease-out;
+    }
+
+    .progress-content h3 {
+        margin: 0 0 20px 0;
+        font-size: 20px;
+        color: #333;
+        text-align: center;
+    }
+
+    .progress-bar-container {
+        background: #e0e0e0;
+        border-radius: 10px;
+        height: 20px;
+        overflow: hidden;
+        margin-bottom: 15px;
+        position: relative;
+    }
+
+    .progress-bar-fill {
+        background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease-out;
+        border-radius: 10px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .progress-bar-fill::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+        background: linear-gradient(
+            90deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent
+        );
+        animation: shimmer 2s infinite;
+    }
+
+    @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+    }
+
+    .progress-text {
+        text-align: center;
+        color: #666;
+        font-size: 14px;
+        margin-top: 10px;
+    }
+
+    .progress-percentage {
+        text-align: center;
+        font-size: 24px;
+        font-weight: bold;
+        color: #4CAF50;
+        margin-bottom: 10px;
+    }
+
+    @keyframes scaleIn {
+        from {
+            transform: scale(0.9);
+            opacity: 0;
+        }
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    /* ========================================
+       Validation Modal
+       ======================================== */
+    .validation-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 10002;
+        backdrop-filter: blur(4px);
+    }
+
+    .validation-modal.show {
+        display: flex;
+    }
+
+    .validation-content {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        min-width: 450px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: scaleIn 0.3s ease-out;
+    }
+
+    .validation-content h3 {
+        margin: 0 0 20px 0;
+        font-size: 22px;
+        color: #333;
+        text-align: center;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 15px;
+    }
+
+    .validation-section {
+        margin-bottom: 20px;
+    }
+
+    .validation-section h4 {
+        font-size: 16px;
+        margin-bottom: 10px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .validation-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .validation-list li {
+        padding: 8px 12px;
+        margin-bottom: 6px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .validation-error {
+        background: #ffebee;
+        color: #c62828;
+        border-right: 4px solid #c62828;
+    }
+
+    .validation-warning {
+        background: #fff3e0;
+        color: #ef6c00;
+        border-right: 4px solid #ef6c00;
+    }
+
+    .validation-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    .validation-btn {
+        padding: 10px 30px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .validation-btn-cancel {
+        background: #e0e0e0;
+        color: #333;
+    }
+
+    .validation-btn-cancel:hover {
+        background: #bdbdbd;
+    }
+
+    .validation-btn-proceed {
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        color: white;
+    }
+
+    .validation-btn-proceed:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+    }
+
+    .validation-btn-proceed:disabled {
+        background: #bdbdbd;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    /* Excel Fields Import Dialog */
+    .fill-dialog-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+    }
+
+    .fill-dialog {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .fill-dialog-header {
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .fill-dialog-header h3 {
+        margin: 0;
+        font-size: 18px;
+    }
+
+    .dialog-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        opacity: 0.8;
+    }
+
+    .dialog-close:hover {
+        opacity: 1;
+    }
+
+    .fill-dialog-body {
+        padding: 20px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .fill-dialog-footer {
+        padding: 16px 20px;
+        border-top: 1px solid #eee;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+
+    .btn-cancel, .btn-secondary, .btn-primary {
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        border: none;
+    }
+
+    .btn-cancel {
+        background: #f5f5f5;
+        color: #666;
+    }
+
+    .btn-secondary {
+        background: #e0e0e0;
+        color: #333;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+    }
+
+    .btn-primary:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+
+    .upload-zone {
+        border: 2px dashed #ddd;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+        border-color: #667eea;
+        background: #f8f9ff;
+    }
+
+    .upload-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+    }
+
+    .upload-hint {
+        color: #999;
+        font-size: 12px;
+        margin-top: 10px;
+    }
+
+    .upload-info {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 8px;
+    }
+
+    .upload-success {
+        color: #4caf50;
+    }
+
+    .upload-error {
+        color: #f44336;
+    }
+
+    .success-icon, .error-icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+    }
+
+    .matching-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+
+    .matching-table th {
+        background: #f5f5f5;
+        padding: 10px 8px;
+        text-align: right;
+        border-bottom: 2px solid #ddd;
+        font-weight: 600;
+    }
+
+    .matching-table td {
+        padding: 8px;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+    }
+
+    .matching-table .arrow {
+        text-align: center;
+        color: #667eea;
+        font-weight: bold;
+    }
+
+    .match-row:hover {
+        background: #f9f9ff;
+    }
+
+    .unmatched-row {
+        background: #fff8f8;
+    }
+
+    .manual-override {
+        background: #f0fff0;
+    }
+
+    .field-column-select {
+        font-size: 12px;
+        max-width: 200px;
+    }
+
+    .preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .preview-stats {
+        display: flex;
+        gap: 15px;
+    }
+
+    .stat.matched {
+        color: #4caf50;
+        font-weight: 600;
+    }
+
+    .stat.unmatched {
+        color: #ff9800;
+    }
+
+    /* Improved UX for unmapped fields */
+    .stat-separator {
+        color: #999;
+        margin: 0 4px;
+    }
+
+    .stat.unmapped-info {
+        background: #FFF3E0;
+        color: #E65100;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .unmapped-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    /* Info icon with CSS tooltip */
+    .info-icon-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+    .info-icon {
+        cursor: help;
+        font-size: 14px;
+    }
+    .info-tooltip {
+        display: none;
+        position: absolute;
+        bottom: 100%;
+        right: 50%;
+        transform: translateX(50%);
+        background: #333;
+        color: white;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        white-space: nowrap;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        text-align: right;
+        direction: rtl;
+        margin-bottom: 8px;
+    }
+    .info-tooltip::after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        right: 50%;
+        transform: translateX(50%);
+        border: 8px solid transparent;
+        border-top-color: #333;
+    }
+    .info-icon-wrapper:hover .info-tooltip {
+        display: block;
+    }
+
+    /* Read-only imported cells styling */
+    .imported-readonly {
+        background: rgba(33, 150, 243, 0.08) !important;
+        cursor: not-allowed !important;
+        position: relative;
+    }
+    .imported-readonly::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+    }
+    .imported-readonly input,
+    .imported-readonly[contenteditable] {
+        cursor: not-allowed !important;
+        color: #1976D2 !important;
+    }
+
+    /* Import status indicator */
+    .import-status-indicator {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #E3F2FD;
+        border: 1px solid #90CAF9;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #1565C0;
+    }
+    .import-status-indicator.active {
+        display: flex;
+    }
+    .import-status-indicator .clear-import-btn {
+        background: #F44336;
+        color: white;
+        border: none;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+    }
+    .import-status-indicator .clear-import-btn:hover {
+        background: #D32F2F;
+    }
+
+    /* Popover field/cell styling */
+    .popover-field,
+    .popover-cell {
+        cursor: pointer !important;
+        transition: background-color 0.2s;
+    }
+    .popover-field:hover,
+    .popover-cell:hover {
+        background-color: rgba(33, 150, 243, 0.15) !important;
+    }
+    .popover-field.empty-field,
+    .popover-cell.empty-field {
+        background-color: rgba(33, 150, 243, 0.05);
+        border: 1px dashed rgba(33, 150, 243, 0.3);
+    }
+    .popover-field.empty-field::after,
+    .popover-cell.empty-field::after {
+        content: 'לחץ להזנה';
+        font-size: 10px;
+        color: rgba(33, 150, 243, 0.6);
+    }
+
+    /* Digit box styling for preview */
+    .digit-box {
+        border-left: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .digit-box:last-child {
+        border-left: none;
+    }
+
+    /* NumericBoxesRenderer - Digits in boxes for table cells */
+    .numeric-boxes {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        align-items: flex-end; /* Bottom anchor */
+        justify-content: flex-start;
+        direction: ltr;
+    }
+    .numeric-boxes .digit {
+        flex: 1;
+        text-align: center;
+        display: flex;
+        align-items: flex-end; /* Bottom anchor */
+        justify-content: center;
+    }
+    .table-cell-editor .numeric-boxes {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+    .field-editor .numeric-boxes {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <div class="app-container">
+        <div class="header">
+            <h1>LiveFill</h1>
+
+            <div class="header-controls">
+                <label for="pdf-upload" class="upload-btn">
+                    📄 העלה PDF
+                    <input type="file" id="pdf-upload" accept=".pdf">
+                </label>
+
+                <label for="json-upload" class="upload-btn json">
+                    📋 העלה מיפוי
+                    <input type="file" id="json-upload" accept=".json">
+                </label>
+
+                <button class="upload-btn" id="excel-upload-btn" onclick="openExcelImport()" style="background: rgba(76, 175, 80, 0.3);">
+                    📊 ייבוא Excel
+                </button>
+
+                <!-- Import Status Indicator -->
+                <div class="import-status-indicator" id="import-status">
+                    <span>📊 נתונים מיובאים פעילים</span>
+                    <span id="import-row-count"></span>
+                    <button class="clear-import-btn" onclick="clearImportedData()">נקה ייבוא</button>
+                </div>
+
+                <label for="font-upload" class="upload-btn font">
+                    🔤 העלה פונט
+                    <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2">
+                </label>
+
+                <span id="font-status" class="font-status"></span>
+
+                <button class="export-btn" id="export-btn" onclick="exportFilledPDF()" disabled>
+                    📤 ייצא PDF
+                </button>
+
+                <button class="export-btn" id="export-json-btn" onclick="exportJSON()" disabled style="background: #2196F3;">
+                    📋 ייצא JSON
+                </button>
+
+                <button class="export-btn" onclick="saveProgress()" style="background: #9C27B0;">
+                    💾 שמור טיוטה
+                </button>
+
+                <button class="export-btn" onclick="loadProgress()" style="background: #FF9800;">
+                    📂 טען טיוטה
+                </button>
+
+                <button class="export-btn" onclick="toggleDebugConsole()" style="background: #607D8B; font-size: 12px;">
+                    🐛 דיבוג
+                </button>
+            </div>
+
+            <div class="zoom-controls">
+                <span>זום:</span>
+                <input type="range" id="zoom-slider" class="zoom-slider" min="50" max="200" value="200">
+                <span id="zoom-value" class="zoom-value">200%</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="pdf-viewer" id="viewport-container">
+                <div id="transform-container" class="transform-container">
+                    <div id="pdf-container" class="pdf-container">
+                        <!-- PDF pages will be rendered here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <h2>עריכת שדה</h2>
+
+                <div id="no-field-selected" style="text-align: center; color: #999; padding: 20px;">
+                    בחר שדה לעריכה
+                </div>
+
+                <div id="field-controls" style="display: none;">
+                    <div class="control-group">
+                        <label>סוג פונט:</label>
+                        <select id="font-family">
+                            <option value="David Libre">David Libre</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Courier New">Courier New</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>גודל פונט:</label>
+                        <div class="range-value">
+                            <input type="range" id="font-size" min="8" max="72" value="14">
+                            <input type="number" id="font-size-number" min="8" max="72" value="14" style="width: 60px;">
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>צבע טקסט:</label>
+                        <input type="color" id="font-color" value="#000000">
+                    </div>
+
+                    <div class="control-group">
+                        <label>יישור טקסט:</label>
+                        <div class="alignment-buttons">
+                            <button class="alignment-btn" data-align="left">שמאל</button>
+                            <button class="alignment-btn" data-align="center">מרכז</button>
+                            <button class="alignment-btn active" data-align="right">ימין</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>מרווח בין אותיות:</label>
+                        <div class="range-value">
+                            <input type="range" id="letter-spacing" min="-2" max="10" value="0" step="0.1">
+                            <input type="number" id="letter-spacing-number" min="-2" max="10" value="0" step="0.1" style="width: 60px;">
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>מרווח בין מילים:</label>
+                        <div class="range-value">
+                            <input type="range" id="word-spacing" min="-5" max="20" value="0" step="0.1">
+                            <input type="number" id="word-spacing-number" min="-5" max="20" value="0" step="0.1" style="width: 60px;">
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <label>שקיפות:</label>
+                        <div class="range-value">
+                            <input type="range" id="opacity" min="10" max="100" value="100">
+                            <span id="opacity-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-message" class="status-message"></div>
+
+    <!-- Debug Console -->
+    <div id="debug-console" class="debug-console"></div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Progress Modal -->
+    <div id="progress-modal" class="progress-modal">
+        <div class="progress-content">
+            <h3>מייצא PDF...</h3>
+            <div class="progress-percentage" id="progress-percentage">0%</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progress-bar-fill"></div>
+            </div>
+            <p class="progress-text" id="progress-text">מתחיל...</p>
+        </div>
+    </div>
+
+    <!-- Validation Modal -->
+    <div id="validation-modal" class="validation-modal">
+        <div class="validation-content">
+            <h3>בדיקת תקינות טרם ייצוא</h3>
+            <div id="validation-body"></div>
+            <div class="validation-buttons">
+                <button class="validation-btn validation-btn-cancel" onclick="ValidationModal.hide()">ביטול</button>
+                <button class="validation-btn validation-btn-proceed" id="validation-proceed-btn" onclick="ValidationModal.proceed()">המשך בכל זאת</button>
+            </div>
+        </div>
+    </div>
+
+<script src="../shared/debounce.js"></script>
+<script src="../shared/normalizeField.js"></script>
+<script src="../shared/migrateV1toV2.js"></script>
+<script src="../shared/toast.js"></script>
+<!-- CRITICAL: UnifiedCoordinateSystem must be loaded BEFORE main-livefill.js -->
+<script src="../shared/UnifiedCoordinateSystem.js"></script>
+<!-- Layout Helper - Safe accessors for field layout (Phase 3) -->
+<script src="../shared/LayoutHelper.js"></script>
+<!-- Intent resolver and per-glyph renderer for box fields -->
+<script src="../shared/FieldIntentResolver.js?v=20251229g"></script>
+<script src="../shared/PerGlyphBoxRenderer.js?v=20251229"></script>
+<script src="js/livefill-core.js"></script>
+<script src="js/livefill-ui.js"></script>
+<script src="js/data-store-manager.js"></script>
+<script src="js/field-input-popover.js?v=20251229"></script>
+<script src="js/export-engine.js?v=20251230d"></script>
+<script src="js/main-livefill.js?v=20251230g"></script>
+
+<!-- SheetJS for Excel/CSV parsing -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+<!-- Semantic Engine - Value Helpers (must load BEFORE ExcelDataResolver) -->
+<script src="../fill-engine/semantic/ValueHelpers.js"></script>
+
+<!-- Excel Fill Integration -->
+<script src="../fill-engine/ExcelDataResolver.js"></script>
+
+<!-- Semantic Engine (Enhanced Matching) -->
+<script src="../fill-engine/semantic/dictionaries/synonyms.js"></script>
+<script src="../fill-engine/semantic/dictionaries/formats.js"></script>
+<script src="../fill-engine/semantic/dictionaries/entities.js"></script>
+<script src="../fill-engine/semantic/Preprocessor.js"></script>
+<script src="../fill-engine/semantic/SemanticMatcher.js"></script>
+<script src="../fill-engine/semantic/MultiValueParser.js"></script>
+<script src="../fill-engine/semantic/CanonicalCategories.js"></script>
+<script src="../fill-engine/semantic/SemanticIntegration.js"></script>
+
+<script src="../fill-engine/TableDataAdapter.js"></script>
+<script src="../fill-engine/ExcelFillUI.js"></script>
+
+<!-- Excel Import Integration -->
+<script>
+    // ============ IMPORT STATUS MANAGEMENT ============
+
+    /**
+     * Update import status indicator UI
+     */
+    function updateImportStatusUI() {
+        const indicator = document.getElementById('import-status');
+        const rowCountSpan = document.getElementById('import-row-count');
+
+        if (!indicator) return;
+
+        if (window.DataStoreManager && window.DataStoreManager.getIsImportActive()) {
+            const meta = window.DataStoreManager.getImportMeta();
+            indicator.classList.add('active');
+            rowCountSpan.textContent = `(${meta.rowCount} שורות)`;
+        } else {
+            indicator.classList.remove('active');
+            rowCountSpan.textContent = '';
+        }
+    }
+
+    /**
+     * Clear imported data and return to manual mode
+     * Manual data is preserved!
+     */
+    function clearImportedData() {
+        if (!window.DataStoreManager) {
+            console.warn('DataStoreManager not available');
+            return;
+        }
+
+        // Confirm with user
+        if (!confirm('לנקות את הנתונים המיובאים?\nהמילוי הידני (אם קיים) יישמר.')) {
+            return;
+        }
+
+        // Clear imported data
+        window.DataStoreManager.clearImportedData();
+
+        // Sync to legacy and re-render
+        window.DataStoreManager.syncToLegacyLiveFillData(window.liveFillData);
+
+        // Update UI
+        updateImportStatusUI();
+
+        // Re-render overlays
+        if (window.createFieldOverlays) {
+            window.createFieldOverlays();
+        }
+
+        // Toast
+        if (window.ToastManager) {
+            window.ToastManager.success('הנתונים המיובאים נוקו. ניתן לערוך ידנית.', 3000);
+        }
+
+        console.log('[LiveFill] Import cleared. Manual data preserved.');
+    }
+
+    // Listen for import activation/clearing events
+    window.addEventListener('datastore:import-activated', (e) => {
+        console.log('[LiveFill] Import activated:', e.detail);
+        updateImportStatusUI();
+    });
+
+    window.addEventListener('datastore:import-cleared', () => {
+        console.log('[LiveFill] Import cleared');
+        updateImportStatusUI();
+    });
+
+    /**
+     * Open Excel import dialog
+     * Supports both tables AND regular fields
+     */
+    function openExcelImport() {
+        console.log('📊 openExcelImport called');
+        console.log('📊 window.fieldsMapping:', window.fieldsMapping);
+        console.log('📊 window.fieldsMapping?.tables:', window.fieldsMapping?.tables);
+        console.log('📊 window.fieldsMapping?.fields:', window.fieldsMapping?.fields?.length);
+
+        // Check if mapping is loaded
+        if (!window.fieldsMapping) {
+            if (window.ToastManager) {
+                ToastManager.warning('יש להעלות מיפוי לפני ייבוא Excel');
+            } else {
+                alert('יש להעלות מיפוי לפני ייבוא Excel');
+            }
+            return;
+        }
+
+        const hasTables = window.fieldsMapping.tables && window.fieldsMapping.tables.length > 0;
+        const hasFields = window.fieldsMapping.fields && window.fieldsMapping.fields.length > 0;
+
+        if (!hasTables && !hasFields) {
+            if (window.ToastManager) {
+                ToastManager.warning('המיפוי ריק - אין שדות או טבלאות');
+            } else {
+                alert('המיפוי ריק - אין שדות או טבלאות');
+            }
+            return;
+        }
+
+        // Check if Excel modules are loaded
+        console.log('📊 ExcelFillUI:', window.ExcelFillUI);
+        console.log('📊 ExcelDataResolver:', window.ExcelDataResolver);
+
+        if (!window.ExcelDataResolver) {
+            if (window.ToastManager) {
+                ToastManager.error('מודולי Excel לא נטענו');
+            } else {
+                alert('מודולי Excel לא נטענו');
+            }
+            return;
+        }
+
+        // Decide which import mode to use
+        if (hasTables && window.ExcelFillUI) {
+            // Use existing table-based import
+            openExcelImportForTables();
+        } else if (hasFields) {
+            // Use new field-based import
+            openExcelImportForFields();
+        } else {
+            if (window.ToastManager) {
+                ToastManager.warning('לא נמצאו שדות או טבלאות במיפוי');
+            }
+        }
+    }
+
+    /**
+     * Excel import for tables (existing functionality)
+     */
+    function openExcelImportForTables() {
+        const table = window.fieldsMapping.tables[0];
+        console.log('📊 Table to use:', table);
+
+        window.ExcelFillUI.openExcelUploadDialog(table, (fillData, resolverResult) => {
+            console.log('📊 Excel data resolved:', fillData);
+
+            const tableId = table.tableId;
+            const tableData = fillData[tableId];
+
+            console.log('📊 Excel data for table:', tableId, '- rows:', tableData?.length);
+
+            if (window.updateTableDataFromExcel) {
+                window.updateTableDataFromExcel(tableId, tableData);
+            }
+
+            if (window.ToastManager) {
+                const rowCount = tableData?.length || 0;
+                ToastManager.success(`✅ ${rowCount} שורות נטענו מ-Excel`);
+            }
+
+            const exportBtn = document.getElementById('export-btn');
+            if (exportBtn) exportBtn.disabled = false;
+        });
+    }
+
+    /**
+     * Excel import for regular fields (NEW)
+     * Maps Excel columns to field labels
+     */
+    function openExcelImportForFields() {
+        console.log('📊 openExcelImportForFields - Starting field-based import');
+
+        // Convert fields to column-like structure for matching
+        const fieldsAsColumns = convertFieldsToColumns(window.fieldsMapping.fields);
+        console.log('📊 Fields as columns:', fieldsAsColumns);
+
+        // Create pseudo-table mapping for resolver
+        const pseudoTableMapping = {
+            tableId: '_fields_',
+            columns: fieldsAsColumns,
+            rowCount: 1000 // Allow many rows for batch processing
+        };
+
+        // Open custom dialog for field import
+        openFieldsExcelDialog(pseudoTableMapping);
+    }
+
+    /**
+     * Convert fields array to columns format for ExcelDataResolver
+     */
+    function convertFieldsToColumns(fields) {
+        // Filter out radio/checkbox options that are part of groups
+        // Radio groups: use ONE column for the group (single selection)
+        // Checkbox groups: use individual columns for each option (multi-select)
+        const processedGroupIds = new Set();
+        const columns = [];
+
+        fields.forEach(field => {
+            // Skip fields that are part of an already-processed group
+            if (field.groupId && processedGroupIds.has(field.groupId)) {
+                // For checkbox groups, we still add individual checkbox fields
+                const group = window.fieldsMapping.radioGroups?.find(g => g.groupId === field.groupId);
+                if (group && group.type === 'checkbox') {
+                    // Add individual checkbox field column
+                    columns.push({
+                        columnId: field.id,
+                        hebrewName: field.label_he || '',
+                        englishId: field.label_en || '',
+                        type: 'checkbox'
+                    });
+                }
+                return;
+            }
+
+            // For group members, process the group
+            if (field.groupId) {
+                const group = window.fieldsMapping.radioGroups?.find(g => g.groupId === field.groupId);
+                if (group && !processedGroupIds.has(field.groupId)) {
+                    processedGroupIds.add(field.groupId);
+
+                    if (group.type === 'checkbox') {
+                        // Checkbox groups: add individual columns for each option (multi-select)
+                        columns.push({
+                            columnId: field.id,
+                            hebrewName: field.label_he || '',
+                            englishId: field.label_en || '',
+                            type: 'checkbox'
+                        });
+                    } else {
+                        // Radio groups: add ONE column for the group (single selection)
+                        columns.push({
+                            columnId: group.groupId,
+                            hebrewName: group.groupName || field.label_he,
+                            englishId: group.groupNameEn || field.label_en,
+                            type: group.type || 'radio',
+                            isGroup: true,
+                            options: group.options
+                        });
+                    }
+                }
+                return;
+            }
+
+            // Regular field
+            columns.push({
+                columnId: field.id,
+                hebrewName: field.label_he || '',
+                englishId: field.label_en || '',
+                type: field.type || 'text'
+            });
+        });
+
+        return columns;
+    }
+
+    /**
+     * Open custom dialog for field-based Excel import
+     */
+    function openFieldsExcelDialog(pseudoTableMapping) {
+        // Remove existing dialog
+        const existingDialog = document.getElementById('excel-fields-dialog');
+        if (existingDialog) existingDialog.remove();
+
+        const dialog = document.createElement('div');
+        dialog.id = 'excel-fields-dialog';
+        dialog.className = 'fill-dialog-overlay';
+        dialog.innerHTML = `
+            <div class="fill-dialog" style="max-width: 900px; direction: rtl;">
+                <div class="fill-dialog-header">
+                    <h3>📊 ייבוא נתונים מ-Excel לשדות</h3>
+                    <button class="dialog-close" onclick="document.getElementById('excel-fields-dialog').remove()">✕</button>
+                </div>
+                <div class="fill-dialog-body">
+                    <!-- Step 1: File Upload -->
+                    <div id="fields-step-upload" class="excel-step active">
+                        <div class="upload-zone" id="fields-drop-zone">
+                            <div class="upload-icon">📁</div>
+                            <p>גרור קובץ Excel/CSV לכאן</p>
+                            <p class="upload-hint">או לחץ לבחירת קובץ</p>
+                            <input type="file" id="fields-file-input" accept=".xlsx,.xls,.csv" style="display:none;">
+                        </div>
+                        <div class="upload-info">
+                            <p><strong>שדות במיפוי:</strong> ${pseudoTableMapping.columns.length}</p>
+                            <p><strong>מצב:</strong> כל שורה ב-Excel = סט ערכים לשדות</p>
+                            <p class="upload-hint">💡 שורה ראשונה = ערכים שיוזנו עכשיו</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Column Matching Preview -->
+                    <div id="fields-step-preview" class="excel-step" style="display:none;">
+                        <div class="preview-header">
+                            <h4>התאמת עמודות Excel לשדות PDF</h4>
+                            <div class="preview-stats" id="fields-preview-stats"></div>
+                        </div>
+                        <div id="fields-matching-container" style="max-height: 400px; overflow-y: auto;"></div>
+                        <div class="row-selector" style="margin-top: 15px; padding: 10px; background: #f5f5f5; border-radius: 8px;">
+                            <label><strong>בחר שורה למילוי:</strong></label>
+                            <select id="row-selector" style="margin-right: 10px; padding: 5px;"></select>
+                            <span id="row-preview-text" style="color: #666; font-size: 12px;"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="fill-dialog-footer">
+                    <button class="btn-cancel" onclick="document.getElementById('excel-fields-dialog').remove()">ביטול</button>
+                    <button class="btn-secondary" id="fields-btn-back" style="display:none;">חזרה</button>
+                    <button class="btn-primary" id="fields-btn-next" disabled>המשך</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(dialog);
+
+        // State
+        let currentStep = 1;
+        let resolverResult = null;
+        let selectedRowIndex = 0;
+
+        // Setup handlers
+        const dropZone = document.getElementById('fields-drop-zone');
+        const fileInput = document.getElementById('fields-file-input');
+        const btnNext = document.getElementById('fields-btn-next');
+        const btnBack = document.getElementById('fields-btn-back');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', async (e) => {
+            if (e.target.files.length > 0) {
+                await handleFieldsFileUpload(e.target.files[0], pseudoTableMapping);
+            }
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length > 0) {
+                await handleFieldsFileUpload(e.dataTransfer.files[0], pseudoTableMapping);
+            }
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (currentStep === 1 && resolverResult) {
+                showFieldsPreview(resolverResult, pseudoTableMapping);
+                document.getElementById('fields-step-upload').style.display = 'none';
+                document.getElementById('fields-step-preview').style.display = 'block';
+                btnBack.style.display = 'inline-block';
+                btnNext.textContent = '✓ מלא שדות';
+                currentStep = 2;
+            } else if (currentStep === 2) {
+                applyFieldsFromExcel(resolverResult, pseudoTableMapping, selectedRowIndex);
+                dialog.remove();
+            }
+        });
+
+        btnBack.addEventListener('click', () => {
+            document.getElementById('fields-step-preview').style.display = 'none';
+            document.getElementById('fields-step-upload').style.display = 'block';
+            btnBack.style.display = 'none';
+            btnNext.textContent = 'המשך';
+            currentStep = 1;
+        });
+
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) dialog.remove();
+        });
+
+        // File upload handler
+        async function handleFieldsFileUpload(file, mapping) {
+            const dropZone = document.getElementById('fields-drop-zone');
+            try {
+                dropZone.innerHTML = '<div class="upload-loading">⏳ מעבד קובץ...</div>';
+
+                const fileBytes = await file.arrayBuffer();
+                resolverResult = window.ExcelDataResolver.resolve(fileBytes, file.name, mapping);
+
+                console.log('📊 Fields resolver result:', resolverResult);
+
+                dropZone.innerHTML = `
+                    <div class="upload-success">
+                        <div class="success-icon">✓</div>
+                        <p><strong>${file.name}</strong></p>
+                        <p>${resolverResult.totalRows} שורות נמצאו</p>
+                        <p class="upload-hint">✅ ${Object.keys(resolverResult.matches).length} עמודות הותאמו אוטומטית</p>
+                    </div>
+                `;
+
+                btnNext.disabled = false;
+            } catch (error) {
+                console.error('Excel upload error:', error);
+                dropZone.innerHTML = `
+                    <div class="upload-error">
+                        <div class="error-icon">❌</div>
+                        <p>שגיאה בקריאת הקובץ</p>
+                        <p class="error-detail">${error.message}</p>
+                    </div>
+                `;
+                btnNext.disabled = true;
+            }
+        }
+
+        // Manual overrides storage
+        let manualOverrides = {};
+
+        // Render field options for dropdown
+        function renderFieldOptions(columns, selectedId) {
+            let options = '<option value="">-- לא לייבא --</option>';
+            columns.forEach(col => {
+                const selected = col.columnId === selectedId ? 'selected' : '';
+                const label = col.hebrewName || col.englishId || col.columnId;
+                const typeHint = col.isGroup ? (col.type === 'checkbox' ? 'צ׳קבוקס' : 'רדיו') : col.type;
+                options += `<option value="${col.columnId}" ${selected}>${label} (${typeHint})</option>`;
+            });
+            return options;
+        }
+
+        // Handle manual override
+        function handleFieldManualOverride(excelIdx, newColumnId, result, mapping) {
+            manualOverrides[excelIdx] = newColumnId || null;
+
+            // Update matches
+            if (newColumnId) {
+                const col = mapping.columns.find(c => c.columnId === newColumnId);
+                if (col) {
+                    result.matches[excelIdx] = {
+                        columnId: col.columnId,
+                        hebrewName: col.hebrewName,
+                        englishId: col.englishId,
+                        confidence: 1.0,
+                        tier: 0,
+                        matchType: 'manual'
+                    };
+                }
+            } else {
+                delete result.matches[excelIdx];
+            }
+
+            // Re-transform data with new matches
+            if (window.ExcelDataResolver && result.rawRows) {
+                result.data = window.ExcelDataResolver.transformRows(
+                    result.rawRows,
+                    { matches: result.matches },
+                    mapping.columns
+                );
+            }
+
+            // Update stats with improved UX
+            const matchedCount = Object.keys(result.matches).length;
+            const unmappedCount = result.headers.length - matchedCount;
+            const statsContainer = document.getElementById('fields-preview-stats');
+            if (statsContainer) {
+                let statsHtml = `<span class="stat matched">✓ ${matchedCount} התאמות אוטומטיות</span>`;
+                if (unmappedCount > 0) {
+                    statsHtml += ` <span class="stat-separator">•</span> `;
+                    statsHtml += `<span class="stat unmapped-info">${unmappedCount} ${unmappedCount === 1 ? 'שדה לא מופה' : 'שדות לא מופים'}</span>`;
+                }
+                statsContainer.innerHTML = statsHtml;
+            }
+
+            // Update row preview
+            updateRowPreview(result, selectedRowIndex);
+
+            console.log(`📊 Manual override: Excel[${excelIdx}] → ${newColumnId || 'none'}`);
+        }
+
+        // Show preview
+        function showFieldsPreview(result, mapping) {
+            const container = document.getElementById('fields-matching-container');
+            const statsContainer = document.getElementById('fields-preview-stats');
+            const rowSelector = document.getElementById('row-selector');
+
+            // Reset manual overrides for new file
+            manualOverrides = {};
+
+            const { matches, unmatched, headers, data } = result;
+            const matchedCount = Object.keys(matches).length;
+            const unmappedCount = headers.length - matchedCount;
+
+            // Improved stats display
+            let statsHtml = `<span class="stat matched">✓ ${matchedCount} התאמות אוטומטיות</span>`;
+            if (unmappedCount > 0) {
+                statsHtml += ` <span class="stat-separator">•</span> `;
+                statsHtml += `<span class="stat unmapped-info">${unmappedCount} ${unmappedCount === 1 ? 'שדה לא מופה' : 'שדות לא מופים'}</span>`;
+            }
+            statsContainer.innerHTML = statsHtml;
+
+            // Build matching table with dropdowns
+            let html = `
+                <table class="matching-table">
+                    <thead>
+                        <tr>
+                            <th>עמודת Excel</th>
+                            <th>ערך לדוגמה</th>
+                            <th>→</th>
+                            <th>שדה PDF</th>
+                            <th>סטטוס</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            headers.forEach((header, idx) => {
+                const match = matches[idx];
+                const sampleValue = result.rawSampleRows?.[0]?.[idx] || '';
+                const sampleStr = String(sampleValue).substring(0, 25);
+                const isManual = manualOverrides[idx] !== undefined;
+
+                const rowClass = match ? (isManual ? 'match-row manual-override' : 'match-row') : 'match-row unmatched-row';
+
+                // Build status cell - show clear message for unmapped fields
+                let statusCell;
+                if (match) {
+                    const statusIcon = match.confidence >= 0.8 ? '✅' : match.confidence >= 0.5 ? '🔶' : '⚪';
+                    statusCell = `<td style="text-align:center;">${statusIcon}</td>`;
+                } else {
+                    // Unmapped field - show informative status with CSS tooltip
+                    statusCell = `
+                        <td class="unmapped-status" style="text-align:center; display:flex; align-items:center; justify-content:center; gap:4px;">
+                            <span style="font-size:11px; color:#E65100; white-space:nowrap;">לא ימולא</span>
+                            <span class="info-icon-wrapper">
+                                <span class="info-icon">ℹ️</span>
+                                <span class="info-tooltip">שדה זה זוהה בקובץ Excel,<br>אך אין לו שדה יעד במסמך זה.<br>כדי למלא אותו – יש להוסיף שדה במיפוי.</span>
+                            </span>
+                        </td>
+                    `;
+                }
+
+                html += `
+                    <tr class="${rowClass}">
+                        <td><strong>${escapeHtml(header)}</strong></td>
+                        <td style="color:#666; font-size:11px; direction:ltr;">${escapeHtml(sampleStr)}</td>
+                        <td class="arrow">→</td>
+                        <td>
+                            <select class="field-column-select" data-excel-idx="${idx}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:4px;">
+                                ${renderFieldOptions(mapping.columns, match?.columnId)}
+                            </select>
+                        </td>
+                        ${statusCell}
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+
+            // Add change handlers for manual override
+            container.querySelectorAll('.field-column-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const excelIdx = parseInt(e.target.dataset.excelIdx);
+                    const newColumnId = e.target.value;
+                    handleFieldManualOverride(excelIdx, newColumnId, result, mapping);
+                });
+            });
+
+            // Row selector
+            rowSelector.innerHTML = '';
+            for (let i = 0; i < Math.min(data.length, 100); i++) {
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.textContent = `שורה ${i + 1}`;
+                rowSelector.appendChild(opt);
+            }
+
+            rowSelector.addEventListener('change', (e) => {
+                selectedRowIndex = parseInt(e.target.value);
+                updateRowPreview(result, selectedRowIndex);
+            });
+
+            updateRowPreview(result, 0);
+        }
+
+        function updateRowPreview(result, rowIdx) {
+            const previewText = document.getElementById('row-preview-text');
+            const rowData = result.data[rowIdx];
+            if (rowData) {
+                const preview = Object.entries(rowData).slice(0, 3).map(([k, v]) => `${v}`).join(', ');
+                previewText.textContent = `תצוגה: ${preview}...`;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+    }
+
+    /**
+     * Apply Excel data to form fields
+     */
+    function applyFieldsFromExcel(resolverResult, pseudoTableMapping, rowIndex) {
+        const rowData = resolverResult.data[rowIndex];
+        if (!rowData) {
+            console.error('No data for row', rowIndex);
+            return;
+        }
+
+        console.log('📊 Applying row data to fields:', rowData);
+
+        const columns = pseudoTableMapping.columns;
+        let filledCount = 0;
+
+        // Map columnId back to field/group
+        columns.forEach(col => {
+            // Use ?? instead of || to handle false values correctly (for checkboxes)
+            const value = rowData[col.englishId] ?? rowData[col.columnId];
+
+            // Debug: Log checkbox columns specifically
+            if (col.type === 'checkbox') {
+                console.log(`🔲 CHECKBOX column: ${col.columnId}, englishId=${col.englishId}, hebrewName=${col.hebrewName}`);
+                console.log(`   rowData keys:`, Object.keys(rowData));
+                console.log(`   value from rowData[${col.englishId}]:`, rowData[col.englishId]);
+                console.log(`   value from rowData[${col.columnId}]:`, rowData[col.columnId]);
+                console.log(`   final value:`, value, typeof value);
+            }
+
+            // Skip undefined values, but NOT false (which is valid for checkboxes)
+            if (value === undefined || (value === '' && col.type !== 'checkbox')) return;
+
+            if (col.isGroup) {
+                // Radio/Checkbox group
+                fillGroupFromExcel(col, value);
+            } else {
+                // Regular field (including individual checkboxes)
+                console.log(`📝 Calling fillFieldFromExcel: ${col.columnId}, value=${value}, type=${col.type}`);
+                fillFieldFromExcel(col.columnId, value);
+            }
+            filledCount++;
+        });
+
+        // ✅ Step 5: Clean state and re-render ONCE after Excel import
+        if (window.cleanLiveFillData) {
+            window.cleanLiveFillData();
+        }
+        if (window.createFieldOverlays) {
+            console.log('🔄 Re-rendering field overlays after Excel import...');
+            window.createFieldOverlays();
+        }
+
+        if (window.ToastManager) {
+            ToastManager.success(`✅ ${filledCount} שדות מולאו מ-Excel (שורה ${rowIndex + 1})`);
+        }
+
+        // Enable export
+        const exportBtn = document.getElementById('export-btn');
+        if (exportBtn) exportBtn.disabled = false;
+    }
+
+    /**
+     * Fill a single field from Excel value
+     * SIMPLE: Just update liveFillData, let createFieldOverlaysForPage handle rendering
+     */
+    function fillFieldFromExcel(fieldId, value) {
+        console.log(`📊 Filling field ${fieldId} with:`, value);
+
+        // Match by multiple possible identifiers (id, fieldId, englishId, label_en)
+        const field = window.fieldsMapping?.fields?.find(f =>
+            f.id === fieldId || f.fieldId === fieldId || f.englishId === fieldId || f.label_en === fieldId
+        );
+
+        if (!field) {
+            console.warn(`⚠️ Field not found in mapping: ${fieldId}`);
+            return;
+        }
+
+        const fieldType = field.type || 'text';
+        const realFieldId = field.id;
+
+        console.log(`📝 Mapped: ${fieldId} → ${realFieldId} (type: ${fieldType})`);
+
+        // Update liveFillData via the updater function
+        if (window.updateFieldDataFromExcel) {
+            window.updateFieldDataFromExcel(realFieldId, value, fieldType);
+        }
+    }
+
+    /**
+     * Fill a radio/checkbox group from Excel value
+     * Enhanced: Supports multi-value cells like "משכורת חודש, משרה נוספת"
+     */
+    function fillGroupFromExcel(groupCol, value) {
+        console.log(`📊 Filling group ${groupCol.columnId} with:`, value);
+
+        const group = window.fieldsMapping?.radioGroups?.find(g => g.groupId === groupCol.columnId);
+        if (!group) return;
+
+        // ✅ NEW: Try multi-value parsing for checkbox groups
+        if (group.type === 'checkbox' && window.SemanticIntegration?.processMultiValueCell) {
+            const checkboxFields = group.options.map(opt => ({
+                id: opt.fieldId,
+                fieldId: opt.fieldId,
+                label: opt.label_he,
+                hebrewName: opt.label_he,
+                englishId: opt.label_en
+            }));
+
+            const multiMatches = window.SemanticIntegration.processMultiValueCell(value, checkboxFields);
+
+            if (multiMatches.length > 0) {
+                console.log(`[MultiValue] Found ${multiMatches.length} checkbox matches for group ${groupCol.columnId}`);
+
+                // Mark all matched checkboxes
+                for (const match of multiMatches) {
+                    if (window.updateFieldDataFromExcel) {
+                        window.updateFieldDataFromExcel(match.fieldId, true, 'checkbox');
+                    } else if (window.liveFillData) {
+                        window.liveFillData[match.fieldId] = { checked: true };
+                    }
+
+                    // Update DOM
+                    const selectedElement = document.querySelector(`[data-field-id="${match.fieldId}"]`);
+                    if (selectedElement) {
+                        selectedElement.classList.add('checked');
+                    }
+                }
+
+                console.log(`📊 Group ${groupCol.columnId} multi-value: [${multiMatches.map(m => m.fieldId).join(', ')}]`);
+                return; // Multi-value handled
+            }
+        }
+
+        // Fallback: Original single-value matching
+        const normalizedValue = String(value).toLowerCase().trim();
+        const matchingOption = group.options.find(opt => {
+            const optHe = (opt.label_he || '').toLowerCase().trim();
+            const optEn = (opt.label_en || '').toLowerCase().trim();
+            return optHe === normalizedValue || optEn === normalizedValue ||
+                   optHe.includes(normalizedValue) || normalizedValue.includes(optHe);
+        });
+
+        if (matchingOption) {
+            // ✅ FIX: Use LOCAL liveFillData updater for radio/checkbox groups
+            if (window.updateFieldDataFromExcel) {
+                // Mark the matching option as checked
+                window.updateFieldDataFromExcel(matchingOption.fieldId, true, 'checkbox');
+
+                // Mark other options in the group as unchecked (for radio)
+                if (group.type === 'radio') {
+                    group.options.forEach(opt => {
+                        if (opt.fieldId !== matchingOption.fieldId) {
+                            window.updateFieldDataFromExcel(opt.fieldId, false, 'checkbox');
+                        }
+                    });
+                }
+            } else if (window.liveFillData) {
+                // Fallback
+                window.liveFillData[matchingOption.fieldId] = { checked: true };
+                if (group.type === 'radio') {
+                    group.options.forEach(opt => {
+                        if (opt.fieldId !== matchingOption.fieldId) {
+                            window.liveFillData[opt.fieldId] = { checked: false };
+                        }
+                    });
+                }
+            }
+
+            // Update DOM (visual only, no event dispatch)
+            // First, remove 'checked' class from all radios in the group
+            if (group.type === 'radio') {
+                group.options.forEach(opt => {
+                    const otherRadio = document.querySelector(`[data-field-id="${opt.fieldId}"]`);
+                    if (otherRadio) {
+                        otherRadio.classList.remove('checked');
+                        otherRadio.textContent = ''; // Clear any text content
+                    }
+                });
+            }
+
+            // Then add 'checked' class to the selected option
+            const selectedElement = document.querySelector(`[data-field-id="${matchingOption.fieldId}"]`);
+            if (selectedElement) {
+                selectedElement.classList.add('checked');
+                console.log(`✅ Added 'checked' class to radio: ${matchingOption.fieldId}`);
+            }
+
+            console.log(`📊 Group ${groupCol.columnId} set to:`, matchingOption.label_he, `(fieldId: ${matchingOption.fieldId})`);
+        } else {
+            console.log(`📊 No matching option found for value:`, value);
+        }
+    }
+</script>
+
+</body>
+</html>
