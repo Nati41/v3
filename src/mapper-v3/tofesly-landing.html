@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Tofesly - מילוי טפסי PDF בקלות</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Professional Government Blue Palette */
+            --primary-deep: #1a365d;
+            --primary-blue: #2c5282;
+            --primary-light: #3182ce;
+            --accent-blue: #4299e1;
+            
+            /* Neutral Grays */
+            --gray-50: #f7fafc;
+            --gray-100: #edf2f7;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e0;
+            --gray-500: #718096;
+            --gray-600: #4a5568;
+            --gray-700: #2d3748;
+            --gray-800: #1a202c;
+            
+            /* Functional */
+            --white: #ffffff;
+            --shadow-sm: 0 1px 2px rgba(26, 54, 93, 0.05);
+            --shadow-md: 0 4px 12px rgba(26, 54, 93, 0.1);
+            --shadow-lg: 0 8px 24px rgba(26, 54, 93, 0.12);
+            --shadow-xl: 0 12px 40px rgba(26, 54, 93, 0.15);
+            
+            /* Safe Areas */
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html {
+            font-size: 16px;
+            -webkit-text-size-adjust: 100%;
+        }
+        
+        body {
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(180deg, var(--gray-50) 0%, var(--white) 50%, var(--gray-100) 100%);
+            min-height: 100vh;
+            min-height: 100dvh;
+            color: var(--gray-800);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Subtle background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(49, 130, 206, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(26, 54, 93, 0.02) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            padding: calc(var(--safe-top) + 24px) 24px calc(var(--safe-bottom) + 24px);
+            max-width: 420px;
+            margin: 0 auto;
+        }
+        
+        /* Header / Logo */
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+            animation: fadeSlideDown 0.6s ease-out;
+        }
+        
+        .logo {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: var(--primary-deep);
+            letter-spacing: -0.02em;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-deep) 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .logo-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: var(--white);
+        }
+        
+        /* Hero Section */
+        .hero {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            padding: 20px 0;
+        }
+        
+        .headline {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: var(--primary-deep);
+            line-height: 1.3;
+            margin-bottom: 16px;
+            animation: fadeSlideUp 0.6s ease-out 0.1s both;
+        }
+        
+        .subtitle {
+            font-size: 1.0625rem;
+            color: var(--gray-600);
+            font-weight: 400;
+            line-height: 1.65;
+            margin-bottom: 40px;
+            animation: fadeSlideUp 0.6s ease-out 0.2s both;
+        }
+        
+        /* Buttons Container */
+        .buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            animation: fadeSlideUp 0.6s ease-out 0.3s both;
+        }
+        
+        /* Button Base */
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 18px 28px;
+            border-radius: 16px;
+            font-family: inherit;
+            font-size: 1.125rem;
+            font-weight: 600;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            min-height: 60px;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .btn-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Primary Button */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-deep) 100%);
+            color: var(--white);
+            box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        
+        .btn-primary:hover {
+            box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.1);
+            transform: translateY(-1px);
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.98) translateY(0);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-primary::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        /* Secondary Button */
+        .btn-secondary {
+            background: var(--white);
+            color: var(--primary-blue);
+            border: 2px solid var(--gray-200);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--primary-light);
+            background: var(--gray-50);
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-secondary:active {
+            background: var(--gray-100);
+        }
+        
+        .btn-secondary .btn-icon svg {
+            fill: var(--primary-blue);
+        }
+        
+        /* Link Button */
+        .btn-link {
+            background: transparent;
+            color: var(--gray-600);
+            font-size: 0.9375rem;
+            font-weight: 500;
+            padding: 14px 20px;
+            min-height: auto;
+            border-radius: 12px;
+        }
+        
+        .btn-link:hover {
+            color: var(--primary-blue);
+            background: rgba(49, 130, 206, 0.05);
+        }
+        
+        .btn-link .btn-icon {
+            width: 20px;
+            height: 20px;
+        }
+        
+        .btn-link .btn-icon svg {
+            fill: var(--gray-500);
+        }
+        
+        .btn-link:hover .btn-icon svg {
+            fill: var(--primary-blue);
+        }
+        
+        /* Trust Badges */
+        .trust-section {
+            margin-top: 32px;
+            animation: fadeSlideUp 0.6s ease-out 0.4s both;
+        }
+        
+        .trust-badges {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            font-size: 0.8125rem;
+            color: var(--gray-500);
+        }
+        
+        .trust-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            background: var(--white);
+            border-radius: 20px;
+            border: 1px solid var(--gray-200);
+            white-space: nowrap;
+        }
+        
+        .trust-badge svg {
+            width: 14px;
+            height: 14px;
+            fill: var(--accent-blue);
+            flex-shrink: 0;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding-top: 24px;
+            animation: fadeSlideUp 0.6s ease-out 0.5s both;
+        }
+        
+        .footer-text {
+            font-size: 0.75rem;
+            color: var(--gray-400);
+        }
+        
+        /* Animations */
+        @keyframes fadeSlideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Touch optimizations */
+        @media (hover: none) and (pointer: coarse) {
+            .btn:hover {
+                transform: none;
+                box-shadow: var(--shadow-lg);
+            }
+            
+            .btn-secondary:hover {
+                border-color: var(--gray-200);
+                background: var(--white);
+            }
+        }
+        
+        /* Smaller phones */
+        @media (max-height: 680px) {
+            .headline {
+                font-size: 1.625rem;
+            }
+            
+            .subtitle {
+                font-size: 1rem;
+                margin-bottom: 28px;
+            }
+            
+            .btn {
+                padding: 16px 24px;
+                min-height: 54px;
+            }
+            
+            .trust-section {
+                margin-top: 24px;
+            }
+        }
+        
+        /* Larger phones */
+        @media (min-height: 800px) {
+            .hero {
+                padding: 40px 0;
+            }
+            
+            .headline {
+                font-size: 2rem;
+            }
+            
+            .subtitle {
+                margin-bottom: 48px;
+            }
+        }
+        
+        /* Tablet/Desktop - still mobile-first feel */
+        @media (min-width: 500px) {
+            .container {
+                padding-left: 32px;
+                padding-right: 32px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 2H6C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-5 4h8v2H7v-2zm0 4h5v2H7v-2z"/>
+                    </svg>
+                </div>
+                Tofesly
+            </div>
+        </header>
+        
+        <!-- Hero -->
+        <main class="hero">
+            <h1 class="headline">ממלאים טפסי PDF בקלות – מהטלפון</h1>
+            <p class="subtitle">העלה טופס, מלא אותו ישירות על המסמך, והורד PDF מוכן</p>
+            
+            <!-- Buttons -->
+            <div class="buttons">
+                <!-- Primary: Upload PDF -->
+                <button class="btn btn-primary" type="button">
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 2H6C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-5-6v4h-2v-4H8l4-4 4 4h-3z"/>
+                        </svg>
+                    </span>
+                    העלה PDF
+                </button>
+                
+                <!-- Secondary: Quick Fill -->
+                <a href="mapper-v3.html?mode=quickfill" class="btn btn-secondary">
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.996.996 0 00-1.41 0L9 12.25 11.75 15l8.96-8.96a.996.996 0 000-1.41z"/>
+                        </svg>
+                    </span>
+                    מילוי מהיר
+                </a>
+                
+                <!-- Link: For Accountants -->
+                <a href="#" class="btn btn-link">
+                    <span class="btn-icon">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z"/>
+                        </svg>
+                    </span>
+                    לחשבונאים ואנשי משרד
+                </a>
+            </div>
+            
+            <!-- Trust Badges -->
+            <div class="trust-section">
+                <div class="trust-badges">
+                    <span class="trust-badge">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                        </svg>
+                        הקובץ נשאר אצלך
+                    </span>
+                    <span class="trust-badge">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/>
+                        </svg>
+                        עובד מהטלפון
+                    </span>
+                    <span class="trust-badge">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        ללא הרשמה
+                    </span>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="footer-text">© 2025 Tofesly</p>
+        </footer>
+    </div>
+</body>
+</html>

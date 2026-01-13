@@ -27,6 +27,8 @@ export class PDFEngine {
         this.dpiSetting = RENDER_DPI;
         this.currentPage = 1;
         this.totalPages = 0;
+        this._fileName = null;       // V3.4: Store file name for AI analysis
+        this._pdfArrayBuffer = null; // V3.4: Store original PDF data for AI analysis
 
         // DOM references
         this.pdfContainer = null;
@@ -82,6 +84,10 @@ export class PDFEngine {
     async load(file) {
         try {
             const arrayBuffer = await file.arrayBuffer();
+            // V3.4: Store a COPY of the ArrayBuffer for AI analysis
+            // (pdf.js may detach the original when processing)
+            this._pdfArrayBuffer = arrayBuffer.slice(0);
+            this._fileName = file.name;          // V3.4: Store file name
             this.pdfDocument = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             this.totalPages = this.pdfDocument.numPages;
             this.currentPage = 1;
@@ -133,6 +139,70 @@ export class PDFEngine {
 
         } catch (error) {
             console.error('[PDFEngine] Failed to load PDF:', error);
+            eventBus.emit(Events.PDF_ERROR, { error });
+            throw error;
+        }
+    }
+
+    /**
+     * V3.9: Load from an already-loaded PDF.js document
+     * Used by WelcomeScreen to avoid loading the PDF twice
+     * @param {PDFDocumentProxy} pdfDoc - Already loaded PDF.js document
+     * @param {string} fileName - Original file name
+     * @param {ArrayBuffer} pdfArrayBuffer - Optional: Original PDF bytes for export
+     */
+    async loadFromDoc(pdfDoc, fileName, pdfArrayBuffer = null) {
+        try {
+            this.pdfDocument = pdfDoc;
+            this._fileName = fileName;
+            this._pdfArrayBuffer = pdfArrayBuffer; // V3.10: Store for Quick Fill export
+            this.totalPages = pdfDoc.numPages;
+            this.currentPage = 1;
+            this.pageCache = {};
+
+            // Update state
+            state.batch({
+                'document.loaded': true,
+                'document.fileName': fileName.replace('.pdf', ''),
+                'document.totalPages': this.totalPages,
+                'document.currentPage': 1
+            });
+
+            // Set pdfPageDimensions IMMEDIATELY
+            const firstPage = await this.pdfDocument.getPage(1);
+            const scale = this.getDpiScale();
+            const viewport = firstPage.getViewport({ scale });
+
+            this.pdfPageDimensions = {
+                width: viewport.width,
+                height: viewport.height,
+                scale: scale
+            };
+
+            console.log('✅ [PDFEngine] EARLY PDF DIMENSIONS SET (from doc):', this.pdfPageDimensions);
+
+            state.set('pdfDimensions', {
+                width: viewport.width,
+                height: viewport.height,
+                scale: scale
+            });
+
+            // Load and render the first page
+            await this.loadPage(1);
+
+            eventBus.emit(Events.PDF_LOADED, {
+                numPages: this.totalPages,
+                dimensions: this.pdfPageDimensions
+            });
+
+            console.log('[PDFEngine] PDF loaded from doc:', fileName, this.totalPages, 'pages');
+
+            setTimeout(() => {
+                eventBus.emit(Events.PDF_PAGE_CHANGED, { page: 1 });
+            }, 30);
+
+        } catch (error) {
+            console.error('[PDFEngine] Failed to load from doc:', error);
             eventBus.emit(Events.PDF_ERROR, { error });
             throw error;
         }
@@ -358,6 +428,40 @@ export class PDFEngine {
         this.pageCache = {};
     }
 
+    // ============ V3.4: AI Analysis Support Methods ============
+
+    /**
+     * Check if a PDF is loaded
+     * @returns {boolean}
+     */
+    isLoaded() {
+        return this.pdfDocument !== null;
+    }
+
+    /**
+     * Get the loaded file name
+     * @returns {string|null}
+     */
+    getFileName() {
+        return this._fileName;
+    }
+
+    /**
+     * Get total page count
+     * @returns {number}
+     */
+    getPageCount() {
+        return this.totalPages;
+    }
+
+    /**
+     * Get PDF data as ArrayBuffer (for AI analysis)
+     * @returns {ArrayBuffer|null}
+     */
+    getPdfData() {
+        return this._pdfArrayBuffer;
+    }
+
     /**
      * Reset the engine
      */
@@ -368,6 +472,8 @@ export class PDFEngine {
         this.baseDimensions = { width: 0, height: 0 };
         this.currentPage = 1;
         this.totalPages = 0;
+        this._fileName = null;        // V3.4
+        this._pdfArrayBuffer = null;  // V3.4
 
         if (this.pdfContainer) {
             this.pdfContainer.innerHTML = '';

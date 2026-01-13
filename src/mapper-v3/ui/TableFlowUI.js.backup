@@ -8,6 +8,7 @@ import { state } from '../core/StateManager.js';
 import { TableFlowController, TableSteps, TableEvents } from '../tables/TableFlowController.js';
 import { drawController } from '../engines/DrawController.js';
 import { makeDraggable, makeMinimizable, addDialogStyles } from './DialogUtils.js';
+import { templateStore, TemplateFieldStatus } from '../core/TemplateStore.js';
 
 // Step descriptions in Hebrew
 // NEW FLOW: tableBBox FIRST (visual boundaries), then title (semantic), then sampleRow (height source)
@@ -63,7 +64,9 @@ class TableFlowUI {
             // Layout toggle for columns (Phase 3)
             columnLayoutToggle: document.getElementById('column-layout-toggle'),
             columnSlotCountGroup: document.getElementById('column-slot-count-group'),
-            columnSlotCount: document.getElementById('column-slot-count')
+            columnSlotCount: document.getElementById('column-slot-count'),
+            // Autobox button
+            autoboxBtn: document.getElementById('table-autobox-btn')
         };
 
         // Current column layout state
@@ -103,19 +106,26 @@ class TableFlowUI {
 
     /**
      * Setup UI button event listeners
+     * V3.5: Added better feedback and logging for back/next buttons
      */
     _setupEventListeners() {
         // Back button
         this.elements.backBtn.addEventListener('click', () => {
             if (this.flowController) {
+                console.log('[TableFlowUI] Back clicked, current step:', this.flowController.currentStep);
                 this.flowController.back();
+            } else {
+                console.warn('[TableFlowUI] Back clicked but no flowController');
             }
         });
 
         // Next button
         this.elements.nextBtn.addEventListener('click', () => {
             if (this.flowController) {
+                console.log('[TableFlowUI] Next clicked, current step:', this.flowController.currentStep);
                 this.flowController.next();
+            } else {
+                console.warn('[TableFlowUI] Next clicked but no flowController');
             }
         });
 
@@ -164,6 +174,11 @@ class TableFlowUI {
             if (e.key === 'Enter') {
                 this._confirmColumnDetails();
             }
+        });
+
+        // Autobox button - auto-split columns
+        this.elements.autoboxBtn?.addEventListener('click', () => {
+            this._autoboxColumns();
         });
     }
 
@@ -281,16 +296,18 @@ class TableFlowUI {
         eventBus.on(TableEvents.TABLE_PROMPT_COLUMN_DETAILS, ({ defaultName, defaultType }) => {
             // If mapping existing table with pre-defined columns, use those instead
             if (this._existingColumns && this._existingColumns.length > 0) {
-                // Count columns that already have positions (bbox set)
-                // This gives us the index of the NEXT column to be positioned
-                const positionedCount = this.flowController?.model?.columns?.filter(c => c.bbox)?.length || 0;
-                const existingColumn = this._existingColumns[positionedCount];
+                // Use column count from model (columns that have bbox set)
+                const positionedColumns = this.flowController?.model?.columns?.filter(c => c.bbox)?.length || 0;
+                const existingColumn = this._existingColumns[positionedColumns];
+
+                console.log(`[TableFlowUI] Column dialog - positioned: ${positionedColumns}, existingColumns:`,
+                    this._existingColumns.map(c => `"${c.hebrewName}"`).join(', '));
 
                 if (existingColumn) {
-                    // Use EXACT Hebrew name from imported JSON - no fallbacks to englishId
-                    const name = existingColumn.hebrewName || defaultName;
+                    // Use Hebrew name from entity analysis
+                    const name = existingColumn.hebrewName || existingColumn.label_he || defaultName;
                     const type = existingColumn.type || defaultType;
-                    console.log(`[TableFlowUI] Pre-filling column ${positionedCount + 1}/${this._existingColumns.length} with: "${name}" (${type})`);
+                    console.log(`[TableFlowUI] Pre-filling column ${positionedColumns + 1}/${this._existingColumns.length} with: "${name}" (${type})`);
                     this._showColumnDialog(name, type);
                     return;
                 }
@@ -302,6 +319,12 @@ class TableFlowUI {
         // Update table title display (NEW - for semantic title)
         eventBus.on(TableEvents.TABLE_UI_UPDATE_TITLE, ({ title }) => {
             this._updateTableTitle(title);
+        });
+
+        // V3.4: Handle entity table flow start (from repeatable entity detection)
+        eventBus.on(Events.ENTITY_TABLE_FLOW_START, ({ entityId, columns, rowCount }) => {
+            console.log('[TableFlowUI] Starting table flow from repeatable entity:', entityId);
+            this.startWithRepeatableEntity({ entityId, columns, rowCount });
         });
     }
 
@@ -397,6 +420,203 @@ class TableFlowUI {
     }
 
     /**
+     * V3.5: Start flow with a table name only (for guided mapping integration)
+     * This creates a new table with the given name, letting user define columns manually
+     * @param {string} tableName - The table name (Hebrew)
+     * @param {Object} options - Optional: { rowCount, columns }
+     */
+    startWithName(tableName, options = {}) {
+        console.log('[TableFlowUI] Starting with name:', tableName);
+
+        // Reset UI before starting
+        this._resetUI();
+
+        // Set title
+        this._currentTableTitle = tableName || 'טבלה';
+        if (this.elements.title) {
+            this.elements.title.textContent = `מיפוי טבלה: ${this._currentTableTitle}`;
+        }
+
+        const currentPage = state.get('document.currentPage') || 1;
+        this.flowController = new TableFlowController(currentPage);
+
+        // Pre-populate row count if provided
+        if (options.rowCount && options.rowCount > 0) {
+            this.flowController.model.rowCount = options.rowCount;
+        }
+
+        // Pre-populate columns if provided
+        if (options.columns && options.columns.length > 0) {
+            this.flowController.model.columns = options.columns.map(col => ({
+                columnId: col.columnId || `col_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                hebrewName: col.hebrewName || col.name_he || '',
+                englishId: col.englishId || col.name_en || '',
+                type: col.type || 'text',
+                bbox: null
+            }));
+            this._existingColumns = options.columns;
+        }
+
+        // Set callback to save table to state
+        this.flowController.onFinish = (tableData) => {
+            // Set the table title
+            tableData.title = tableName;
+            state.addTable(tableData);
+            console.log('[TableFlowUI] Table saved with name:', tableName, tableData.tableId);
+        };
+
+        this.flowController.start();
+
+        // Show panel
+        this.show();
+
+        // Update columns list if pre-populated
+        if (options.columns && options.columns.length > 0) {
+            this._updateColumnsList(this.flowController.model.columns);
+        }
+    }
+
+    /**
+     * V3.5: Start flow for Field Intelligence table group
+     * Pre-populates from field_groups data
+     * @param {Object} groupInfo - { id, name_he, instances, properties, fieldCount }
+     */
+    startWithFieldIntelligenceGroup(groupInfo) {
+        console.log('[TableFlowUI] Starting with Field Intelligence group:', groupInfo.id);
+
+        // Build columns from properties
+        const columns = (groupInfo.properties || []).map((prop, index) => ({
+            columnId: `col_${groupInfo.id}_${prop}`,
+            hebrewName: prop,  // The property name is the column name
+            englishId: prop,
+            type: 'text'
+        }));
+
+        // Start with name and options
+        this.startWithName(groupInfo.name_he || groupInfo.id, {
+            rowCount: groupInfo.instances || 0,
+            columns: columns
+        });
+
+        // Store group ID for linking back
+        this._fieldIntelligenceGroupId = groupInfo.id;
+    }
+
+    /**
+     * V3.4: Start flow for repeatable entity table mapping
+     * Pre-populates columns from template analysis
+     * @param {Object} data - { entityId, columns, rowCount }
+     */
+    startWithRepeatableEntity(data) {
+        const { entityId, columns, rowCount } = data;
+        console.log('[TableFlowUI] Starting with repeatable entity:', entityId);
+
+        // Get entity info from template store
+        const entity = templateStore.getEntity(entityId);
+        const entityName = entity?.label_he || entity?.entity_name_he || entityId;
+
+        // Reset UI before starting
+        this._resetUI();
+
+        // Set title with entity name
+        this._currentTableTitle = entityName;
+        if (this.elements.title) {
+            this.elements.title.textContent = `מיפוי טבלה: ${entityName}`;
+        }
+
+        const currentPage = state.get('document.currentPage') || 1;
+        this.flowController = new TableFlowController(currentPage);
+
+        // Pre-populate the model with columns from entity analysis
+        if (columns && columns.length > 0) {
+            this.flowController.model.columns = columns.map(col => ({
+                columnId: col.columnId || `col_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                hebrewName: col.hebrewName || '',
+                englishId: col.englishName || col.columnId || '',
+                type: col.type || 'text',
+                templateFieldPattern: col.templateFieldPattern || null,
+                bbox: null  // Will be set during mapping
+            }));
+        }
+
+        // Pre-populate row count from detection
+        if (rowCount && rowCount > 0) {
+            this.flowController.model.rowCount = rowCount;
+        }
+
+        // Store entity ID for linking back to template fields
+        this._entityId = entityId;
+
+        // Store columns for pre-filling the column dialog
+        this._existingColumns = columns || [];
+
+        // Set callback to save table and link to template fields
+        this.flowController.onFinish = (tableData) => {
+            state.addTable(tableData);
+            console.log('[TableFlowUI] Table created from entity:', entityId, tableData.tableId);
+
+            // Link table rows back to template fields (V3.4)
+            if (entityId) {
+                this._linkTableToTemplateFields(entityId, tableData);
+            }
+        };
+
+        this.flowController.start();
+
+        // Show panel
+        this.show();
+
+        // Update columns list in UI
+        this._updateColumnsList(this.flowController.model.columns);
+
+        // Show info toast
+        if (window.showToast) {
+            window.showToast(`זוהו ${columns?.length || 0} עמודות, ${rowCount || 0} שורות`, 'info');
+        }
+    }
+
+    /**
+     * V3.4: Link table rows/cells back to template fields
+     * After table is created, mark corresponding template fields as mapped
+     * @param {string} entityId - Entity ID
+     * @param {Object} tableData - Created table data
+     */
+    _linkTableToTemplateFields(entityId, tableData) {
+        if (!tableData.rows || !tableData.columns) return;
+
+        console.log('[TableFlowUI] Linking table to template fields:', entityId);
+
+        // For each row, mark the corresponding template fields as mapped
+        // The pattern tells us which template fields correspond to which column+row
+        tableData.rows.forEach((row, rowIndex) => {
+            tableData.columns.forEach((col, colIndex) => {
+                const pattern = col.templateFieldPattern;
+                if (pattern) {
+                    // Replace # with row number (1-indexed)
+                    const instanceNum = rowIndex + 1;
+                    const fieldPattern = pattern.replace('#', instanceNum);
+
+                    // Find the template field matching this pattern
+                    const fields = templateStore.getFields();
+                    const matchingField = fields.find(f => {
+                        const name = f.label_en || f.canonical || f.name || '';
+                        return name.toLowerCase().includes(fieldPattern.toLowerCase().replace('_#_', `_${instanceNum}_`));
+                    });
+
+                    if (matchingField) {
+                        templateStore.setFieldStatus(matchingField.template_field_id, TemplateFieldStatus.MAPPED);
+                        console.log(`[TableFlowUI] Linked: row ${instanceNum}, col ${col.hebrewName} -> ${matchingField.template_field_id}`);
+                    }
+                }
+            });
+        });
+
+        // Update progress
+        const progress = templateStore.getMappingProgress();
+        eventBus.emit(Events.MAPPING_PROGRESS_CHANGED, progress);
+    }
+
+    /**
      * Reset UI elements to initial state
      */
     _resetUI() {
@@ -409,6 +629,7 @@ class TableFlowUI {
         // Clear existing table data from previous flow
         this._existingTableId = null;
         this._existingColumns = null;
+        this._columnDialogCount = 0;  // Reset column counter
 
         // Reset row count input
         if (this.elements.rowCountInput) {
@@ -470,10 +691,15 @@ class TableFlowUI {
 
     /**
      * Update step display
+     * V3.5: Fixed to properly restore state when going back
+     * V3.5: Added redraw button for steps that already have values
      */
     _updateStep(step) {
         // Update step number (now 7 steps: tableBBox, title, sampleRow, columns, rowCount, generate, review)
-        this.elements.stepNum.textContent = `שלב ${step}/7`;
+        // V3.5: Skip GENERATE in display since user doesn't interact with it
+        const displayStep = step > TableSteps.GENERATE ? step - 1 : step;
+        const totalDisplaySteps = 6; // User-visible steps (excluding GENERATE)
+        this.elements.stepNum.textContent = `שלב ${displayStep}/${totalDisplaySteps}`;
 
         // Update step description
         this.elements.stepDesc.textContent = STEP_DESCRIPTIONS[step] || '';
@@ -492,6 +718,64 @@ class TableFlowUI {
         this.elements.rowCountSection.classList.toggle('hidden', step !== TableSteps.ROW_COUNT);
         this.elements.columnsSection.classList.toggle('hidden', step !== TableSteps.COLUMNS && step !== TableSteps.ROW_COUNT);
         this.elements.summary.classList.toggle('hidden', step !== TableSteps.REVIEW);
+
+        // V3.5: Restore row count input value when returning to ROW_COUNT step
+        if (step === TableSteps.ROW_COUNT && this.flowController?.model?.rowCount > 0) {
+            this.elements.rowCountInput.value = this.flowController.model.rowCount;
+        }
+
+        // V3.5: Refresh columns list when returning to COLUMNS or ROW_COUNT step
+        if ((step === TableSteps.COLUMNS || step === TableSteps.ROW_COUNT) && this.flowController?.model?.columns) {
+            this._updateColumnsList(this.flowController.model.columns);
+        }
+
+        // Show/hide autobox button (only on COLUMNS step with existing columns)
+        if (step === TableSteps.COLUMNS) {
+            this._showAutoboxButton();
+        } else {
+            this._hideAutoboxButton();
+        }
+
+        // V3.5: Show redraw hint if element already exists
+        this._showRedrawHint(step);
+    }
+
+    /**
+     * V3.5: Show hint that user can redraw an element
+     * @param {number} step - Current step
+     */
+    _showRedrawHint(step) {
+        if (!this.flowController?.model) return;
+
+        const model = this.flowController.model;
+        let hint = '';
+
+        switch (step) {
+            case TableSteps.SELECT_TABLE_BBOX:
+                if (model.tableBBox) {
+                    hint = '💡 גבולות הטבלה כבר מסומנים. ניתן לצייר מחדש כדי לשנות';
+                }
+                break;
+            case TableSteps.SELECT_TITLE:
+                if (model.tableTitle?.text) {
+                    hint = `💡 כותרת: "${model.tableTitle.text}". ניתן לצייר מחדש כדי לשנות`;
+                }
+                break;
+            case TableSteps.SAMPLE_ROW:
+                if (model.sampleRowBBox) {
+                    hint = '💡 שורה לדוגמא כבר מסומנת. ניתן לצייר מחדש כדי לשנות';
+                }
+                break;
+            case TableSteps.COLUMNS:
+                if (model.columns?.length > 0) {
+                    hint = `💡 ${model.columns.length} עמודות מוגדרות. ניתן להוסיף עוד או למחוק`;
+                }
+                break;
+        }
+
+        if (hint) {
+            this._showMessage('info', hint);
+        }
     }
 
     /**
@@ -579,6 +863,7 @@ class TableFlowUI {
 
     /**
      * Update columns list
+     * V3.5: Added delete button for each column
      * Adds hover handlers for sidebar/PDF column sync
      */
     _updateColumnsList(columns) {
@@ -597,6 +882,7 @@ class TableFlowUI {
                 <span class="col-num">${index + 1}</span>
                 <span class="col-name">${col.hebrewName || col.columnId}</span>
                 <span class="col-type">(${col.type})</span>
+                <button class="col-delete" title="מחק עמודה" data-column-id="${col.columnId}">✕</button>
             `;
 
             // Add hover effect styling
@@ -605,7 +891,39 @@ class TableFlowUI {
                 transition: background 0.2s;
                 padding: 4px 8px;
                 border-radius: 4px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
             `;
+
+            // Delete button handler
+            const deleteBtn = li.querySelector('.col-delete');
+            if (deleteBtn) {
+                deleteBtn.style.cssText = `
+                    margin-right: auto;
+                    background: transparent;
+                    border: none;
+                    color: #ef4444;
+                    cursor: pointer;
+                    font-size: 14px;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    opacity: 0.6;
+                    transition: opacity 0.2s, background 0.2s;
+                `;
+                deleteBtn.addEventListener('mouseenter', () => {
+                    deleteBtn.style.opacity = '1';
+                    deleteBtn.style.background = 'rgba(239, 68, 68, 0.1)';
+                });
+                deleteBtn.addEventListener('mouseleave', () => {
+                    deleteBtn.style.opacity = '0.6';
+                    deleteBtn.style.background = 'transparent';
+                });
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this._deleteColumn(col.columnId, index);
+                });
+            }
 
             // Hover to highlight corresponding PDF overlay
             li.addEventListener('mouseenter', () => {
@@ -643,6 +961,62 @@ class TableFlowUI {
             });
         };
         eventBus.on('table:column:hover', this._columnHoverListener);
+    }
+
+    /**
+     * V3.5: Delete a column from the table
+     * @param {string} columnId - Column ID to delete
+     * @param {number} index - Column index
+     */
+    _deleteColumn(columnId, index) {
+        if (!this.flowController) return;
+
+        const model = this.flowController.model;
+        const column = model.columns.find(c => c.columnId === columnId);
+
+        if (!column) {
+            console.warn('[TableFlowUI] Column not found:', columnId);
+            return;
+        }
+
+        // Confirm deletion
+        const columnName = column.hebrewName || `עמודה ${index + 1}`;
+        if (!confirm(`האם למחוק את העמודה "${columnName}"?`)) {
+            return;
+        }
+
+        // Remove from model
+        model.columns = model.columns.filter(c => c.columnId !== columnId);
+
+        // Clear and re-render column overlays
+        eventBus.emit(TableEvents.TABLE_OVERLAY_CLEAR_COLUMNS);
+        model.columns.forEach((col, idx) => {
+            if (col.bbox) {
+                eventBus.emit(TableEvents.TABLE_OVERLAY_SHOW_COLUMN, {
+                    index: idx,
+                    bbox: col.bbox,
+                    name: col.hebrewName,
+                    columnId: col.columnId,
+                    layout: col.layout
+                });
+            }
+        });
+
+        // Update columns list
+        this._updateColumnsList(model.columns);
+
+        // Lock/unlock next button based on column count
+        if (model.columns.length === 0) {
+            eventBus.emit(TableEvents.TABLE_UI_LOCK_NEXT);
+        }
+
+        // Show message
+        eventBus.emit(TableEvents.TABLE_UI_MESSAGE, {
+            type: 'success',
+            message: `העמודה "${columnName}" נמחקה`
+        });
+
+        console.log('[TableFlowUI] Column deleted:', columnId);
     }
 
     /**
@@ -792,6 +1166,9 @@ class TableFlowUI {
             }
         }
 
+        // Increment column dialog counter (for pre-fill tracking)
+        this._columnDialogCount = (this._columnDialogCount || 0) + 1;
+
         // Cleanup dialog listeners
         this._cleanupDialogListeners();
 
@@ -855,10 +1232,148 @@ class TableFlowUI {
     }
 
     /**
+     * Handle click for AutoBoxer-based cell detection
+     * Called when user clicks on overlay in COLUMNS step
+     *
+     * @param {number} clickX - Click X in screen coordinates
+     * @param {number} clickY - Click Y in screen coordinates
+     * @returns {Promise<boolean>} True if handled by AutoBoxer
+     */
+    async onClickForAutoBox(clickX, clickY) {
+        if (!this.flowController) return false;
+        if (!this.flowController.supportsAutoBoxClick()) return false;
+        return await this.flowController.onClickForAutoBox(clickX, clickY);
+    }
+
+    /**
+     * Check if AutoBoxer click mode is supported in current step
+     * @returns {boolean}
+     */
+    supportsAutoBoxClick() {
+        return this.flowController && this.flowController.supportsAutoBoxClick();
+    }
+
+    /**
      * Get current flow controller
      */
     getFlowController() {
         return this.flowController;
+    }
+
+    // ============ AUTOBOX - Automatic Column Division ============
+
+    /**
+     * Show autobox button when in column step with pre-defined columns
+     */
+    _showAutoboxButton() {
+        if (!this.elements.autoboxBtn) return;
+
+        // Show only when:
+        // 1. We have existing columns from entity
+        // 2. No columns have been positioned yet
+        const hasExistingColumns = this._existingColumns && this._existingColumns.length > 0;
+        const noPositionedColumns = !this.flowController?.model?.columns?.some(c => c.bbox);
+
+        if (hasExistingColumns && noPositionedColumns) {
+            this.elements.autoboxBtn.classList.remove('hidden');
+            this.elements.autoboxBtn.textContent = `📐 חלק ל-${this._existingColumns.length} עמודות`;
+        } else {
+            this.elements.autoboxBtn.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Hide autobox button
+     */
+    _hideAutoboxButton() {
+        if (this.elements.autoboxBtn) {
+            this.elements.autoboxBtn.classList.add('hidden');
+        }
+    }
+
+    /**
+     * Auto-divide the sample row into equal columns
+     * V3.5: Fixed to use sampleRowBBox instead of firstRowBbox
+     */
+    async _autoboxColumns() {
+        if (!this.flowController || !this._existingColumns || this._existingColumns.length === 0) {
+            console.warn('[TableFlowUI] Cannot autobox: no flow controller or existing columns');
+            return;
+        }
+
+        const model = this.flowController.model;
+        // V3.5: Use sampleRowBBox (correct property name)
+        if (!model.sampleRowBBox) {
+            eventBus.emit(TableEvents.TABLE_UI_MESSAGE, {
+                type: 'warning',
+                message: 'יש לסמן שורה לדוגמא לפני חלוקה אוטומטית'
+            });
+            return;
+        }
+
+        const rowBbox = model.sampleRowBBox;
+        const columnCount = this._existingColumns.length;
+        const columnWidth = rowBbox.width / columnCount;
+
+        console.log(`[TableFlowUI] Autoboxing: ${columnCount} columns, width each: ${columnWidth}`);
+
+        // Create columns one by one with pre-filled data
+        for (let i = 0; i < columnCount; i++) {
+            const existingCol = this._existingColumns[i];
+
+            // Calculate column bbox
+            const colBbox = {
+                x: rowBbox.x + (i * columnWidth),
+                y: rowBbox.y,
+                width: columnWidth,
+                height: rowBbox.height
+            };
+
+            // Get column details from existing data
+            const name = existingCol.hebrewName || existingCol.label_he || `עמודה ${i + 1}`;
+            const type = existingCol.type || 'text';
+
+            // Build layout (default flow)
+            const LH = window.LayoutHelper;
+            const layout = LH ? LH.createFlowLayout(LH.OVERFLOW.SHRINK, LH.SOURCES.AUTO) : null;
+
+            // Add column to model
+            const column = model.addColumn(colBbox, name, type, layout);
+
+            // Show column overlay
+            eventBus.emit(TableEvents.TABLE_OVERLAY_SHOW_COLUMN, {
+                index: model.columns.length - 1,
+                bbox: colBbox,
+                name: name,
+                columnId: column.columnId,
+                layout: column.layout
+            });
+
+            console.log(`[TableFlowUI] Autobox column ${i + 1}/${columnCount}: "${name}"`);
+        }
+
+        // Update column counter to match
+        this._columnDialogCount = columnCount;
+
+        // Update columns list in UI
+        this._updateColumnsList(model.columns);
+
+        // Hide autobox button since we're done
+        this._hideAutoboxButton();
+
+        // Unlock NEXT button
+        eventBus.emit(TableEvents.TABLE_UI_UNLOCK_NEXT);
+
+        // Show success message
+        eventBus.emit(TableEvents.TABLE_UI_MESSAGE, {
+            type: 'success',
+            message: `נוצרו ${columnCount} עמודות אוטומטית`
+        });
+
+        // Show toast
+        if (window.showToast) {
+            window.showToast(`חולקו ${columnCount} עמודות אוטומטית`, 'success');
+        }
     }
 }
 

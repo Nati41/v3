@@ -1,0 +1,869 @@
+/**
+ * TableToolbarMode - Toolbar-integrated table mapping
+ *
+ * Works like radio/checkbox - integrates into existing toolbar flow.
+ * No separate panel - uses floating messages and direct drawing.
+ *
+ * States: IDLE → BOUNDS → COLUMNS → ROWS → DONE
+ *
+ * Flow:
+ * 1. Activated via setTool('draw_table') or from GuidedMappingUI
+ * 2. User draws table bounds
+ * 3. User draws columns OR presses Enter for auto-split
+ * 4. User enters row count
+ * 5. Fields created, return to IDLE
+ */
+
+import { eventBus, Events } from '../core/EventBus.js';
+import { state, Modes, Tools } from '../core/StateManager.js';
+
+// States
+// V3.8: Simplified flow - draw ONE ROW, then columns, then specify count
+const TableState = {
+    IDLE: 'idle',
+    ROW: 'row',            // Drawing ONE row (first row of table)
+    COLUMNS: 'columns',    // Drawing column dividers within the row
+    COUNT: 'count',        // Entering row count (how many times to replicate)
+    DONE: 'done'
+};
+
+class TableToolbarMode {
+    constructor() {
+        this.currentState = TableState.IDLE;
+        this.tableData = null;
+        this.aiGroupInfo = null;  // Field Intelligence data
+        this.floatingMessage = null;
+        this.rowInput = null;
+
+        this._setupEventListeners();
+        this._createFloatingUI();
+    }
+
+    /**
+     * Initialize (called from main app)
+     */
+    init() {
+        console.log('[TableToolbarMode] Initialized');
+    }
+
+    /**
+     * Start table mapping mode
+     * @param {Object} options - { aiGroupInfo, tableName }
+     */
+    start(options = {}) {
+        console.log('[TableToolbarMode] Starting table mode', options);
+
+        // === CRITICAL: Clear any conflicting states FIRST ===
+        // Cancel any active radio group building
+        if (state.cancelRadioGroupBuilder) {
+            state.cancelRadioGroupBuilder();
+        }
+
+        // Hard reset radio/checkbox building state flags
+        state.set('ui.radioGroupBuilding', false);
+        state.set('ui.checkboxMode', false);
+        state.set('ui.labelDrawMode', false);
+
+        // Cancel radio group in DrawController if active
+        if (window.drawController?.cancelRadioGroup) {
+            window.drawController.cancelRadioGroup();
+        }
+
+        // If there's a DrawController with transient modes, reset them
+        if (window.drawController?.resetTransientModes) {
+            window.drawController.resetTransientModes();
+        }
+
+        // Reset state
+        this.tableData = {
+            tableId: `table_${Date.now()}`,
+            tableName: options.tableName || 'טבלה',
+            pageIndex: state.get('document.currentPage') || 1,
+            bounds: null,
+            columns: [],
+            rowCount: options.rowCount || 0
+        };
+
+        // Store AI data if provided
+        this.aiGroupInfo = options.aiGroupInfo || null;
+
+        // Set tool and mode
+        state.setMode(Modes.DRAWING);
+        state.setTool(Tools.DRAW_TABLE);
+
+        // === Emit started event for coordination ===
+        // This allows GuidedMappingUI and other modules to pause/adjust
+        eventBus.emit('tableToolbar:started', {
+            tableId: this.tableData.tableId,
+            tableName: this.tableData.tableName,
+            hasAiData: !!this.aiGroupInfo
+        });
+
+        // V3.8: Move to ROW state (draw one row first)
+        this._setState(TableState.ROW);
+    }
+
+    /**
+     * Cancel and reset
+     */
+    cancel() {
+        console.log('[TableToolbarMode] Cancelled');
+        this._hideFloatingMessage();
+        this._hideRowInput();
+        this._clearOverlays();
+        this.currentState = TableState.IDLE;
+        this.tableData = null;
+        this.aiGroupInfo = null;
+
+        // Emit cancel event for GuidedMappingUI
+        eventBus.emit('tableToolbar:cancelled');
+    }
+
+    /**
+     * Check if table mode is active
+     */
+    isActive() {
+        return this.currentState !== TableState.IDLE;
+    }
+
+    /**
+     * Get current state
+     */
+    getState() {
+        return this.currentState;
+    }
+
+    // ============ PRIVATE METHODS ============
+
+    /**
+     * Setup event listeners
+     */
+    _setupEventListeners() {
+        // Listen for drawing completion
+        eventBus.on(Events.DRAW_END, ({ bbox, tool }) => {
+            if (!this.isActive()) return;
+            if (tool !== Tools.DRAW_TABLE && tool !== 'draw_table') return;
+
+            this._handleDrawEnd(bbox);
+        });
+
+        // Listen for keyboard
+        document.addEventListener('keydown', (e) => {
+            if (!this.isActive()) return;
+
+            if (e.key === 'Escape') {
+                this.cancel();
+            } else if (e.key === 'Enter' && this.currentState === TableState.COLUMNS) {
+                // V3.8: Require at least one column
+                if (this.tableData.columns.length > 0) {
+                    console.log('[TableToolbarMode] Enter pressed, proceeding to COUNT');
+                    this._renderColumnsOverlay();
+                    this._setState(TableState.COUNT);
+                } else {
+                    if (window.showToast) {
+                        window.showToast('יש לצייר לפחות עמודה אחת', 'warning');
+                    }
+                }
+            }
+        });
+
+        // Listen for tool change (user manually switched away)
+        eventBus.on(Events.TOOL_CHANGED, ({ tool }) => {
+            if (this.isActive() && tool !== Tools.DRAW_TABLE && tool !== 'draw_table') {
+                this.cancel();
+            }
+        });
+    }
+
+    /**
+     * Handle drawing completion
+     */
+    _handleDrawEnd(bbox) {
+        // bbox comes as [x, y, width, height] array
+        const overlayLayer = document.getElementById('overlay-layer');
+        if (!overlayLayer) return;
+
+        const layerWidth = overlayLayer.offsetWidth;
+        const layerHeight = overlayLayer.offsetHeight;
+
+        // Normalize to 0-1
+        const normalized = {
+            x: bbox[0] / layerWidth,
+            y: bbox[1] / layerHeight,
+            width: bbox[2] / layerWidth,
+            height: bbox[3] / layerHeight
+        };
+
+        console.log('[TableToolbarMode] Draw end in state:', this.currentState, normalized);
+
+        // V3.8: Updated state handling
+        switch (this.currentState) {
+            case TableState.ROW:
+                this._handleRowDrawn(normalized);
+                break;
+            case TableState.COLUMNS:
+                this._handleColumnDrawn(normalized);
+                break;
+        }
+    }
+
+    /**
+     * Handle row drawn
+     * V3.8: User draws ONE row (first row of table)
+     */
+    _handleRowDrawn(bbox) {
+        console.log('[TableToolbarMode] Row drawn:', bbox);
+
+        // Validate minimum size
+        const MIN_SIZE = 0.02;
+        if (bbox.width < MIN_SIZE || bbox.height < MIN_SIZE) {
+            console.log('[TableToolbarMode] Row too small, ignoring:', bbox);
+            if (window.showToast) {
+                window.showToast('השורה קטנה מדי - גרור אזור גדול יותר', 'warning');
+            }
+            return;
+        }
+
+        // V3.8: Store as row template (will be replicated)
+        this.tableData.rowTemplate = bbox;
+        this.tableData.bounds = bbox; // For backward compatibility
+        this._renderRowOverlay(bbox);
+
+        // Move to COLUMNS state - user draws column dividers
+        this._setState(TableState.COLUMNS);
+    }
+
+    /**
+     * Handle column drawn manually
+     * V3.8: User draws column areas within the row
+     */
+    _handleColumnDrawn(bbox) {
+        const row = this.tableData.rowTemplate || this.tableData.bounds;
+        if (!row) return;
+
+        // V3.8: Create column within row bounds
+        const column = {
+            id: `col_${Date.now()}_${this.tableData.columns.length}`,
+            name: `עמודה ${this.tableData.columns.length + 1}`,
+            type: 'text',
+            bbox: {
+                x: bbox.x,
+                y: row.y,        // Use row's Y
+                width: bbox.width,
+                height: row.height  // Use row's height
+            }
+        };
+
+        // Prompt for column name
+        const name = prompt(`שם העמודה ${this.tableData.columns.length + 1}:`, column.name);
+        if (name === null) return; // Cancelled
+
+        column.name = name || column.name;
+
+        // V3.8: Detect checkbox from name
+        const nameLower = column.name.toLowerCase();
+        const checkboxPatterns = ['checkbox', '_cb', '_chk', 'check_', 'bool', 'סימון', 'תיבה', 'וי_'];
+        if (checkboxPatterns.some(p => nameLower.includes(p))) {
+            column.type = 'checkbox';
+        }
+
+        this.tableData.columns.push(column);
+        this._sortColumns();
+        this._renderColumnsOverlay();
+
+        console.log('[TableToolbarMode] Column added:', column.name, '(type:', column.type, ')');
+        this._updateFloatingMessage(`${this.tableData.columns.length} עמודות | צייר עוד או Enter לסיום`);
+    }
+
+    /**
+     * Auto-split columns evenly
+     */
+    _autoSplitColumns() {
+        if (!this.tableData.bounds) return;
+
+        const count = parseInt(prompt('מספר עמודות:', '4'), 10);
+        if (!count || count <= 0) return;
+
+        const bounds = this.tableData.bounds;
+        const columnWidth = bounds.width / count;
+
+        this.tableData.columns = [];
+        for (let i = 0; i < count; i++) {
+            this.tableData.columns.push({
+                id: `col_${Date.now()}_${i}`,
+                name: `עמודה ${i + 1}`,
+                type: 'text',
+                bbox: {
+                    x: bounds.x + (i * columnWidth),
+                    y: bounds.y,
+                    width: columnWidth,
+                    height: bounds.height
+                }
+            });
+        }
+
+        // Prompt for names
+        this._promptColumnNames();
+    }
+
+    /**
+     * Auto-split columns using AI data
+     * V3.7: Smart width allocation - checkbox columns get narrow width
+     */
+    _autoSplitColumnsWithAI() {
+        if (!this.tableData.bounds || !this.aiGroupInfo) return;
+
+        const properties = this.aiGroupInfo.properties;
+        const count = properties.length;
+        const bounds = this.tableData.bounds;
+
+        // V3.7: Detect column types and allocate widths smartly
+        const CHECKBOX_WIDTH_RATIO = 0.04;  // 4% of table width for checkbox
+        // Generic patterns only - no form-specific terms
+        const checkboxPatterns = [
+            'checkbox', '_cb', '_chk', 'check_', 'bool',
+            'סימון', 'תיבה', 'וי_'
+        ];
+
+        // First pass: identify checkbox columns
+        const columnTypes = properties.map(prop => {
+            const propLower = prop.toLowerCase();
+            const isCheckbox = checkboxPatterns.some(p => propLower.includes(p));
+            return isCheckbox ? 'checkbox' : 'text';
+        });
+
+        // Calculate widths
+        const checkboxCount = columnTypes.filter(t => t === 'checkbox').length;
+        const textCount = count - checkboxCount;
+        const checkboxTotalWidth = checkboxCount * CHECKBOX_WIDTH_RATIO * bounds.width;
+        const remainingWidth = bounds.width - checkboxTotalWidth;
+        const textColumnWidth = textCount > 0 ? remainingWidth / textCount : bounds.width / count;
+        const checkboxColumnWidth = CHECKBOX_WIDTH_RATIO * bounds.width;
+
+        // Build columns with smart widths
+        let currentX = bounds.x;
+        this.tableData.columns = properties.map((prop, i) => {
+            const isCheckbox = columnTypes[i] === 'checkbox';
+            const colWidth = isCheckbox ? checkboxColumnWidth : textColumnWidth;
+
+            const column = {
+                id: `col_${Date.now()}_${i}`,
+                name: prop,
+                type: isCheckbox ? 'checkbox' : 'text',
+                bbox: {
+                    x: currentX,
+                    y: bounds.y,
+                    width: colWidth,
+                    height: bounds.height
+                }
+            };
+
+            currentX += colWidth;
+            return column;
+        });
+
+        // Use AI row count if available
+        if (this.aiGroupInfo.instances) {
+            this.tableData.rowCount = this.aiGroupInfo.instances;
+        }
+
+        console.log('[TableToolbarMode] Auto-split with AI (smart widths):',
+            this.tableData.columns.map(c => `${c.name}(${c.type}:${Math.round(c.bbox.width * 100)}%)`));
+
+        this._renderColumnsOverlay();
+        this._setState(TableState.ROWS);
+    }
+
+    /**
+     * Prompt for column names
+     * V3.7: After getting names, recalculate widths for checkbox columns
+     */
+    _promptColumnNames() {
+        // Simple prompt for each column
+        for (let i = 0; i < this.tableData.columns.length; i++) {
+            const name = prompt(`שם עמודה ${i + 1}:`, this.tableData.columns[i].name);
+            if (name !== null) {
+                this.tableData.columns[i].name = name || this.tableData.columns[i].name;
+            }
+        }
+
+        // V3.7: Recalculate widths based on detected checkbox columns
+        this._recalculateColumnWidths();
+
+        this._renderColumnsOverlay();
+        this._setState(TableState.ROWS);
+    }
+
+    /**
+     * V3.7: Recalculate column widths - checkbox columns get narrow width
+     */
+    _recalculateColumnWidths() {
+        if (!this.tableData.bounds || this.tableData.columns.length === 0) return;
+
+        const bounds = this.tableData.bounds;
+        const CHECKBOX_WIDTH_RATIO = 0.04;  // 4% of table width for checkbox
+
+        // Generic patterns only - no form-specific terms
+        const checkboxPatterns = [
+            'checkbox', '_cb', '_chk', 'check_', 'bool',
+            'סימון', 'תיבה', 'וי_'
+        ];
+
+        // Detect checkbox columns by name
+        this.tableData.columns.forEach(col => {
+            const nameLower = col.name.toLowerCase();
+            if (checkboxPatterns.some(p => nameLower.includes(p))) {
+                col.type = 'checkbox';
+            }
+        });
+
+        // Count types
+        const checkboxCount = this.tableData.columns.filter(c => c.type === 'checkbox').length;
+        const textCount = this.tableData.columns.length - checkboxCount;
+
+        // If no checkboxes detected, keep original widths
+        if (checkboxCount === 0) return;
+
+        // Calculate new widths
+        const checkboxColumnWidth = CHECKBOX_WIDTH_RATIO * bounds.width;
+        const checkboxTotalWidth = checkboxCount * checkboxColumnWidth;
+        const remainingWidth = bounds.width - checkboxTotalWidth;
+        const textColumnWidth = textCount > 0 ? remainingWidth / textCount : bounds.width / this.tableData.columns.length;
+
+        // Rebuild positions
+        let currentX = bounds.x;
+        this.tableData.columns.forEach(col => {
+            const colWidth = col.type === 'checkbox' ? checkboxColumnWidth : textColumnWidth;
+            col.bbox.x = currentX;
+            col.bbox.width = colWidth;
+            currentX += colWidth;
+        });
+
+        console.log('[TableToolbarMode] Recalculated widths:',
+            this.tableData.columns.map(c => `${c.name}(${c.type}:${Math.round(c.bbox.width / bounds.width * 100)}%)`));
+    }
+
+    /**
+     * Sort columns left to right
+     */
+    _sortColumns() {
+        this.tableData.columns.sort((a, b) => a.bbox.x - b.bbox.x);
+    }
+
+    /**
+     * Set state and update UI
+     * V3.8: Updated for new flow (ROW → COLUMNS → COUNT)
+     */
+    _setState(newState) {
+        console.log('[TableToolbarMode] State:', this.currentState, '→', newState);
+        this.currentState = newState;
+
+        switch (newState) {
+            case TableState.ROW:
+                // V3.8: Draw ONE row (first row of table)
+                this._showFloatingMessage('צייר שורה אחת של הטבלה (השורה הראשונה)');
+                break;
+
+            case TableState.COLUMNS:
+                // V3.8: Draw column dividers - no auto-split
+                const colCount = this.tableData.columns.length;
+                if (colCount > 0) {
+                    this._showFloatingMessage(`${colCount} עמודות | צייר עוד או Enter לסיום`);
+                } else {
+                    this._showFloatingMessage('צייר קווים אנכיים לחלוקת עמודות | Enter לסיום');
+                }
+                break;
+
+            case TableState.COUNT:
+                // V3.8: Renamed from ROWS
+                this._showRowInput();
+                break;
+
+            case TableState.DONE:
+                this._hideFloatingMessage();
+                this._hideRowInput();
+                this._createFields();
+                break;
+        }
+    }
+
+    /**
+     * Create floating UI elements
+     */
+    _createFloatingUI() {
+        // Floating message
+        this.floatingMessage = document.createElement('div');
+        this.floatingMessage.id = 'table-toolbar-message';
+        this.floatingMessage.className = 'table-toolbar-message hidden';
+        this.floatingMessage.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: opacity 0.2s, transform 0.2s;
+        `;
+        document.body.appendChild(this.floatingMessage);
+
+        // Row input container
+        this.rowInput = document.createElement('div');
+        this.rowInput.id = 'table-toolbar-row-input';
+        this.rowInput.className = 'table-toolbar-row-input hidden';
+        this.rowInput.style.cssText = `
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        `;
+        this.rowInput.innerHTML = `
+            <span style="color: #374151; font-weight: 500;">מספר שורות:</span>
+            <input type="number" id="table-row-count-input" min="1" max="100" value="1"
+                   style="width: 60px; padding: 8px; border: 2px solid #3b82f6; border-radius: 6px; text-align: center; font-size: 16px;">
+            <button id="table-row-confirm-btn" style="
+                background: #10b981; color: white; border: none; padding: 8px 16px;
+                border-radius: 6px; cursor: pointer; font-weight: 500;
+            ">אישור</button>
+            <button id="table-row-cancel-btn" style="
+                background: #ef4444; color: white; border: none; padding: 8px 16px;
+                border-radius: 6px; cursor: pointer; font-weight: 500;
+            ">ביטול</button>
+        `;
+        document.body.appendChild(this.rowInput);
+
+        // Event handlers for row input
+        this.rowInput.querySelector('#table-row-confirm-btn').addEventListener('click', () => {
+            this._confirmRowCount();
+        });
+        this.rowInput.querySelector('#table-row-cancel-btn').addEventListener('click', () => {
+            this.cancel();
+        });
+        this.rowInput.querySelector('#table-row-count-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this._confirmRowCount();
+            if (e.key === 'Escape') this.cancel();
+        });
+    }
+
+    /**
+     * Show floating message
+     */
+    _showFloatingMessage(text) {
+        this.floatingMessage.innerHTML = `
+            <span style="font-size: 18px;">📊</span>
+            <span>${text}</span>
+            <span style="opacity: 0.7; font-size: 12px;">(Esc לביטול)</span>
+        `;
+        this.floatingMessage.classList.remove('hidden');
+        this._hideRowInput();
+    }
+
+    /**
+     * Update floating message text
+     */
+    _updateFloatingMessage(text) {
+        const span = this.floatingMessage.querySelector('span:nth-child(2)');
+        if (span) span.textContent = text;
+    }
+
+    /**
+     * Hide floating message
+     */
+    _hideFloatingMessage() {
+        this.floatingMessage.classList.add('hidden');
+    }
+
+    /**
+     * Show row count input
+     */
+    _showRowInput() {
+        this._hideFloatingMessage();
+
+        const input = this.rowInput.querySelector('#table-row-count-input');
+        input.value = this.tableData.rowCount || 1;
+
+        this.rowInput.classList.remove('hidden');
+        input.focus();
+        input.select();
+    }
+
+    /**
+     * Hide row input
+     */
+    _hideRowInput() {
+        this.rowInput.classList.add('hidden');
+    }
+
+    /**
+     * Confirm row count and proceed
+     */
+    _confirmRowCount() {
+        const input = this.rowInput.querySelector('#table-row-count-input');
+        const count = parseInt(input.value, 10);
+
+        if (!count || count <= 0) {
+            input.style.borderColor = '#ef4444';
+            return;
+        }
+
+        this.tableData.rowCount = count;
+        this._setState(TableState.DONE);
+    }
+
+    /**
+     * Create fields and finish
+     * V3.8: Replicate the drawn row based on rowCount
+     */
+    _createFields() {
+        const row = this.tableData.rowTemplate || this.tableData.bounds;
+        if (!row || this.tableData.columns.length === 0 || this.tableData.rowCount <= 0) {
+            console.error('[TableToolbarMode] Cannot create fields - missing data');
+            this.cancel();
+            return;
+        }
+
+        const fields = [];
+        // V3.8: rowHeight is the height of the drawn row (exact, not divided)
+        const rowHeight = row.height;
+
+        // V3.6: Ensure page is 1-indexed (validator requires page >= 1)
+        const page = Math.max(1, this.tableData.pageIndex || 1);
+
+        // V3.8: Generate fields for each cell by replicating the drawn row
+        for (let rowIdx = 0; rowIdx < this.tableData.rowCount; rowIdx++) {
+            // V3.8: Screen Y - row 0 is the drawn row, row 1 is below it, etc.
+            const rowScreenY = row.y + (rowIdx * rowHeight);
+
+            // V3.8: Convert to PDF Y coordinates (0 at bottom) for OverlayRenderer
+            const rowPdfY = 1 - rowScreenY - rowHeight;
+
+            for (let colIdx = 0; colIdx < this.tableData.columns.length; colIdx++) {
+                const col = this.tableData.columns[colIdx];
+
+                const field = {
+                    id: `fld_${this.tableData.tableId}_r${rowIdx}_c${colIdx}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    type: col.type || 'text',
+                    label_he: `${col.name} - שורה ${rowIdx + 1}`,
+                    label_en: `${col.name}_row_${rowIdx + 1}`,
+                    // V3.8: bbox in PDF coordinates
+                    bbox: [
+                        col.bbox.x,           // X from column
+                        rowPdfY,              // PDF Y for this row
+                        col.bbox.width,       // Width from column
+                        rowHeight             // Height from drawn row
+                    ],
+                    page: page,
+                    isMapped: true,
+                    status: 'mapped',
+                    tableGroupId: this.tableData.tableId,
+                    tableRow: rowIdx,
+                    tableColumn: colIdx,
+                    columnName: col.name
+                };
+
+                fields.push(field);
+            }
+        }
+
+        console.log('[TableToolbarMode] Creating', fields.length, 'fields with normalized bbox');
+
+        // Add fields to state
+        fields.forEach(field => {
+            const result = state.addField(field);
+            if (!result) {
+                console.error('[TableToolbarMode] Failed to add field:', field.id);
+            }
+        });
+
+        // V3.8: Calculate full table bounds (row template * rowCount)
+        const tableHeight = rowHeight * this.tableData.rowCount;
+        const tablePdfY = 1 - row.y - tableHeight;
+
+        // Add table metadata (also normalized)
+        state.addTable({
+            tableId: this.tableData.tableId,
+            tableName: this.tableData.tableName,
+            tableTitle: this.tableData.tableName,
+            page: page,
+            // V3.8: bbox in PDF coordinates - full table size
+            bbox: [
+                row.x,
+                tablePdfY,
+                row.width,
+                tableHeight
+            ],
+            columns: this.tableData.columns.map(c => ({
+                columnId: c.id,
+                hebrewName: c.name,
+                type: c.type
+            })),
+            rowCount: this.tableData.rowCount,
+            isComplete: true
+        });
+
+        // Clear overlays
+        this._clearOverlays();
+
+        // Show success
+        if (window.showToast) {
+            window.showToast(`נוצרו ${fields.length} שדות בטבלה "${this.tableData.tableName}"`, 'success');
+        }
+
+        // V3.6: Save data for event BEFORE resetting state
+        const completionData = {
+            tableId: this.tableData.tableId,
+            fields,
+            columns: this.tableData.columns.length,
+            rows: this.tableData.rowCount
+        };
+
+        // V3.6: CRITICAL - Reset state BEFORE emitting event
+        // This prevents re-triggering when listeners call isActive()
+        this.currentState = TableState.IDLE;
+        this.tableData = null;
+        this.aiGroupInfo = null;
+
+        // Emit completion event (after reset)
+        eventBus.emit('tableToolbar:completed', completionData);
+
+        // Update sidebar
+        eventBus.emit(Events.SIDEBAR_UPDATE);
+    }
+
+    // ============ OVERLAY RENDERING ============
+
+    /**
+     * V3.8: Render row overlay (the one row the user drew)
+     */
+    _renderRowOverlay(bbox) {
+        const overlayLayer = document.getElementById('overlay-layer');
+        if (!overlayLayer) return;
+
+        // Remove existing
+        const existing = overlayLayer.querySelector('.table-row-overlay');
+        if (existing) existing.remove();
+
+        const layerWidth = overlayLayer.offsetWidth;
+        const layerHeight = overlayLayer.offsetHeight;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'table-row-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            left: ${bbox.x * layerWidth}px;
+            top: ${bbox.y * layerHeight}px;
+            width: ${bbox.width * layerWidth}px;
+            height: ${bbox.height * layerHeight}px;
+            border: 3px solid #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            pointer-events: none;
+            z-index: 100;
+            box-sizing: border-box;
+        `;
+
+        // Add label
+        const label = document.createElement('div');
+        label.textContent = 'שורה 1 (תבנית)';
+        label.style.cssText = `
+            position: absolute;
+            top: -20px;
+            left: 0;
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
+        `;
+        overlay.appendChild(label);
+
+        overlayLayer.appendChild(overlay);
+    }
+
+    /**
+     * Legacy: Render bounds overlay (for backward compatibility)
+     */
+    _renderBoundsOverlay(bbox) {
+        this._renderRowOverlay(bbox);
+    }
+
+    /**
+     * Render columns overlay
+     */
+    _renderColumnsOverlay() {
+        const overlayLayer = document.getElementById('overlay-layer');
+        if (!overlayLayer) return;
+
+        // Remove existing columns
+        overlayLayer.querySelectorAll('.table-column-overlay').forEach(el => el.remove());
+
+        const layerWidth = overlayLayer.offsetWidth;
+        const layerHeight = overlayLayer.offsetHeight;
+
+        this.tableData.columns.forEach((col, idx) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'table-column-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                left: ${col.bbox.x * layerWidth}px;
+                top: ${col.bbox.y * layerHeight}px;
+                width: ${col.bbox.width * layerWidth}px;
+                height: ${col.bbox.height * layerHeight}px;
+                border: 2px solid #3b82f6;
+                background: rgba(59, 130, 246, 0.1);
+                pointer-events: none;
+                z-index: 101;
+                box-sizing: border-box;
+            `;
+
+            // Add label
+            const label = document.createElement('div');
+            label.style.cssText = `
+                position: absolute;
+                top: -24px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #3b82f6;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                white-space: nowrap;
+            `;
+            label.textContent = `${idx + 1}. ${col.name}`;
+            overlay.appendChild(label);
+
+            overlayLayer.appendChild(overlay);
+        });
+    }
+
+    /**
+     * Clear all overlays
+     */
+    _clearOverlays() {
+        const overlayLayer = document.getElementById('overlay-layer');
+        if (!overlayLayer) return;
+
+        // V3.8: Also clear row overlay
+        overlayLayer.querySelectorAll('.table-bounds-overlay, .table-row-overlay, .table-column-overlay').forEach(el => el.remove());
+    }
+}
+
+// Singleton instance
+export const tableToolbarMode = new TableToolbarMode();

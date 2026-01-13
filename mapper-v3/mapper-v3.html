@@ -106,6 +106,14 @@
                 </button>
             </div>
 
+            <!-- V3.2: Draft Fields Indicator -->
+            <div id="draft-indicator" class="toolbar-group draft-indicator hidden" data-mapper-only>
+                <span class="draft-badge">🟡 <span id="draft-count">0</span> שדות טיוטה</span>
+                <button id="btn-review" class="toolbar-btn review-btn" title="Review Fields (Shift+R)">
+                    Review
+                </button>
+            </div>
+
             <div class="toolbar-spacer"></div>
 
             <div class="toolbar-group">
@@ -218,12 +226,54 @@
                     <option value="checkbox">תיבת סימון</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>מצב תצוגה:</label>
+                <div class="layout-toggle-buttons" id="column-layout-toggle">
+                    <button type="button" class="layout-toggle active" data-mode="flow">זרימה</button>
+                    <button type="button" class="layout-toggle" data-mode="slots">תיבות</button>
+                </div>
+            </div>
+            <div class="form-group slot-count-group hidden" id="column-slot-count-group">
+                <label>מספר תיבות:</label>
+                <div class="slot-count-control">
+                    <button type="button" class="slot-adjust" data-delta="-1">−</button>
+                    <input type="number" id="column-slot-count" value="9" min="1" max="30">
+                    <button type="button" class="slot-adjust" data-delta="1">+</button>
+                </div>
+            </div>
             <div class="dialog-actions">
                 <button id="column-cancel-btn" class="btn-secondary">ביטול</button>
                 <button id="column-confirm-btn" class="btn-primary">אישור</button>
             </div>
         </div>
     </div>
+
+    <!-- Smart Table Detection Dialog -->
+    <div id="smart-table-dialog" class="dialog-overlay hidden">
+        <div class="dialog-box smart-table-dialog">
+            <h3>זוהתה טבלה פוטנציאלית</h3>
+            <p id="smart-table-description" class="dialog-description"></p>
+
+            <div id="smart-table-columns" class="smart-table-columns">
+                <!-- Column list will be populated dynamically -->
+            </div>
+
+            <div class="dialog-actions">
+                <button id="smart-table-skip" class="btn-secondary">השאר כשדות רגילים</button>
+                <button id="smart-table-convert" class="btn-primary">המר לטבלה</button>
+            </div>
+
+            <div id="smart-table-nav" class="smart-table-nav hidden">
+                <span id="smart-table-counter">1 / 1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Intent Resolver for renderHint in export -->
+    <script src="./shared/FieldIntentResolver.js"></script>
+
+    <!-- Layout Helper - Safe accessors for field layout (Phase 3) -->
+    <script src="./shared/LayoutHelper.js"></script>
 
     <!-- Application Bootstrap -->
     <script type="module">
@@ -245,6 +295,12 @@
         import { radioGroupDialog } from './ui/RadioGroupDialog.js';
         import { tableFlowUI } from './ui/TableFlowUI.js';
 
+        // Import overlay modules
+        import { labelOverlay } from './overlay/LabelOverlay.js';
+
+        // Import word selector (new word-based selection)
+        import { wordSelector } from './engines/WordSelector.js';
+
         // Import text extraction (for name capture)
         import { textExtractor } from './engines/TextExtractor.js';
         import { fieldNamer } from './engines/FieldNamer.js';
@@ -261,6 +317,15 @@
         window.viewportController = viewportController;
         window.drawController = drawController;
         window.tableFlowUI = tableFlowUI;
+        window.labelOverlay = labelOverlay;
+        window.wordSelector = wordSelector;
+
+        // ============ LABEL DETECTION V2 FLAGS ============
+        // Enable V2 engine with boundary-aware detection
+        window.USE_LABEL_V2 = true;
+        window.LABEL_V2_BOUNDARY = true;
+        window.LABEL_DEBUG = true;  // Set to false to disable debug logs
+        // window.LABEL_VALIDATE = true;  // Uncomment to compare V2 vs legacy
 
         // Initialize when DOM ready
         document.addEventListener('DOMContentLoaded', async () => {
@@ -289,6 +354,10 @@
                 nameConfirmDialog.init();
                 radioGroupDialog.init();
                 tableFlowUI.init();
+
+                // Initialize overlay modules
+                labelOverlay.init();
+                wordSelector.init();
 
                 // Register engines with mapper
                 mapper.registerEngine('pdf', pdfEngine);
@@ -342,6 +411,10 @@
                     }, 150);
                 });
 
+                // ============ Smart Table Detection handler ============
+                // Show dialog when repeating field patterns are detected after import
+                setupSmartTableDialog();
+
                 // Hide loading screen
                 document.getElementById('loading-screen').classList.add('hidden');
 
@@ -375,10 +448,24 @@
                 btn.addEventListener('click', () => {
                     const tool = btn.dataset.tool;
 
-                    // Special handling for Radio tool - starts the new radio flow
+                    // Special handling for Capture Name tool - uses click-select
+                    if (tool === 'capture_name') {
+                        console.log('[Toolbar] Capture Name button clicked - starting click-select');
+                        drawController.startFieldNameCapture();
+                        return;
+                    }
+
+                    // Special handling for Radio tool - starts the new radio group flow
                     if (tool === 'draw_radio') {
                         console.log('[Toolbar] Radio button clicked - starting radio group flow');
                         drawController.startRadioGroupFlow();
+                        return;
+                    }
+
+                    // Special handling for Checkbox tool - starts the new checkbox group flow
+                    if (tool === 'draw_checkbox') {
+                        console.log('[Toolbar] Checkbox button clicked - starting checkbox group flow');
+                        drawController.startCheckboxGroupFlow();
                         return;
                     }
 
@@ -408,6 +495,14 @@
             eventBus.on(Events.STATE_CHANGED, () => {
                 document.getElementById('btn-undo').disabled = !state.canUndo();
                 document.getElementById('btn-redo').disabled = !state.canRedo();
+            });
+
+            // V3.2: Toast event listener with action support
+            eventBus.on(Events.TOAST_SHOW, (data) => {
+                const options = {};
+                if (data.duration) options.duration = data.duration;
+                if (data.action) options.action = data.action;
+                showToast(data.message, data.type || 'info', options);
             });
 
             // Page navigation
@@ -495,15 +590,27 @@
                 e.target.value = ''; // Reset for re-selection
             });
 
-            // JSON file input
+            // JSON file input - supports Mapper JSON and Unified Schema (AI templates)
             document.getElementById('json-file-input').addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     try {
                         const text = await file.text();
                         const data = JSON.parse(text);
-                        mapper.importProject(data);
-                        showToast('Project imported', 'success');
+
+                        // Detect format and route to appropriate import
+                        // Unified Import Schema v1 (AI-prepared templates)
+                        if (data.$schema === 'unified-import-v1' || (data.meta?.source && data.fields) || (data.meta?.version && data.fields)) {
+                            console.log('[Import] Detected Unified Import Schema');
+                            state.importUnifiedJson(data);
+                            const stats = `${data.fields?.length || 0} שדות`;
+                            const groups = data.groups?.length ? `, ${data.groups.length} קבוצות` : '';
+                            showToast(`יובאו ${stats}${groups}`, 'success');
+                        } else {
+                            // Standard Mapper JSON format (legacy)
+                            mapper.importProject(data);
+                            showToast('Project imported', 'success');
+                        }
                     } catch (error) {
                         console.error('Failed to import JSON:', error);
                         showToast('Failed to import: ' + error.message, 'error');
@@ -515,18 +622,42 @@
 
         /**
          * Show toast notification
+         * V3.2: Extended to support action button
+         * @param {string} message - Toast message
+         * @param {string} type - Toast type (info, success, warning, error)
+         * @param {Object} options - Optional { duration, action: { label, callback } }
          */
-        function showToast(message, type = 'info') {
+        function showToast(message, type = 'info', options = {}) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
-            toast.textContent = message;
+
+            // V3.2: Support action button
+            if (options.action && options.action.label && options.action.callback) {
+                const textSpan = document.createElement('span');
+                textSpan.textContent = message;
+                toast.appendChild(textSpan);
+
+                const actionBtn = document.createElement('button');
+                actionBtn.className = 'toast-action-btn';
+                actionBtn.textContent = options.action.label;
+                actionBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    options.action.callback();
+                    toast.remove();
+                });
+                toast.appendChild(actionBtn);
+            } else {
+                toast.textContent = message;
+            }
+
             container.appendChild(toast);
 
+            const duration = options.duration || 3000;
             setTimeout(() => {
                 toast.classList.add('fade-out');
                 setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            }, duration);
         }
 
         // Expose showToast globally
@@ -580,6 +711,119 @@
             // Close properties panel
             document.getElementById('btn-close-properties')?.addEventListener('click', () => {
                 document.getElementById('properties-panel').classList.add('hidden');
+            });
+        }
+
+        /**
+         * Setup Smart Table Detection dialog
+         * Shows when repeating field patterns are detected after import
+         */
+        function setupSmartTableDialog() {
+            const dialog = document.getElementById('smart-table-dialog');
+            const description = document.getElementById('smart-table-description');
+            const columnsContainer = document.getElementById('smart-table-columns');
+            const convertBtn = document.getElementById('smart-table-convert');
+            const skipBtn = document.getElementById('smart-table-skip');
+            const navContainer = document.getElementById('smart-table-nav');
+            const counter = document.getElementById('smart-table-counter');
+
+            let candidates = [];
+            let currentIndex = 0;
+
+            // Listen for smart table detection event
+            eventBus.on(Events.SMART_TABLE_DETECTED, ({ candidates: detected }) => {
+                candidates = detected;
+                currentIndex = 0;
+
+                if (candidates.length === 0) return;
+
+                console.log('[SmartTableDialog] Showing dialog for', candidates.length, 'candidates');
+                showCandidate(currentIndex);
+                dialog.classList.remove('hidden');
+            });
+
+            function showCandidate(index) {
+                const candidate = candidates[index];
+                if (!candidate) return;
+
+                // Use Hebrew names for display (baseHe, columnsHe)
+                const tableName = candidate.baseHe || candidate.base;
+                const columnNames = candidate.columnsHe || candidate.columns;
+
+                // Update description - use Hebrew base name
+                description.innerHTML = `
+                    זוהו <strong>${candidate.fieldIds.length}</strong> שדות שנראים כמו טבלה: <strong>"${tableName}"</strong><br>
+                    <span class="table-stats">${candidate.columnCount} עמודות × ${candidate.rowCount} שורות</span>
+                `;
+
+                // Show columns with Hebrew names
+                columnsContainer.innerHTML = `
+                    <div class="columns-label">עמודות שזוהו:</div>
+                    <div class="columns-list">
+                        ${columnNames.map(col => `<span class="column-tag">${col}</span>`).join('')}
+                    </div>
+                    <div class="rows-label">שורות: ${candidate.rows.join(', ')}</div>
+                    <div class="fields-preview">
+                        <details>
+                            <summary>שדות שיומרו (${candidate.fieldIds.length})</summary>
+                            <ul class="fields-list">
+                                ${candidate.fields.slice(0, 10).map(f =>
+                                    `<li>${f.label_he || f.columnHe || f.label_en}</li>`
+                                ).join('')}
+                                ${candidate.fields.length > 10 ? `<li>... ועוד ${candidate.fields.length - 10}</li>` : ''}
+                            </ul>
+                        </details>
+                    </div>
+                `;
+
+                // Update navigation
+                if (candidates.length > 1) {
+                    navContainer.classList.remove('hidden');
+                    counter.textContent = `${index + 1} / ${candidates.length}`;
+                } else {
+                    navContainer.classList.add('hidden');
+                }
+            }
+
+            // Convert button
+            convertBtn.addEventListener('click', () => {
+                const candidate = candidates[currentIndex];
+                if (candidate) {
+                    state.convertSmartTableToTable(candidate);
+                }
+
+                // Move to next or close
+                currentIndex++;
+                if (currentIndex < candidates.length) {
+                    showCandidate(currentIndex);
+                } else {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                }
+            });
+
+            // Skip button
+            skipBtn.addEventListener('click', () => {
+                // Move to next or close
+                currentIndex++;
+                if (currentIndex < candidates.length) {
+                    showCandidate(currentIndex);
+                } else {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                    showToast('שדות נשמרו כשדות רגילים', 'info');
+                }
+            });
+
+            // Close on overlay click
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) {
+                    dialog.classList.add('hidden');
+                    candidates = [];
+                    currentIndex = 0;
+                }
             });
         }
     </script>

@@ -13,6 +13,19 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="styles/mapper-v3.css">
+    <!-- V3.9: Welcome screens styles -->
+    <link rel="stylesheet" href="styles/welcome-screens.css">
+
+    <!-- V3.10: David Libre Font - CRITICAL for Quick Fill text anchoring (same as Export) -->
+    <style>
+        @font-face {
+            font-family: 'David Libre';
+            src: url('./fonts/DavidLibre-Regular.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+    </style>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -22,6 +35,12 @@
             <p>Loading Mapper V3...</p>
         </div>
     </div>
+
+    <!-- V3.9: Welcome Screen Container (shown first) -->
+    <div id="welcome-screen-container" style="display: none;"></div>
+
+    <!-- V3.9: Field Loader Screen Container -->
+    <div id="field-loader-screen-container" style="display: none;"></div>
 
     <!-- Main Container -->
     <div id="mapper-container" class="mapper-container">
@@ -39,6 +58,14 @@
                 <button id="btn-export-json" class="toolbar-btn" title="Export JSON">
                     <span class="icon">📤</span>
                     <span class="label">Export</span>
+                </button>
+                <button id="btn-load-template" class="toolbar-btn" title="Load AI Template">
+                    <span class="icon">📋</span>
+                    <span class="label">תבנית</span>
+                </button>
+                <button id="btn-ai-analyze" class="toolbar-btn" title="Analyze PDF with AI">
+                    <span class="icon">🤖</span>
+                    <span class="label">AI</span>
                 </button>
             </div>
 
@@ -60,14 +87,17 @@
                 <button id="btn-tool-radio" class="toolbar-btn tool-btn" data-tool="draw_radio" title="Draw Radio (R)">
                     <span class="icon">🔘</span>
                 </button>
+                <button id="btn-tool-cell" class="toolbar-btn tool-btn" data-tool="draw_cell" title="תא סימון (M)">
+                    <span class="icon">▢</span>
+                </button>
                 <button id="btn-tool-table" class="toolbar-btn tool-btn" data-tool="draw_table" title="Draw Table">
                     <span class="icon">📊</span>
                 </button>
             </div>
 
-            <div class="toolbar-separator"></div>
+            <div class="toolbar-separator" data-mapper-only></div>
 
-            <div class="toolbar-group">
+            <div class="toolbar-group" data-mapper-only>
                 <button id="btn-undo" class="toolbar-btn" title="Undo (Ctrl+Z)" disabled>
                     <span class="icon">↩️</span>
                 </button>
@@ -76,7 +106,7 @@
                 </button>
             </div>
 
-            <div class="toolbar-separator"></div>
+            <div class="toolbar-separator" data-mapper-only></div>
 
             <div class="toolbar-group page-nav">
                 <button id="btn-prev-page" class="toolbar-btn" title="Previous Page" disabled>
@@ -104,6 +134,38 @@
                 <button id="btn-zoom-reset" class="toolbar-btn" title="Reset Zoom (Ctrl+0)">
                     <span class="icon">↺</span>
                 </button>
+            </div>
+
+            <!-- V3.2: Draft Fields Indicator -->
+            <div id="draft-indicator" class="toolbar-group draft-indicator hidden" data-mapper-only>
+                <span class="draft-badge">🟡 <span id="draft-count">0</span> שדות טיוטה</span>
+                <button id="btn-review" class="toolbar-btn review-btn" title="Review Fields (Shift+R)">
+                    Review
+                </button>
+            </div>
+
+            <!-- V3.9: Auto-Advance Indicator -->
+            <div id="auto-advance-indicator" class="toolbar-group auto-advance-indicator" data-mapper-only>
+                <button id="btn-auto-advance" class="toolbar-btn auto-advance-btn active" title="מעבר אוטומטי (A)">
+                    <span class="icon">⏭️</span>
+                    <span class="label">אוטומטי</span>
+                </button>
+                <span id="remaining-count" class="remaining-badge hidden">0</span>
+            </div>
+
+            <!-- V3.10: Flow Mode Toggle (Mapping / Quick Fill) -->
+            <div id="flow-mode-toggle" class="toolbar-group flow-mode-toggle" data-mapper-only>
+                <!-- V3.10: Flow mode switcher hidden - QuickFill moved to separate site (?mode=quickfill) -->
+                <div class="flow-mode-switcher" style="display: none;">
+                    <button id="btn-mode-mapping" class="flow-mode-btn active" data-mode="mapping" title="מיפוי רגיל">
+                        <span class="icon">📍</span>
+                        <span class="label">מיפוי</span>
+                    </button>
+                    <button id="btn-mode-quickfill" class="flow-mode-btn" data-mode="quick_fill" title="מילוי מהיר">
+                        <span class="icon">⚡</span>
+                        <span class="label">מילוי מהיר</span>
+                    </button>
+                </div>
             </div>
 
             <div class="toolbar-spacer"></div>
@@ -192,6 +254,9 @@
             <div id="table-flow-columns" class="columns-list hidden">
                 <h4>עמודות:</h4>
                 <ul id="table-columns-list"></ul>
+                <button id="table-autobox-btn" class="btn-autobox hidden" title="חלק את השורה לעמודות שוות">
+                    📐 חלוקה אוטומטית
+                </button>
             </div>
             <div id="table-flow-summary" class="flow-summary hidden"></div>
         </div>
@@ -261,18 +326,88 @@
         </div>
     </div>
 
+    <!-- V3.9: Recent PDFs localStorage manager -->
+    <script src="./core/RecentPDFs.js"></script>
+
+    <!-- V3.9: Welcome Screen component -->
+    <script src="./ui/WelcomeScreen.js"></script>
+
+    <!-- V3.9: Field Loader Screen component -->
+    <script src="./ui/FieldLoaderScreen.js"></script>
+
     <!-- Intent Resolver for renderHint in export -->
     <script src="./shared/FieldIntentResolver.js"></script>
 
     <!-- Layout Helper - Safe accessors for field layout (Phase 3) -->
     <script src="./shared/LayoutHelper.js"></script>
 
+    <!-- V3.10: PreviewTextRenderer from LiveFill - for Quick Fill mode text rendering -->
+    <script src="../livefill/js/preview-text-renderer.js"></script>
+
+    <!-- V3.10: PDF-LIB for Quick Fill PDF export -->
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <!-- V3.10: fontkit for Hebrew font embedding (required by pdf-lib for custom fonts) -->
+    <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.0.0"></script>
+
+    <!-- רישום fontkit ל-pdf-lib (חובה לעברית) - copied exactly from livefill.html -->
+    <script>
+        PDFLib.PDFDocument.prototype.registerFontkit = function (fontkit) {
+            this.fontkit = fontkit;
+        };
+        PDFLib.PDFDocument.registerFontkit = function (fontkit) {
+            PDFLib.PDFDocument.prototype.fontkit = fontkit;
+        };
+        PDFLib.PDFDocument.registerFontkit(fontkit);
+    </script>
+
+    <!-- V3.10: Dependencies for ExportEngine -->
+    <script src="../shared/normalizeField.js"></script>
+
+    <!-- V3.10: Progress modal stubs for ExportEngine (it checks typeof before calling) -->
+    <script>
+        // Simple progress modal for Quick Fill export
+        window.showProgressModal = function() {
+            const existing = document.getElementById('qf-progress-modal');
+            if (existing) existing.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'qf-progress-modal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            modal.innerHTML = `
+                <div style="background:white;padding:24px 32px;border-radius:8px;text-align:center;direction:rtl;">
+                    <div id="qf-progress-text" style="margin-bottom:12px;font-size:16px;">מייצא PDF...</div>
+                    <div style="width:200px;height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden;">
+                        <div id="qf-progress-bar" style="width:0%;height:100%;background:#4CAF50;transition:width 0.3s;"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        };
+
+        window.hideProgressModal = function() {
+            const modal = document.getElementById('qf-progress-modal');
+            if (modal) modal.remove();
+        };
+
+        window.updateProgress = function(percent, message) {
+            const bar = document.getElementById('qf-progress-bar');
+            const text = document.getElementById('qf-progress-text');
+            if (bar) bar.style.width = percent + '%';
+            if (text && message) text.textContent = message;
+        };
+    </script>
+
+    <!-- V3.10: ExportEngine from LiveFill - for Quick Fill PDF export -->
+    <script src="../livefill/js/export-engine.js"></script>
+
     <!-- Application Bootstrap -->
     <script type="module">
         // Import core modules
         import { mapper } from './core/MapperCore.js';
-        import { state, Tools, Modes } from './core/StateManager.js';
+        import { state, Tools, Modes, FlowModes } from './core/StateManager.js';
         import { eventBus, Events } from './core/EventBus.js';
+        import { intentManager, IntentType, IntentSource } from './core/IntentManager.js';
 
         // Import engines
         import { pdfEngine } from './engines/PDFEngine.js';
@@ -285,7 +420,14 @@
         import { sidebarController } from './ui/SidebarController.js';
         import { nameConfirmDialog } from './ui/NameConfirmDialog.js';
         import { radioGroupDialog } from './ui/RadioGroupDialog.js';
-        import { tableFlowUI } from './ui/TableFlowUI.js';
+        // V3.10: Legacy table system disabled - using new TableRegion
+        // import { tableFlowUI } from './ui/TableFlowUI.js';
+        import { templateImportDialog } from './ui/TemplateImportDialog.js';
+        import { exceptionReviewPanel } from './ui/ExceptionReviewPanel.js';
+        import { entityMappingModeDialog } from './ui/EntityMappingModeDialog.js';
+        import { aiAnalysisDialog } from './ui/AIAnalysisDialog.js';
+        import { guidedMappingUI } from './ui/GuidedMappingUI.js';
+        import { fieldIntelligenceStore } from './core/FieldIntelligenceStore.js';
 
         // Import overlay modules
         import { labelOverlay } from './overlay/LabelOverlay.js';
@@ -296,6 +438,29 @@
         // Import text extraction (for name capture)
         import { textExtractor } from './engines/TextExtractor.js';
         import { fieldNamer } from './engines/FieldNamer.js';
+
+        // V3.10: Legacy table toolbar mode disabled - using new TableRegion
+        // import { tableToolbarMode } from './ui/TableToolbarMode.js';
+        const tableToolbarMode = null; // Stub for backward compatibility
+
+        // V3.9: Import AutoAdvanceController for field-driven workflow
+        import { autoAdvanceController } from './ui/AutoAdvanceController.js';
+
+        // V3.9: Import DuplicateFieldDialog for "Duplicate × N"
+        import { duplicateFieldDialog } from './ui/DuplicateFieldDialog.js';
+
+        // V3.10: Import QuickFillOverlay for Quick Fill mode
+        import { quickFillOverlay } from './ui/QuickFillOverlay.js';
+
+        // V3.10: Import MappingLoader for loading JSON mappings into QuickFill
+        import { mappingLoader } from './ui/MappingLoader.js';
+
+        // V3.10: Import QuickFillUIProfile for public mode UI
+        import { quickFillUIProfile } from './ui/QuickFillUIProfile.js';
+
+        // V3.10: Import new TableRegion system
+        import { tableRegionManager } from './core/TableRegionManager.js';
+        import { tableSelectMode } from './ui/TableSelectMode.js';
 
         // Make available globally for debugging
         window.mapper = mapper;
@@ -308,9 +473,39 @@
         window.overlayRenderer = overlayRenderer;
         window.viewportController = viewportController;
         window.drawController = drawController;
-        window.tableFlowUI = tableFlowUI;
+        // V3.10: Legacy table system disabled
+        // window.tableFlowUI = tableFlowUI;
+        // V3.10: New TableRegion system
+        window.tableRegionManager = tableRegionManager;
+        window.tableSelectMode = tableSelectMode;
         window.labelOverlay = labelOverlay;
         window.wordSelector = wordSelector;
+        window.templateImportDialog = templateImportDialog;
+        window.exceptionReviewPanel = exceptionReviewPanel;
+        window.guidedMappingUI = guidedMappingUI;
+        window.fieldIntelligenceStore = fieldIntelligenceStore;
+        window.tableToolbarMode = tableToolbarMode;
+
+        // V3.9: Intent Manager
+        window.intentManager = intentManager;
+        window.IntentType = IntentType;
+        window.IntentSource = IntentSource;
+
+        // V3.9: Auto-advance controller
+        window.autoAdvanceController = autoAdvanceController;
+
+        // V3.9: Duplicate field dialog
+        window.duplicateFieldDialog = duplicateFieldDialog;
+
+        // V3.10: Quick Fill overlay and FlowModes
+        window.quickFillOverlay = quickFillOverlay;
+        window.FlowModes = FlowModes;
+
+        // V3.10: Mapping loader for JSON import
+        window.mappingLoader = mappingLoader;
+
+        // V3.10: QuickFill UI Profile for public mode
+        window.quickFillUIProfile = quickFillUIProfile;
 
         // ============ LABEL DETECTION V2 FLAGS ============
         // Enable V2 engine with boundary-aware detection
@@ -345,11 +540,28 @@
                 sidebarController.init();
                 nameConfirmDialog.init();
                 radioGroupDialog.init();
-                tableFlowUI.init();
+                // V3.10: Legacy table system disabled
+                // tableFlowUI.init();
+                // tableToolbarMode.init();
+                // V3.10: New TableRegion system
+                tableRegionManager.init();
+
+                templateImportDialog.init();
+                exceptionReviewPanel.init();
+                entityMappingModeDialog.init();
+                aiAnalysisDialog.init();
+                guidedMappingUI.init();
+                await fieldIntelligenceStore.init();
 
                 // Initialize overlay modules
                 labelOverlay.init();
                 wordSelector.init();
+
+                // V3.9: Initialize auto-advance controller
+                autoAdvanceController.init();
+
+                // V3.9: Initialize duplicate field dialog
+                duplicateFieldDialog.init();
 
                 // Register engines with mapper
                 mapper.registerEngine('pdf', pdfEngine);
@@ -410,7 +622,17 @@
                 // Hide loading screen
                 document.getElementById('loading-screen').classList.add('hidden');
 
+                // V3.9: Initialize Welcome Screens (new UX flow)
+                initWelcomeScreens();
+
                 console.log('[Mapper V3] Ready!');
+
+                // V3.10: Initialize QuickFill UI Profile (handles ?mode=quickfill)
+                // This also enters Quick Fill mode and hides advanced UI
+                quickFillUIProfile.init();
+                if (quickFillUIProfile.isPublicMode()) {
+                    state.setFlowMode(FlowModes.QUICK_FILL);
+                }
 
             } catch (error) {
                 console.error('[Mapper V3] Init error:', error);
@@ -432,6 +654,87 @@
         }
 
         /**
+         * V3.9: Initialize Welcome Screens
+         * Shows the new welcome flow instead of the old empty mapper view
+         */
+        function initWelcomeScreens() {
+            const welcomeContainer = document.getElementById('welcome-screen-container');
+            const fieldLoaderContainer = document.getElementById('field-loader-screen-container');
+            const mapperContainer = document.getElementById('mapper-container');
+
+            if (!welcomeContainer || !fieldLoaderContainer) {
+                console.warn('[WelcomeScreens] Containers not found - skipping new UX flow');
+                return;
+            }
+
+            // Initialize WelcomeScreen with callback for PDF selection
+            // V3.10: Accept pdfArrayBuffer for Quick Fill export support
+            WelcomeScreen.init(welcomeContainer, (file, pdfDoc, pdfArrayBuffer) => {
+                console.log('[WelcomeScreens] PDF selected:', file.name);
+
+                // Hide welcome screen, show field loader
+                WelcomeScreen.hide();
+                FieldLoaderScreen.show(file, pdfDoc, pdfArrayBuffer);
+            });
+
+            // Initialize FieldLoaderScreen with callback for fields loaded
+            FieldLoaderScreen.init(fieldLoaderContainer, async (result) => {
+                console.log('[WelcomeScreens] Fields loaded via:', result.method);
+
+                // Hide field loader, show main mapper
+                FieldLoaderScreen.hide();
+                mapperContainer.style.display = '';
+
+                // Load the PDF into the existing pdfEngine
+                // The PDF is already loaded by WelcomeScreen, just need to render it
+                try {
+                    // Use the already-loaded pdfDoc
+                    // V3.10: Pass pdfArrayBuffer for Quick Fill export support
+                    await pdfEngine.loadFromDoc(result.pdfDoc, result.pdfFile.name, result.pdfArrayBuffer);
+
+                    // If fields were provided, import them
+                    if (result.fields && result.fields.length > 0) {
+                        // Convert to unified format and import
+                        // V3.9: Preserve original label_he/label_en from JSON
+                        const unifiedData = {
+                            $schema: 'unified-import-v1',
+                            meta: {
+                                source: 'welcome-screen',
+                                version: '1.0',
+                                loadMethod: result.method
+                            },
+                            fields: result.fields.map(f => ({
+                                id: f.id || `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                                label_he: f.label_he || f.labelHe || f.name,
+                                label_en: f.label_en || f.labelEn || f.name,
+                                type: f.type || 'text',
+                                status: f.status || 'pending',
+                                // Preserve any existing bbox or other properties
+                                ...(f.bbox && { bbox: f.bbox }),
+                                ...(f.page && { page: f.page })
+                            }))
+                        };
+                        state.importUnifiedJson(unifiedData);
+                        showToast(`נטענו ${result.fields.length} שדות`, 'success');
+                    } else if (result.method === 'ocr') {
+                        showToast('מצב OCR - סמן את אזור הסרגל לחילוץ שמות', 'info', { duration: 5000 });
+                    } else if (result.method === 'manual') {
+                        showToast('מצב ידני - הוסף שדות תוך כדי מיפוי', 'info', { duration: 5000 });
+                    }
+                } catch (error) {
+                    console.error('[WelcomeScreens] Failed to load PDF into engine:', error);
+                    showToast('שגיאה בטעינת ה-PDF', 'error');
+                }
+            });
+
+            // Initially hide the main mapper and show welcome screen
+            mapperContainer.style.display = 'none';
+            WelcomeScreen.show();
+
+            console.log('[WelcomeScreens] Initialized - showing welcome screen');
+        }
+
+        /**
          * Setup toolbar button handlers
          */
         function setupToolbar() {
@@ -439,6 +742,13 @@
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const tool = btn.dataset.tool;
+                    const inQuickFill = state.isQuickFillMode();
+
+                    // V3.10: Block non-drawing tools in Quick Fill mode
+                    if (inQuickFill && (tool === 'select' || tool === 'capture_name' || tool === 'draw_table')) {
+                        console.log('[Toolbar] Tool blocked in Quick Fill mode:', tool);
+                        return;
+                    }
 
                     // Special handling for Capture Name tool - uses click-select
                     if (tool === 'capture_name') {
@@ -447,24 +757,46 @@
                         return;
                     }
 
-                    // Special handling for Radio tool - starts the new radio group flow
+                    // Special handling for Radio tool - starts the radio group flow (only in mapping mode)
                     if (tool === 'draw_radio') {
-                        console.log('[Toolbar] Radio button clicked - starting radio group flow');
-                        drawController.startRadioGroupFlow();
+                        if (state.isQuickFillMode()) {
+                            // In Quick Fill mode, just set the tool directly
+                            console.log('[Toolbar] Radio button clicked - Quick Fill mode, setting tool');
+                            state.setTool(tool);
+                        } else {
+                            console.log('[Toolbar] Radio button clicked - starting radio group flow');
+                            drawController.startRadioGroupFlow();
+                        }
                         return;
                     }
 
-                    // Special handling for Checkbox tool - starts the new checkbox group flow
+                    // Special handling for Checkbox tool - starts the checkbox group flow (only in mapping mode)
                     if (tool === 'draw_checkbox') {
-                        console.log('[Toolbar] Checkbox button clicked - starting checkbox group flow');
-                        drawController.startCheckboxGroupFlow();
+                        if (state.isQuickFillMode()) {
+                            // In Quick Fill mode, just set the tool directly
+                            console.log('[Toolbar] Checkbox button clicked - Quick Fill mode, setting tool');
+                            state.setTool(tool);
+                        } else {
+                            console.log('[Toolbar] Checkbox button clicked - starting checkbox group flow');
+                            drawController.startCheckboxGroupFlow();
+                        }
                         return;
                     }
 
-                    // Special handling for Table tool - starts the table flow
+                    // V3.10: Table tool - new TableRegion system
                     if (tool === 'draw_table') {
-                        console.log('[Toolbar] Table button clicked - starting table flow');
-                        tableFlowUI.start();
+                        console.log('[Toolbar] Table button clicked - starting Table Select Mode');
+                        // Import and use new TableSelectMode
+                        if (window.tableSelectMode) {
+                            window.tableSelectMode.start();
+                        } else {
+                            eventBus.emit(Events.TOAST_SHOW, {
+                                message: 'צייר מלבן סביב הטבלה',
+                                type: 'info',
+                                duration: 3000
+                            });
+                            state.setTool('draw_table');
+                        }
                         return;
                     }
 
@@ -479,14 +811,39 @@
                 });
             });
 
-            // Undo/Redo buttons
-            document.getElementById('btn-undo').addEventListener('click', () => mapper.undo());
-            document.getElementById('btn-redo').addEventListener('click', () => mapper.redo());
+            // Undo/Redo buttons (blocked in Quick Fill mode)
+            document.getElementById('btn-undo').addEventListener('click', () => {
+                if (!state.isQuickFillMode()) mapper.undo();
+            });
+            document.getElementById('btn-redo').addEventListener('click', () => {
+                if (!state.isQuickFillMode()) mapper.redo();
+            });
 
             // Update undo/redo button state
             eventBus.on(Events.STATE_CHANGED, () => {
-                document.getElementById('btn-undo').disabled = !state.canUndo();
-                document.getElementById('btn-redo').disabled = !state.canRedo();
+                const inQuickFill = state.isQuickFillMode();
+                document.getElementById('btn-undo').disabled = inQuickFill || !state.canUndo();
+                document.getElementById('btn-redo').disabled = inQuickFill || !state.canRedo();
+            });
+
+            // V3.10: Disable buttons when entering/exiting Quick Fill mode
+            eventBus.on(Events.QUICK_FILL_MODE_CHANGED, ({ active }) => {
+                document.getElementById('btn-undo').disabled = active || !state.canUndo();
+                document.getElementById('btn-redo').disabled = active || !state.canRedo();
+
+                // Disable non-drawing tools visually
+                ['btn-tool-select', 'btn-tool-capture', 'btn-tool-table'].forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) btn.disabled = active;
+                });
+            });
+
+            // V3.2: Toast event listener with action support
+            eventBus.on(Events.TOAST_SHOW, (data) => {
+                const options = {};
+                if (data.duration) options.duration = data.duration;
+                if (data.action) options.action = data.action;
+                showToast(data.message, data.type || 'info', options);
             });
 
             // Page navigation
@@ -515,6 +872,59 @@
                 viewportController.resetZoom();
             });
 
+            // V3.9: Auto-advance toggle button
+            const autoAdvanceBtn = document.getElementById('btn-auto-advance');
+            if (autoAdvanceBtn) {
+                autoAdvanceBtn.addEventListener('click', () => {
+                    const enabled = autoAdvanceController.toggle();
+                    autoAdvanceBtn.classList.toggle('active', enabled);
+                });
+            }
+
+            // V3.10: Flow mode toggle buttons (Mapping / Quick Fill)
+            const flowModeButtons = document.querySelectorAll('.flow-mode-btn');
+            flowModeButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.dataset.mode;
+
+                    // Set flow mode in state
+                    if (mode === 'mapping') {
+                        state.setFlowMode(FlowModes.MAPPING);
+                    } else if (mode === 'quick_fill') {
+                        state.setFlowMode(FlowModes.QUICK_FILL);
+                    }
+
+                    // Update button states
+                    flowModeButtons.forEach(b => {
+                        b.classList.toggle('active', b.dataset.mode === mode);
+                    });
+
+                    console.log('[Toolbar] Flow mode changed to:', mode);
+                });
+            });
+
+            // Listen for flow mode changes from other sources
+            eventBus.on(Events.QUICK_FILL_MODE_CHANGED, ({ active }) => {
+                flowModeButtons.forEach(btn => {
+                    const isQuickFill = btn.dataset.mode === 'quick_fill';
+                    btn.classList.toggle('active', isQuickFill === active);
+                });
+            });
+
+            // Update remaining count when fields change
+            eventBus.on(Events.STATE_CHANGED, () => {
+                updateRemainingCount();
+            });
+
+            function updateRemainingCount() {
+                const remainingEl = document.getElementById('remaining-count');
+                if (remainingEl) {
+                    const count = autoAdvanceController.getRemainingCount();
+                    remainingEl.textContent = count;
+                    remainingEl.classList.toggle('hidden', count === 0);
+                }
+            }
+
             // Open PDF button
             document.getElementById('btn-open-pdf').addEventListener('click', () => {
                 document.getElementById('pdf-file-input').click();
@@ -525,9 +935,39 @@
                 document.getElementById('json-file-input').click();
             });
 
+            // Load Template button - opens AI template import dialog
+            document.getElementById('btn-load-template').addEventListener('click', () => {
+                templateImportDialog.open();
+            });
+
+            // AI Analyze button - opens AI analysis dialog for automatic PDF analysis
+            document.getElementById('btn-ai-analyze').addEventListener('click', () => {
+                // Check if PDF is loaded first
+                if (!pdfEngine.isLoaded()) {
+                    showToast('נא לטעון PDF קודם', 'warning');
+                    return;
+                }
+                aiAnalysisDialog.show();
+            });
+
             // Export JSON button - exports mapped fields and tables
             document.getElementById('btn-export-json').addEventListener('click', () => {
                 const data = mapper.exportMappedFields();
+
+                // Check if export was blocked by validation
+                if (!data) {
+                    // Get validation details to show user
+                    const validation = mapper.validateMapping();
+                    if (validation.errors.length > 0) {
+                        console.error('[Export] Validation errors:', validation.errors);
+                        // Show detailed errors
+                        const errorList = validation.errors.map(e =>
+                            `• ${e.fieldLabel || e.fieldId || 'Unknown'}: ${e.message}`
+                        ).join('\n');
+                        alert(`לא ניתן לייצא - יש ${validation.errors.length} שגיאות:\n\n${errorList}`);
+                    }
+                    return;
+                }
 
                 // Check if there are any mapped fields OR tables
                 const hasFields = data.fields && data.fields.length > 0;
@@ -606,18 +1046,42 @@
 
         /**
          * Show toast notification
+         * V3.2: Extended to support action button
+         * @param {string} message - Toast message
+         * @param {string} type - Toast type (info, success, warning, error)
+         * @param {Object} options - Optional { duration, action: { label, callback } }
          */
-        function showToast(message, type = 'info') {
+        function showToast(message, type = 'info', options = {}) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
-            toast.textContent = message;
+
+            // V3.2: Support action button
+            if (options.action && options.action.label && options.action.callback) {
+                const textSpan = document.createElement('span');
+                textSpan.textContent = message;
+                toast.appendChild(textSpan);
+
+                const actionBtn = document.createElement('button');
+                actionBtn.className = 'toast-action-btn';
+                actionBtn.textContent = options.action.label;
+                actionBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    options.action.callback();
+                    toast.remove();
+                });
+                toast.appendChild(actionBtn);
+            } else {
+                toast.textContent = message;
+            }
+
             container.appendChild(toast);
 
+            const duration = options.duration || 3000;
             setTimeout(() => {
                 toast.classList.add('fade-out');
                 setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            }, duration);
         }
 
         // Expose showToast globally

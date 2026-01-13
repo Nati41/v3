@@ -1,12 +1,14 @@
 /**
  * OverlayRenderer - Field overlay rendering for Mapper V3
  * Ported from old mapper with correct coordinate conversion
+ * V3.3: Extended with ghost overlays for template mapping
  */
 import { state, RadioGroupSteps } from '../core/StateManager.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { pdfEngine, PDF_DPI, CHECKBOX_SIZE, RADIO_SIZE } from './PDFEngine.js';
 import { labelOverlay } from '../overlay/LabelOverlay.js';
 import { TableEvents } from '../tables/TableFlowController.js';
+import { templateStore, TemplateFieldStatus } from '../core/TemplateStore.js';
 
 export class OverlayRenderer {
     constructor() {
@@ -16,6 +18,17 @@ export class OverlayRenderer {
         this.tableElements = new Map(); // tableId -> DOM element
         this.tempColumnElements = new Map(); // columnId/index -> DOM element (during table flow)
         this._pendingRenderFields = [];  // Queue for fields waiting for dimensions
+
+        // V3.3: Ghost overlays for template mapping
+        this.ghostElements = new Map(); // templateFieldId -> DOM element
+        this._batchPreviewElements = []; // Elements showing batch mapping preview
+
+        // V3.9: Table flow lock - prevents resize during column drawing
+        this._tableStructureLocked = false;
+
+        // V3.9: Store screen pixel coords directly to avoid normalization drift
+        this._tableBBoxScreenPixels = null;
+        this._sampleRowScreenPixels = null;
     }
 
     /**
@@ -134,6 +147,19 @@ export class OverlayRenderer {
             this.removeTable(table.tableId);
         });
 
+        // V3.10: Table Region events (new system)
+        eventBus.on(Events.TABLE_REGION_CREATED, () => {
+            this.renderTableRegions();
+        });
+
+        eventBus.on(Events.TABLE_REGION_UPDATED, () => {
+            this.renderTableRegions();
+        });
+
+        eventBus.on(Events.TABLE_REGION_DELETED, () => {
+            this.renderTableRegions();
+        });
+
         // Re-render tables on zoom change
         eventBus.on(Events.ZOOM_CHANGED, () => {
             this._updateLayerSize();
@@ -154,12 +180,72 @@ export class OverlayRenderer {
         // Clear all temporary overlays (including columns)
         eventBus.on(TableEvents.TABLE_OVERLAY_CLEAR_ALL, () => {
             this.clearTempColumns();
+            this.clearTableBBoxOverlay();
+            this.clearSampleRowOverlay();
+        });
+
+        // V3.5: Clear temporary overlays (but keep bbox and sample row visible)
+        eventBus.on(TableEvents.TABLE_OVERLAY_CLEAR_TEMP, () => {
+            // Clear only temporary drawing elements, not the structural overlays
+            // This is called when switching steps
+            console.log('[OverlayRenderer] Clearing temp overlays');
+        });
+
+        // ============ V3.5: TABLE BBOX AND SAMPLE ROW OVERLAYS ============
+        // Show table bbox overlay during table flow
+        eventBus.on(TableEvents.TABLE_OVERLAY_SHOW_TABLE_BBOX, ({ bbox }) => {
+            this.renderTableBBoxOverlay(bbox);
+        });
+
+        // Show sample row overlay during table flow
+        eventBus.on(TableEvents.TABLE_OVERLAY_SHOW_SAMPLE_ROW, ({ bbox }) => {
+            this.renderSampleRowOverlay(bbox);
+        });
+
+        // V3.9: Lock/unlock table structure during column drawing
+        eventBus.on(TableEvents.TABLE_OVERLAY_LOCK_STRUCTURE, () => {
+            this.lockTableStructure();
+        });
+        eventBus.on(TableEvents.TABLE_OVERLAY_UNLOCK_STRUCTURE, () => {
+            this.unlockTableStructure();
         });
 
         // ============ SIDEBAR/PDF COLUMN SYNC ============
         // Highlight PDF column when hovering sidebar item
         eventBus.on('table:sidebar:columnHover', ({ columnId, index, hover }) => {
             this.highlightTempColumn(columnId, hover);
+        });
+
+        // ============ V3.3: TEMPLATE GHOST OVERLAY EVENTS ============
+        eventBus.on(Events.TEMPLATE_LOADED, () => {
+            // Clear any existing ghost overlays
+            this.clearGhostOverlays();
+        });
+
+        eventBus.on(Events.TEMPLATE_CLEARED, () => {
+            this.clearGhostOverlays();
+            this.clearBatchPreview();
+        });
+
+        eventBus.on(Events.NEXT_UNMAPPED_ACTIVATED, ({ fieldId, templateFieldId }) => {
+            // Highlight the active target field in sidebar (handled by SidebarController)
+            // Here we could show a ghost hint if the template has position hints
+        });
+
+        eventBus.on(Events.BATCH_MAPPING_OFFERED, ({ sourceFieldId, duplicates, pattern }) => {
+            // Show preview of where batch-mapped fields will go
+            const sourceField = state.getField(sourceFieldId);
+            if (sourceField && sourceField.bbox) {
+                this.showBatchPreview(sourceField.bbox, duplicates.length);
+            }
+        });
+
+        eventBus.on(Events.BATCH_MAPPING_APPLIED, () => {
+            this.clearBatchPreview();
+        });
+
+        eventBus.on(Events.BATCH_MAPPING_CANCELLED, () => {
+            this.clearBatchPreview();
         });
     }
 
@@ -208,6 +294,9 @@ export class OverlayRenderer {
         // Also render tables for current page
         this.renderAllTables();
 
+        // V3.10: Render table regions (new system)
+        this.renderTableRegions();
+
         // Also render radio builder circles if active
         this.renderRadioBuilderCircles();
 
@@ -233,6 +322,68 @@ export class OverlayRenderer {
 
         tables.forEach(table => {
             this.renderTable(table);
+        });
+    }
+
+    /**
+     * V3.10: Render table regions (new simple table system)
+     */
+    renderTableRegions() {
+        if (!window.tableRegionManager) return;
+
+        const regions = window.tableRegionManager.getAllRegions();
+        if (regions.length === 0) return;
+
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+
+        regions.forEach(region => {
+            // Remove existing element if any
+            const existingEl = this.overlayLayer.querySelector(`[data-region-id="${region.id}"]`);
+            if (existingEl) existingEl.remove();
+
+            const [rx, ry, rw, rh] = region.bbox;
+
+            // Create region overlay
+            const regionEl = document.createElement('div');
+            regionEl.className = `table-region-overlay ${region.isStructureLocked ? 'locked' : 'pending'}`;
+            regionEl.dataset.regionId = region.id;
+
+            // Convert normalized coords to pixels
+            // bbox uses PDF coords (Y=0 at bottom), screen uses Y=0 at top
+            // Apply Y-flip: screenY = (1 - pdfY - height) * layerHeight
+            regionEl.style.cssText = `
+                position: absolute;
+                left: ${rx * layerWidth}px;
+                top: ${(1 - ry - rh) * layerHeight}px;
+                width: ${rw * layerWidth}px;
+                height: ${rh * layerHeight}px;
+                border: 2px dashed ${region.isStructureLocked ? '#16a34a' : '#ca8a04'};
+                background: ${region.isStructureLocked ? 'rgba(22, 163, 74, 0.05)' : 'rgba(202, 138, 4, 0.05)'};
+                pointer-events: none;
+                z-index: 5;
+            `;
+
+            // Add label
+            const label = document.createElement('div');
+            label.className = 'table-region-label';
+            label.style.cssText = `
+                position: absolute;
+                top: -20px;
+                right: 0;
+                font-size: 11px;
+                background: ${region.isStructureLocked ? '#16a34a' : '#ca8a04'};
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                direction: rtl;
+            `;
+            label.textContent = region.isStructureLocked
+                ? `טבלה: ${region.rowCount} שורות`
+                : 'טבלה (ממתין למיפוי)';
+
+            regionEl.appendChild(label);
+            this.overlayLayer.appendChild(regionEl);
         });
     }
 
@@ -672,6 +823,9 @@ export class OverlayRenderer {
             colEl.appendChild(slotsOverlay);
         }
 
+        // V3.5: Add resize handles to column overlays
+        this._addResizeHandlesToTempOverlay(colEl, 'column', bbox);
+
         // Hover effect
         colEl.addEventListener('mouseenter', () => {
             colEl.style.background = 'rgba(16, 185, 129, 0.3)';
@@ -731,6 +885,410 @@ export class OverlayRenderer {
         }
     }
 
+    // ============ V3.5: TABLE BBOX AND SAMPLE ROW OVERLAYS ============
+
+    /**
+     * V3.9: Lock table structure - prevents resizing bbox/sample row during column drawing
+     */
+    lockTableStructure() {
+        this._tableStructureLocked = true;
+        // Hide resize handles on existing overlays
+        if (this._tableBBoxOverlay) {
+            this._tableBBoxOverlay.querySelectorAll('.temp-resize-handle').forEach(h => {
+                h.style.display = 'none';
+            });
+        }
+        if (this._sampleRowOverlay) {
+            this._sampleRowOverlay.querySelectorAll('.temp-resize-handle').forEach(h => {
+                h.style.display = 'none';
+            });
+        }
+        console.log('[OverlayRenderer] Table structure LOCKED');
+    }
+
+    /**
+     * V3.9: Unlock table structure - allows resizing again
+     */
+    unlockTableStructure() {
+        this._tableStructureLocked = false;
+        // Show resize handles on existing overlays
+        if (this._tableBBoxOverlay) {
+            this._tableBBoxOverlay.querySelectorAll('.temp-resize-handle').forEach(h => {
+                h.style.display = '';
+            });
+        }
+        if (this._sampleRowOverlay) {
+            this._sampleRowOverlay.querySelectorAll('.temp-resize-handle').forEach(h => {
+                h.style.display = '';
+            });
+        }
+        console.log('[OverlayRenderer] Table structure UNLOCKED');
+    }
+
+    /**
+     * Render the table bounding box overlay during table flow
+     * V3.5: Added for visual feedback with resize capability
+     * V3.9: Now stores screen pixels directly to avoid normalization drift
+     * @param {Object} bbox - { x, y, width, height } in normalized 0-1 values OR screen pixels
+     * @param {boolean} isScreenPixels - If true, bbox is already in screen pixels
+     */
+    renderTableBBoxOverlay(bbox, isScreenPixels = false) {
+        if (!this.overlayLayer) return;
+
+        // Clear existing
+        this.clearTableBBoxOverlay();
+
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+
+        // V3.9: Handle both normalized and screen pixel input
+        let screenBbox;
+        if (isScreenPixels) {
+            screenBbox = { ...bbox };
+        } else {
+            // Convert normalized bbox to screen pixels
+            screenBbox = {
+                x: Math.round(bbox.x * layerWidth),
+                y: Math.round(bbox.y * layerHeight),
+                width: Math.round(bbox.width * layerWidth),
+                height: Math.round(bbox.height * layerHeight)
+            };
+        }
+
+        // V3.9: Store screen pixels for stable re-rendering
+        this._tableBBoxScreenPixels = { ...screenBbox };
+
+        // Create overlay element
+        // V3.5: pointer-events: none to allow drawing through it
+        // Resize handles have their own pointer-events: auto
+        const overlay = document.createElement('div');
+        overlay.className = 'table-flow-bbox-overlay';
+        overlay.id = 'table-flow-bbox';
+        overlay.style.cssText = `
+            position: absolute;
+            left: ${screenBbox.x}px;
+            top: ${screenBbox.y}px;
+            width: ${screenBbox.width}px;
+            height: ${screenBbox.height}px;
+            border: 3px solid #10b981;
+            background: rgba(16, 185, 129, 0.08);
+            pointer-events: none;
+            z-index: 40;
+            box-sizing: border-box;
+        `;
+
+        // Add resize handles (they have pointer-events: auto) - unless locked
+        if (!this._tableStructureLocked) {
+            this._addResizeHandlesToTempOverlay(overlay, 'table-bbox', bbox);
+        }
+
+        // Add label
+        const label = document.createElement('div');
+        label.className = 'table-bbox-label';
+        label.textContent = 'גבולות הטבלה';
+        label.style.cssText = `
+            position: absolute;
+            top: -24px;
+            left: 0;
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 4px 4px 0 0;
+            white-space: nowrap;
+            pointer-events: none;
+        `;
+        overlay.appendChild(label);
+
+        this.overlayLayer.appendChild(overlay);
+        this._tableBBoxOverlay = overlay;
+        this._tableBBoxNormalized = bbox;
+    }
+
+    /**
+     * Clear the table bbox overlay
+     */
+    clearTableBBoxOverlay() {
+        if (this._tableBBoxOverlay) {
+            this._tableBBoxOverlay.remove();
+            this._tableBBoxOverlay = null;
+            this._tableBBoxNormalized = null;
+        }
+    }
+
+    /**
+     * Render the sample row overlay during table flow
+     * V3.5: Added for visual feedback with resize capability
+     * V3.9: Now stores screen pixels directly to avoid normalization drift
+     * @param {Object} bbox - { x, y, width, height } in normalized 0-1 values OR screen pixels
+     * @param {boolean} isScreenPixels - If true, bbox is already in screen pixels
+     */
+    renderSampleRowOverlay(bbox, isScreenPixels = false) {
+        if (!this.overlayLayer) return;
+
+        // Clear existing
+        this.clearSampleRowOverlay();
+
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+
+        // V3.9: Handle both normalized and screen pixel input
+        let screenBbox;
+        if (isScreenPixels) {
+            screenBbox = { ...bbox };
+        } else {
+            // Convert normalized bbox to screen pixels
+            screenBbox = {
+                x: Math.round(bbox.x * layerWidth),
+                y: Math.round(bbox.y * layerHeight),
+                width: Math.round(bbox.width * layerWidth),
+                height: Math.round(bbox.height * layerHeight)
+            };
+        }
+
+        // V3.9: Store screen pixels for stable re-rendering
+        this._sampleRowScreenPixels = { ...screenBbox };
+
+        // Create overlay element
+        // V3.5: pointer-events: none to allow drawing columns through it
+        const overlay = document.createElement('div');
+        overlay.className = 'table-flow-sample-row-overlay';
+        overlay.id = 'table-flow-sample-row';
+        overlay.style.cssText = `
+            position: absolute;
+            left: ${screenBbox.x}px;
+            top: ${screenBbox.y}px;
+            width: ${screenBbox.width}px;
+            height: ${screenBbox.height}px;
+            border: 2px dashed #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+            z-index: 45;
+            box-sizing: border-box;
+        `;
+
+        // Add resize handles (they have pointer-events: auto) - unless locked
+        if (!this._tableStructureLocked) {
+            this._addResizeHandlesToTempOverlay(overlay, 'sample-row', bbox);
+        }
+
+        // Add label
+        const label = document.createElement('div');
+        label.className = 'sample-row-label';
+        label.textContent = 'שורה לדוגמא';
+        label.style.cssText = `
+            position: absolute;
+            top: -20px;
+            right: 0;
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            font-size: 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+        `;
+        overlay.appendChild(label);
+
+        this.overlayLayer.appendChild(overlay);
+        this._sampleRowOverlay = overlay;
+        this._sampleRowNormalized = bbox;
+    }
+
+    /**
+     * Clear the sample row overlay
+     */
+    clearSampleRowOverlay() {
+        if (this._sampleRowOverlay) {
+            this._sampleRowOverlay.remove();
+            this._sampleRowOverlay = null;
+            this._sampleRowNormalized = null;
+        }
+    }
+
+    /**
+     * Add resize handles to a temporary overlay
+     * V3.5: Enables resizing of table bbox, sample row, and columns
+     * @param {HTMLElement} overlay - The overlay element
+     * @param {string} type - Type of overlay ('table-bbox', 'sample-row', 'column')
+     * @param {Object} normalizedBbox - Original normalized bbox for reference
+     */
+    _addResizeHandlesToTempOverlay(overlay, type, normalizedBbox) {
+        const positions = ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'];
+        const cursorMap = {
+            'n': 'ns-resize',
+            's': 'ns-resize',
+            'e': 'ew-resize',
+            'w': 'ew-resize',
+            'nw': 'nw-resize',
+            'ne': 'ne-resize',
+            'sw': 'sw-resize',
+            'se': 'se-resize'
+        };
+
+        positions.forEach(pos => {
+            const handle = document.createElement('div');
+            handle.className = `temp-resize-handle ${pos}`;
+            handle.dataset.handleType = type;
+            handle.dataset.handlePos = pos;
+
+            // Position based on corner/edge
+            let style = `
+                position: absolute;
+                background: white;
+                border: 2px solid ${type === 'table-bbox' ? '#10b981' : '#3b82f6'};
+                z-index: 100;
+                cursor: ${cursorMap[pos]};
+            `;
+
+            if (pos === 'n') {
+                style += 'top: -5px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%;';
+            } else if (pos === 's') {
+                style += 'bottom: -5px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%;';
+            } else if (pos === 'e') {
+                style += 'right: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; border-radius: 50%;';
+            } else if (pos === 'w') {
+                style += 'left: -5px; top: 50%; transform: translateY(-50%); width: 10px; height: 10px; border-radius: 50%;';
+            } else if (pos === 'nw') {
+                style += 'top: -5px; left: -5px; width: 10px; height: 10px; border-radius: 2px;';
+            } else if (pos === 'ne') {
+                style += 'top: -5px; right: -5px; width: 10px; height: 10px; border-radius: 2px;';
+            } else if (pos === 'sw') {
+                style += 'bottom: -5px; left: -5px; width: 10px; height: 10px; border-radius: 2px;';
+            } else if (pos === 'se') {
+                style += 'bottom: -5px; right: -5px; width: 10px; height: 10px; border-radius: 2px;';
+            }
+
+            handle.style.cssText = style;
+
+            // Add drag handlers
+            handle.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                this._startTempResize(e, overlay, type, pos);
+            });
+
+            overlay.appendChild(handle);
+        });
+    }
+
+    /**
+     * Start resizing a temporary overlay
+     * @param {MouseEvent} e - Mouse event
+     * @param {HTMLElement} overlay - Overlay element
+     * @param {string} type - Overlay type
+     * @param {string} position - Resize handle position
+     */
+    _startTempResize(e, overlay, type, position) {
+        e.preventDefault();
+
+        this._tempResizeState = {
+            overlay,
+            type,
+            position,
+            startX: e.clientX,
+            startY: e.clientY,
+            startLeft: overlay.offsetLeft,
+            startTop: overlay.offsetTop,
+            startWidth: overlay.offsetWidth,
+            startHeight: overlay.offsetHeight
+        };
+
+        // Add temporary listeners
+        this._boundTempResizeMove = this._onTempResizeMove.bind(this);
+        this._boundTempResizeEnd = this._onTempResizeEnd.bind(this);
+        document.addEventListener('mousemove', this._boundTempResizeMove);
+        document.addEventListener('mouseup', this._boundTempResizeEnd);
+
+        overlay.classList.add('resizing');
+    }
+
+    /**
+     * Handle temp resize move
+     * @param {MouseEvent} e - Mouse event
+     */
+    _onTempResizeMove(e) {
+        if (!this._tempResizeState) return;
+
+        const { overlay, position, startX, startY, startLeft, startTop, startWidth, startHeight } = this._tempResizeState;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        let newLeft = startLeft;
+        let newTop = startTop;
+        let newWidth = startWidth;
+        let newHeight = startHeight;
+
+        // Handle position-based resize
+        if (position.includes('w')) {
+            newLeft = startLeft + dx;
+            newWidth = startWidth - dx;
+        }
+        if (position.includes('e')) {
+            newWidth = startWidth + dx;
+        }
+        if (position.includes('n')) {
+            newTop = startTop + dy;
+            newHeight = startHeight - dy;
+        }
+        if (position.includes('s')) {
+            newHeight = startHeight + dy;
+        }
+
+        // Minimum size constraints
+        newWidth = Math.max(20, newWidth);
+        newHeight = Math.max(10, newHeight);
+
+        // Boundary constraints
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+        newLeft = Math.max(0, Math.min(layerWidth - newWidth, newLeft));
+        newTop = Math.max(0, Math.min(layerHeight - newHeight, newTop));
+
+        // Update visual position
+        overlay.style.left = newLeft + 'px';
+        overlay.style.top = newTop + 'px';
+        overlay.style.width = newWidth + 'px';
+        overlay.style.height = newHeight + 'px';
+    }
+
+    /**
+     * Handle temp resize end
+     * @param {MouseEvent} e - Mouse event
+     */
+    _onTempResizeEnd(e) {
+        if (!this._tempResizeState) return;
+
+        const { overlay, type } = this._tempResizeState;
+        overlay.classList.remove('resizing');
+
+        // Calculate new normalized bbox
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+
+        const newNormalizedBbox = {
+            x: overlay.offsetLeft / layerWidth,
+            y: overlay.offsetTop / layerHeight,
+            width: overlay.offsetWidth / layerWidth,
+            height: overlay.offsetHeight / layerHeight
+        };
+
+        // Emit event to update the model
+        if (type === 'table-bbox') {
+            this._tableBBoxNormalized = newNormalizedBbox;
+            eventBus.emit('table:resize:tableBBox', { bbox: newNormalizedBbox });
+        } else if (type === 'sample-row') {
+            this._sampleRowNormalized = newNormalizedBbox;
+            eventBus.emit('table:resize:sampleRow', { bbox: newNormalizedBbox });
+        } else if (type === 'column') {
+            eventBus.emit('table:resize:column', { bbox: newNormalizedBbox, columnId: overlay.dataset.columnId });
+        }
+
+        // Cleanup
+        document.removeEventListener('mousemove', this._boundTempResizeMove);
+        document.removeEventListener('mouseup', this._boundTempResizeEnd);
+        this._tempResizeState = null;
+    }
+
     /**
      * Render a single field overlay
      * Uses the EXACT coordinate conversion from old mapper
@@ -758,7 +1316,7 @@ export class OverlayRenderer {
         overlay.className = 'field-overlay';
 
         // Add type-specific class
-        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'signature') {
+        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell' || field.type === 'signature') {
             overlay.classList.add(`type-${field.type}`);
         }
 
@@ -808,9 +1366,9 @@ export class OverlayRenderer {
             width = Math.round(bboxW * scaleX);
             height = Math.round(bboxH * scaleY);
 
-        } else if ((field.type === 'checkbox' || field.type === 'radio') &&
+        } else if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell') &&
                    field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
-            // ============ ANCHOR FORMAT: [xPercent, yPercent] for checkbox/radio ============
+            // ============ ANCHOR FORMAT: [xPercent, yPercent] for checkbox/radio/cell ============
             // NOTE: yPercent is stored as "from bottom" (Y-flipped during save)
             const [anchorX, anchorY] = field.anchor;
 
@@ -819,8 +1377,9 @@ export class OverlayRenderer {
             const canvasCenterX = anchorX * layerWidth;
             const canvasCenterY = (1 - anchorY) * layerHeight;  // ← Y-AXIS FLIP BACK
 
-            width = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
-            height = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
+            // V3.10: Cell uses its stored dimensions, checkbox/radio have defaults
+            width = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'radio' ? RADIO_SIZE : CHECKBOX_SIZE));
+            height = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'radio' ? RADIO_SIZE : CHECKBOX_SIZE));
             x = Math.round(canvasCenterX - width / 2);
             y = Math.round(canvasCenterY - height / 2);
 
@@ -1029,10 +1588,11 @@ export class OverlayRenderer {
         let x, y, width, height;
 
         if (isNormalized) {
-            // Normalized coordinates (0-1) are TOP-BASED (like HTML/CSS)
-            // No Y flip needed - convert directly to screen pixels
+            // Normalized coordinates (0-1) are BOTTOM-BASED (PDF coordinate system)
+            // screenToBbox stores yPercent = (pdfH - yPdfTop - heightPdf) / pdfH
+            // So we need to reverse: y = (1 - bboxY - bboxH) * layerHeight
             x = Math.round(bboxX * layerWidth);
-            y = Math.round(bboxY * layerHeight);
+            y = Math.round((1 - bboxY - bboxH) * layerHeight);
             width = Math.round(bboxW * layerWidth);
             height = Math.round(bboxH * layerHeight);
         } else {
@@ -1281,6 +1841,174 @@ export class OverlayRenderer {
      */
     getFieldElement(fieldId) {
         return this.fieldElements.get(fieldId) || null;
+    }
+
+    // ============ V3.3: GHOST OVERLAY METHODS ============
+
+    /**
+     * Clear all ghost overlays
+     */
+    clearGhostOverlays() {
+        this.ghostElements.forEach(el => el.remove());
+        this.ghostElements.clear();
+    }
+
+    /**
+     * Show batch mapping preview
+     * Displays ghost rectangles where batch-mapped fields will be placed
+     * @param {Array} sourceBbox - Source field bbox [x, y, w, h]
+     * @param {number} count - Number of duplicates to show
+     */
+    showBatchPreview(sourceBbox, count) {
+        this.clearBatchPreview();
+
+        if (!this.overlayLayer) return;
+
+        const [x, y, w, h] = sourceBbox;
+        const deltaY = h + (h * 0.1); // 10% gap between fields
+
+        const dims = pdfEngine.getPdfPageDimensions();
+        if (!dims) return;
+
+        // Get layer dimensions for screen coordinate conversion
+        const layerWidth = this.overlayLayer?.offsetWidth || dims.width;
+        const layerHeight = this.overlayLayer?.offsetHeight || dims.height;
+
+        for (let i = 0; i < count; i++) {
+            // V3.4: SUBTRACT to move DOWN visually (PDF Y=0 is at bottom)
+            const newY = y - (deltaY * (i + 1));
+
+            // Convert normalized coords to screen coords using layer dimensions
+            const screenX = x * layerWidth;
+            const screenY = (1 - newY - h) * layerHeight; // Y-flip for screen coords
+            const screenW = w * layerWidth;
+            const screenH = h * layerHeight;
+
+            const ghostEl = document.createElement('div');
+            ghostEl.className = 'batch-preview-ghost';
+            ghostEl.style.cssText = `
+                position: absolute;
+                left: ${screenX}px;
+                top: ${screenY}px;
+                width: ${screenW}px;
+                height: ${screenH}px;
+                background: rgba(139, 92, 246, 0.15);
+                border: 2px dashed rgba(139, 92, 246, 0.6);
+                border-radius: 4px;
+                pointer-events: none;
+                z-index: 50;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+
+            // Add index label
+            const label = document.createElement('span');
+            label.textContent = `+${i + 1}`;
+            label.style.cssText = `
+                background: rgba(139, 92, 246, 0.8);
+                color: white;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-size: 11px;
+                font-weight: 600;
+            `;
+            ghostEl.appendChild(label);
+
+            this.overlayLayer.appendChild(ghostEl);
+            this._batchPreviewElements.push(ghostEl);
+        }
+
+        console.log('[OverlayRenderer] Showing batch preview for', count, 'fields');
+    }
+
+    /**
+     * Clear batch mapping preview
+     */
+    clearBatchPreview() {
+        this._batchPreviewElements.forEach(el => el.remove());
+        this._batchPreviewElements = [];
+    }
+
+    /**
+     * Render a ghost overlay for an unmapped template field
+     * Used to show hints where fields should be placed
+     * @param {Object} templateField - Template field with position hints
+     * @param {Object} options - Styling options
+     */
+    renderGhostOverlay(templateField, options = {}) {
+        if (!this.overlayLayer || !templateField.positionHint) return;
+
+        // Remove existing ghost for this field
+        if (this.ghostElements.has(templateField.id)) {
+            this.ghostElements.get(templateField.id).remove();
+        }
+
+        const dims = pdfEngine.getPdfPageDimensions();
+        if (!dims) return;
+
+        const hint = templateField.positionHint;
+        const [x, y, w, h] = hint.bbox || [0.1, 0.1, 0.2, 0.03];
+
+        // Get layer dimensions for screen coordinate conversion
+        const layerWidth = this.overlayLayer?.offsetWidth || dims.width;
+        const layerHeight = this.overlayLayer?.offsetHeight || dims.height;
+
+        // Convert to screen coords using layer dimensions
+        const screenX = x * layerWidth;
+        const screenY = (1 - y - h) * layerHeight; // Y-flip for screen coords
+        const screenW = w * layerWidth;
+        const screenH = h * layerHeight;
+
+        const ghostEl = document.createElement('div');
+        ghostEl.className = 'ghost-overlay';
+        ghostEl.dataset.templateFieldId = templateField.id;
+        ghostEl.style.cssText = `
+            position: absolute;
+            left: ${screenX}px;
+            top: ${screenY}px;
+            width: ${screenW}px;
+            height: ${screenH}px;
+            background: rgba(34, 197, 94, 0.1);
+            border: 2px dashed rgba(34, 197, 94, 0.5);
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 40;
+        `;
+
+        // Add field name label
+        if (templateField.label_he || templateField.label_en) {
+            const label = document.createElement('div');
+            label.className = 'ghost-label';
+            label.textContent = templateField.label_he || templateField.label_en;
+            label.style.cssText = `
+                position: absolute;
+                top: -20px;
+                right: 0;
+                background: rgba(34, 197, 94, 0.9);
+                color: white;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 11px;
+                white-space: nowrap;
+            `;
+            ghostEl.appendChild(label);
+        }
+
+        this.overlayLayer.appendChild(ghostEl);
+        this.ghostElements.set(templateField.id, ghostEl);
+    }
+
+    /**
+     * Remove ghost overlay for a template field
+     * @param {string} templateFieldId - Template field ID
+     */
+    removeGhostOverlay(templateFieldId) {
+        const el = this.ghostElements.get(templateFieldId);
+        if (el) {
+            el.remove();
+            this.ghostElements.delete(templateFieldId);
+        }
     }
 }
 

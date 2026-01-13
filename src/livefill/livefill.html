@@ -75,14 +75,14 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 60px;
-            background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
-            box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+            height: 56px;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             display: flex;
             align-items: center;
             padding: 0 20px;
             z-index: 1000;
-            gap: 16px;
+            gap: 12px;
         }
 
         .header h1 {
@@ -138,26 +138,26 @@
 
         .export-btn {
             padding: 8px 16px;
-            background: var(--success-color, #10b981);
-            color: var(--text-inverse, white);
+            background: #0d9488;
+            color: white;
             border: none;
-            border-radius: var(--radius-md, 8px);
+            border-radius: 6px;
             cursor: pointer;
             font-size: 13px;
             font-weight: 500;
-            margin-right: auto;
-            transition: all var(--transition-normal, 0.2s);
-            box-shadow: var(--shadow-sm, 0 2px 4px rgba(0,0,0,0.1));
+            transition: all 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
         }
 
         .export-btn:hover {
-            background: #059669;
+            background: #0f766e;
             transform: translateY(-1px);
-            box-shadow: var(--shadow-md, 0 4px 8px rgba(0,0,0,0.15));
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
 
         .export-btn:disabled {
-            background: rgba(255,255,255,0.2);
+            background: #475569;
+            opacity: 0.5;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
@@ -237,48 +237,53 @@
             /* Overlays move with canvas because they're in the same container */
         }
 
+        /* ╔═══════════════════════════════════════════════════════════════════╗
+           ║  🔒 LOCKED CSS - DO NOT MODIFY WITHOUT TESTING EXPORT MATCH 🔒   ║
+           ║  CRITICAL: padding: 0 is required for text bottom-anchoring      ║
+           ║  Last verified: 2026-01-08                                        ║
+           ╚═══════════════════════════════════════════════════════════════════╝ */
         .field-editor {
             position: absolute;
-            border: 2px solid #4CAF50;
-            background-color: transparent !important;
-            opacity: 0.35;
+            border: 1.5px solid #94a3b8;
+            background-color: rgba(148, 163, 184, 0.08) !important;
+            opacity: 0.7;
             cursor: text;
-            padding: 2px 4px;
+            padding: 0; /* 🔒 CRITICAL: Must be 0 for text anchoring to work */
             outline: none;
-            transition: all 0.2s;
+            transition: all 0.15s ease;
             pointer-events: all;
             overflow: hidden;
             white-space: nowrap;
             direction: rtl;
             font-family: 'David Libre', Arial, sans-serif;
+            box-sizing: border-box; /* 🔒 CRITICAL: Required for proper sizing */
         }
 
         .field-editor:hover {
-            border-color: #2196F3;
-            background-color: transparent !important;
-            opacity: 0.5;
+            border-color: #0d9488;
+            background-color: rgba(13, 148, 136, 0.08) !important;
+            opacity: 0.85;
         }
 
         .field-editor.selected {
-            border-color: #ff6b6b;
-            background-color: transparent !important;
-            opacity: 0.6;
-            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+            border-color: #0d9488;
+            background-color: rgba(13, 148, 136, 0.12) !important;
+            opacity: 1;
+            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
         }
 
         .field-editor.checkbox,
         .field-editor.radio {
-            border: 2px solid rgba(30,144,255,0.9); /* soft blue border */
-            background-color: transparent !important;
-            opacity: 0.35;
-            border-radius: 4px;                     /* slight rounding */
+            border: 1.5px solid #64748b;
+            background-color: rgba(100, 116, 139, 0.05) !important;
+            opacity: 0.7;
+            border-radius: 3px;
             pointer-events: auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;                        /* small subtle marker */
-            color: rgba(0,0,0,0.6);
-            backdrop-filter: blur(1px);
+            font-size: 14px;
+            color: #1e293b;
             cursor: pointer;
             padding: 0;
             font-family: 'Segoe UI Symbol', 'Segoe UI', Arial, sans-serif;
@@ -288,10 +293,12 @@
         .field-editor.checkbox.checked::after {
             content: "✓";
             font-size: 14px;
-            color: red;
+            color: #0d9488;
+            font-weight: bold;
             position: absolute;
-            left: 3px;
-            top: -2px;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
         }
 
         .field-editor.signature {
@@ -300,52 +307,51 @@
             font-style: italic;
         }
 
-        /* ===== Table Cell Editor ===== */
-        /* PRODUCTION MODE: Clean display matching Export */
+        /* ╔═══════════════════════════════════════════════════════════════════╗
+           ║  🔒 LOCKED CSS - Table Cell Editor                                ║
+           ║  CRITICAL: padding: 0 is required for text bottom-anchoring       ║
+           ║  Must match .field-editor settings for consistent rendering       ║
+           ║  Last verified: 2026-01-08                                        ║
+           ╚═══════════════════════════════════════════════════════════════════╝ */
         .table-cell-editor {
             position: absolute;
             border: none;
             background-color: transparent;
             cursor: text;
-            padding: 0;
+            padding: 0; /* 🔒 CRITICAL: Must be 0 for text anchoring to work */
             outline: none;
             overflow: hidden;
             white-space: nowrap;
             direction: rtl;
             font-family: 'David Libre', Arial, sans-serif;
+            box-sizing: border-box; /* 🔒 CRITICAL: Required for proper sizing */
             pointer-events: auto;
             z-index: 50;
-            box-sizing: border-box;
+            transition: background-color 0.15s ease;
         }
-        /* Row number indicator - displays 1-based (visual) not 0-based (logical) */
-        /* Uses CSS counter since data-row-index must remain 0-based for JS logic */
+        /* Row number indicator - hidden in production mode */
         .table-cell-editor::before {
-            /* Calculate: attr value + 1 for display */
-            /* CSS can't do math on attr(), so we use a workaround via JS data attribute */
-            content: attr(data-row-display);
-            position: absolute;
-            top: 0;
-            left: 0;
-            background: #FF0000;
-            color: white;
-            font-size: 9px;
-            padding: 0 3px;
-            font-weight: bold;
+            display: none; /* Hide debug row numbers */
         }
-        .table-cell-editor:hover { border-color: #0000FF !important; background-color: rgba(0, 0, 255, 0.2) !important; }
-        .table-cell-editor:focus { border-color: #00FF00 !important; background: rgba(0, 255, 0, 0.3) !important; }
-        .table-cell-editor.checkbox { cursor: pointer; display: flex; align-items: center; justify-content: center; }
-        .table-cell-editor.checkbox.checked::after { content: "✓"; color: red; font-size: 12px; font-weight: bold; }
+        .table-cell-editor:hover {
+            background-color: rgba(13, 148, 136, 0.08) !important;
+        }
+        .table-cell-editor:focus {
+            background-color: rgba(13, 148, 136, 0.12) !important;
+            outline: 1px solid rgba(13, 148, 136, 0.3);
+        }
+        .table-cell-editor.checkbox { cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; }
+        .table-cell-editor.checkbox.checked::after { content: "✓"; color: #0d9488; font-size: 12px; font-weight: bold; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 
         /* ===== Sidebar - Professional Style ===== */
         .sidebar {
-            width: 320px;
-            background: var(--bg-secondary, white);
-            box-shadow: var(--shadow-lg, -4px 0 20px rgba(0,0,0,0.08));
+            width: 300px;
+            background: #f8fafc;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.06);
             padding: 0;
             overflow-y: auto;
-            transition: transform var(--transition-slow, 0.3s);
-            border-left: 1px solid var(--border-light, #e5e7eb);
+            transition: transform 0.25s ease;
+            border-left: 1px solid #e2e8f0;
         }
 
         .sidebar.hidden {
@@ -353,12 +359,13 @@
         }
 
         .sidebar h2 {
-            font-size: 16px;
+            font-size: 15px;
             margin: 0;
-            padding: 16px 20px;
-            color: var(--text-inverse, white);
-            background: var(--primary-gradient, linear-gradient(135deg, #667eea 0%, #764ba2 100%));
+            padding: 14px 20px;
+            color: white;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
             font-weight: 600;
+            letter-spacing: 0.3px;
         }
 
         .sidebar-content {
@@ -390,13 +397,13 @@
         .control-group input:focus,
         .control-group select:focus {
             outline: none;
-            border-color: var(--primary-color, #667eea);
-            box-shadow: var(--shadow-focus, 0 0 0 3px rgba(102, 126, 234, 0.15));
+            border-color: #0d9488;
+            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
         }
 
         .control-group input[type="range"] {
             padding: 0;
-            accent-color: var(--primary-color, #667eea);
+            accent-color: #0d9488;
         }
 
         .control-group .range-value {
@@ -413,24 +420,25 @@
 
         .alignment-btn {
             flex: 1;
-            padding: 10px;
-            border: 1px solid var(--border-light, #e5e7eb);
-            background: var(--bg-secondary, white);
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            background: white;
             cursor: pointer;
-            border-radius: var(--radius-md, 8px);
-            transition: all var(--transition-fast, 0.15s);
-            font-size: 14px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+            font-size: 13px;
+            color: #475569;
         }
 
         .alignment-btn:hover {
-            background: var(--bg-tertiary, #f3f4f6);
-            border-color: var(--border-medium, #d1d5db);
+            background: #f1f5f9;
+            border-color: #cbd5e1;
         }
 
         .alignment-btn.active {
-            background: var(--primary-color, #667eea);
-            color: var(--text-inverse, white);
-            border-color: var(--primary-color, #667eea);
+            background: #0d9488;
+            color: white;
+            border-color: #0d9488;
         }
 
         input[type="file"] {
@@ -459,12 +467,12 @@
         }
 
         .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #3498db;
+            width: 44px;
+            height: 44px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #0d9488;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {
@@ -493,11 +501,11 @@
         }
 
         .status-message.success {
-            background: var(--success-color, #10b981);
+            background: #059669;
         }
 
         .status-message.error {
-            background: var(--danger-color, #ef4444);
+            background: #dc2626;
         }
 
         .status-message.info {
@@ -590,19 +598,19 @@
     }
 
     .toast-success {
-        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
     }
 
     .toast-error {
-        background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
     }
 
     .toast-warning {
-        background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%);
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
     }
 
     .toast-info {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
+        background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
     }
 
     .toast-icon {
@@ -680,7 +688,7 @@
     }
 
     .progress-bar-fill {
-        background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+        background: linear-gradient(90deg, #0d9488 0%, #0f766e 100%);
         height: 100%;
         width: 0%;
         transition: width 0.3s ease-out;
@@ -721,7 +729,7 @@
         text-align: center;
         font-size: 24px;
         font-weight: bold;
-        color: #4CAF50;
+        color: #0d9488;
         margin-bottom: 10px;
     }
 
@@ -845,13 +853,13 @@
     }
 
     .validation-btn-proceed {
-        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
         color: white;
     }
 
     .validation-btn-proceed:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35);
     }
 
     .validation-btn-proceed:disabled {
@@ -886,7 +894,7 @@
 
     .fill-dialog-header {
         padding: 16px 20px;
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
         color: white;
         display: flex;
         justify-content: space-between;
@@ -944,7 +952,7 @@
     }
 
     .btn-primary {
-        background: linear-gradient(135deg, #667eea, #764ba2);
+        background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
         color: white;
     }
 
@@ -1234,6 +1242,71 @@
         height: 100%;
     }
 
+    /* ========================================
+       Preview Mode - WYSIWYG Display
+       Hides all editing borders for export-like view
+       ======================================== */
+    .preview-mode .field-editor {
+        border: none !important;
+        background-color: transparent !important;
+        opacity: 1 !important;
+        box-shadow: none !important;
+    }
+
+    .preview-mode .field-editor:hover {
+        border: none !important;
+        background-color: transparent !important;
+    }
+
+    .preview-mode .field-editor.selected {
+        border: none !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .preview-mode .field-editor.checkbox,
+    .preview-mode .field-editor.radio {
+        border: none !important;
+        background-color: transparent !important;
+    }
+
+    .preview-mode .table-cell-editor {
+        border: none !important;
+        background-color: transparent !important;
+        outline: none !important;
+    }
+
+    .preview-mode .table-cell-editor:hover,
+    .preview-mode .table-cell-editor:focus {
+        background-color: transparent !important;
+        outline: none !important;
+    }
+
+    /* Preview button styling */
+    .preview-btn {
+        padding: 8px 14px;
+        background: rgba(255,255,255,0.15);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .preview-btn:hover {
+        background: rgba(255,255,255,0.25);
+    }
+
+    .preview-btn.active {
+        background: #0d9488;
+        border-color: #0d9488;
+    }
+
     </style>
 </head>
 <body>
@@ -1255,8 +1328,12 @@
                     <input type="file" id="json-upload" accept=".json">
                 </label>
 
-                <button class="upload-btn" id="excel-upload-btn" onclick="openExcelImport()" style="background: rgba(76, 175, 80, 0.3);">
+                <button class="upload-btn" id="excel-upload-btn" onclick="openExcelImport()" style="background: rgba(13, 148, 136, 0.25);">
                     📊 ייבוא Excel
+                </button>
+
+                <button class="preview-btn" id="preview-toggle-btn" onclick="togglePreviewMode()">
+                    👁️ תצוגה מקדימה
                 </button>
 
                 <!-- Import Status Indicator -->
@@ -1266,32 +1343,16 @@
                     <button class="clear-import-btn" onclick="clearImportedData()">נקה ייבוא</button>
                 </div>
 
-                <label for="font-upload" class="upload-btn font">
-                    🔤 העלה פונט
-                    <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2">
-                </label>
-
-                <span id="font-status" class="font-status"></span>
+                <!-- Font upload hidden - using default David Libre -->
+                <input type="file" id="font-upload" accept=".ttf,.otf,.woff,.woff2" style="display:none;">
+                <span id="font-status" class="font-status" style="display:none;"></span>
 
                 <button class="export-btn" id="export-btn" onclick="exportFilledPDF()" disabled>
                     📤 ייצא PDF
                 </button>
 
-                <button class="export-btn" id="export-json-btn" onclick="exportJSON()" disabled style="background: #2196F3;">
-                    📋 ייצא JSON
-                </button>
-
-                <button class="export-btn" onclick="saveProgress()" style="background: #9C27B0;">
-                    💾 שמור טיוטה
-                </button>
-
-                <button class="export-btn" onclick="loadProgress()" style="background: #FF9800;">
-                    📂 טען טיוטה
-                </button>
-
-                <button class="export-btn" onclick="toggleDebugConsole()" style="background: #607D8B; font-size: 12px;">
-                    🐛 דיבוג
-                </button>
+                <!-- Hidden buttons - kept for functionality but not shown -->
+                <button id="export-json-btn" onclick="exportJSON()" disabled style="display:none;"></button>
             </div>
 
             <div class="zoom-controls">
@@ -1310,69 +1371,21 @@
                 </div>
             </div>
 
-            <div class="sidebar">
-                <h2>עריכת שדה</h2>
-
-                <div id="no-field-selected" style="text-align: center; color: #999; padding: 20px;">
-                    בחר שדה לעריכה
-                </div>
-
+            <!-- Sidebar hidden - keeping elements for JS compatibility -->
+            <div class="sidebar" style="display: none;">
+                <div id="no-field-selected"></div>
                 <div id="field-controls" style="display: none;">
-                    <div class="control-group">
-                        <label>סוג פונט:</label>
-                        <select id="font-family">
-                            <option value="David Libre">David Libre</option>
-                            <option value="Arial">Arial</option>
-                            <option value="Times New Roman">Times New Roman</option>
-                            <option value="Courier New">Courier New</option>
-                        </select>
-                    </div>
-
-                    <div class="control-group">
-                        <label>גודל פונט:</label>
-                        <div class="range-value">
-                            <input type="range" id="font-size" min="8" max="72" value="14">
-                            <input type="number" id="font-size-number" min="8" max="72" value="14" style="width: 60px;">
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label>צבע טקסט:</label>
-                        <input type="color" id="font-color" value="#000000">
-                    </div>
-
-                    <div class="control-group">
-                        <label>יישור טקסט:</label>
-                        <div class="alignment-buttons">
-                            <button class="alignment-btn" data-align="left">שמאל</button>
-                            <button class="alignment-btn" data-align="center">מרכז</button>
-                            <button class="alignment-btn active" data-align="right">ימין</button>
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label>מרווח בין אותיות:</label>
-                        <div class="range-value">
-                            <input type="range" id="letter-spacing" min="-2" max="10" value="0" step="0.1">
-                            <input type="number" id="letter-spacing-number" min="-2" max="10" value="0" step="0.1" style="width: 60px;">
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label>מרווח בין מילים:</label>
-                        <div class="range-value">
-                            <input type="range" id="word-spacing" min="-5" max="20" value="0" step="0.1">
-                            <input type="number" id="word-spacing-number" min="-5" max="20" value="0" step="0.1" style="width: 60px;">
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label>שקיפות:</label>
-                        <div class="range-value">
-                            <input type="range" id="opacity" min="10" max="100" value="100">
-                            <span id="opacity-value">100%</span>
-                        </div>
-                    </div>
+                    <select id="font-family"><option value="David Libre">David Libre</option></select>
+                    <input type="range" id="font-size" value="14">
+                    <input type="number" id="font-size-number" value="14">
+                    <input type="color" id="font-color" value="#000000">
+                    <button class="alignment-btn active" data-align="right"></button>
+                    <input type="range" id="letter-spacing" value="0">
+                    <input type="number" id="letter-spacing-number" value="0">
+                    <input type="range" id="word-spacing" value="0">
+                    <input type="number" id="word-spacing-number" value="0">
+                    <input type="range" id="opacity" value="100">
+                    <span id="opacity-value">100%</span>
                 </div>
             </div>
         </div>
@@ -1432,7 +1445,8 @@
 <script src="js/data-store-manager.js"></script>
 <script src="js/field-input-popover.js?v=20251229"></script>
 <script src="js/export-engine.js?v=20251230d"></script>
-<script src="js/main-livefill.js?v=20251230g"></script>
+<script src="js/preview-text-renderer.js?v=20260108-LOCKED"></script>
+<script src="js/main-livefill.js?v=20260110a"></script>
 
 <!-- SheetJS for Excel/CSV parsing -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
@@ -1458,6 +1472,36 @@
 
 <!-- Excel Import Integration -->
 <script>
+    // ============ PREVIEW MODE ============
+
+    /**
+     * Toggle Preview Mode - WYSIWYG display
+     * Shows fields exactly as they will appear in export
+     */
+    function togglePreviewMode() {
+        const pdfContainer = document.getElementById('pdf-container');
+        const previewBtn = document.getElementById('preview-toggle-btn');
+
+        if (!pdfContainer) return;
+
+        const isPreview = pdfContainer.classList.toggle('preview-mode');
+
+        if (previewBtn) {
+            previewBtn.classList.toggle('active', isPreview);
+            previewBtn.innerHTML = isPreview
+                ? '✏️ מצב עריכה'
+                : '👁️ תצוגה מקדימה';
+        }
+
+        // Show toast
+        if (typeof ToastManager !== 'undefined') {
+            ToastManager.info(
+                isPreview ? 'מצב תצוגה מקדימה - כמו בייצוא' : 'מצב עריכה',
+                2000
+            );
+        }
+    }
+
     // ============ IMPORT STATUS MANAGEMENT ============
 
     /**

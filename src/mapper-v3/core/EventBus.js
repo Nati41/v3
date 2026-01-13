@@ -93,6 +93,37 @@ export class EventBus {
      * @param {*} data - Event data
      */
     emit(event, data = null) {
+        // V3.9: Permanent stop check
+        if (this._permanentStop) {
+            return;
+        }
+
+        // CRASH PROTECTION V3.9: Event cascade detection
+        this._emitDepth = (this._emitDepth || 0) + 1;
+        if (this._emitDepth > 50) {
+            console.error(`[EventBus] CRITICAL: Event cascade detected! Depth: ${this._emitDepth}, Event: ${event}`);
+            this._emitDepth--;
+            return; // Break the cascade
+        }
+
+        // CRASH PROTECTION V3.9: Rate limiting per event type
+        const now = Date.now();
+        this._eventCounts = this._eventCounts || {};
+        this._eventCountReset = this._eventCountReset || now;
+
+        // Reset counts every second
+        if (now - this._eventCountReset > 1000) {
+            this._eventCounts = {};
+            this._eventCountReset = now;
+        }
+
+        this._eventCounts[event] = (this._eventCounts[event] || 0) + 1;
+        if (this._eventCounts[event] > 100) {
+            console.error(`[EventBus] CRITICAL: Event ${event} fired ${this._eventCounts[event]} times/sec!`);
+            this._emitDepth--;
+            return; // Rate limit exceeded
+        }
+
         // CRASH PROTECTION: Check frame performance
         const inEmergency = this._checkPerformance();
 
@@ -102,9 +133,14 @@ export class EventBus {
                 'field:created', 'field:deleted', 'field:updated',
                 'pdf:loaded', 'pdf:pageChanged',
                 'state:changed', 'history:undo', 'history:redo',
-                'smartTable:detected', 'toast:show'
+                'smartTable:detected', 'toast:show',
+                // Template events (V3.3)
+                'template:loaded', 'template:fieldMapped',
+                'exception:resolved', 'exception:allResolved',
+                'batch:applied', 'mapping:progressChanged'
             ];
             if (!criticalEvents.includes(event)) {
+                this._emitDepth--;
                 return; // Skip non-critical events in emergency
             }
         }
@@ -122,6 +158,8 @@ export class EventBus {
                 }
             });
         }
+
+        this._emitDepth--;
     }
 
     /**
@@ -204,10 +242,17 @@ export const Events = {
     DRAW_UPDATE: 'draw:update',
     DRAW_END: 'draw:end',
     DRAW_CANCEL: 'draw:cancel',
+    RECTANGLE_DRAWN: 'draw:rectangleDrawn',  // Table Flow V2: when a rectangle is completed
+
+    // Fields changed (bulk update)
+    FIELDS_CHANGED: 'fields:changed',
 
     // Mode events
     MODE_CHANGED: 'mode:changed',
     TOOL_CHANGED: 'tool:changed',
+
+    // ============ INTENT EVENTS (V3.9) ============
+    INTENT_CHANGED: 'intent:changed',             // { type, targetId, fieldType, source, context }
 
     // UI events
     SIDEBAR_UPDATE: 'sidebar:update',
@@ -228,8 +273,79 @@ export const Events = {
     // Save/Load events
     PROJECT_SAVE: 'project:save',
     PROJECT_LOAD: 'project:load',
-    AUTOSAVE_TRIGGER: 'autosave:trigger'
+    AUTOSAVE_TRIGGER: 'autosave:trigger',
+
+    // ============ TEMPLATE EVENTS (V3.3) ============
+    // Template lifecycle
+    TEMPLATE_LOADED: 'template:loaded',           // { templateId, fieldCount, exceptionCount, entities[] }
+    TEMPLATE_CLEARED: 'template:cleared',         // {}
+    TEMPLATE_LOCKED: 'template:locked',           // { templateId }
+
+    // Template field mapping
+    TEMPLATE_FIELD_MAPPED: 'template:fieldMapped',       // { fieldId, templateFieldId, canonical, bbox }
+    NEXT_UNMAPPED_ACTIVATED: 'template:nextUnmappedActivated', // { fieldId, templateFieldId, canonical }
+
+    // Exception handling
+    EXCEPTION_RESOLVED: 'exception:resolved',     // { exceptionId, choice, resultFieldId }
+    EXCEPTION_SKIPPED: 'exception:skipped',       // { exceptionId }
+    ALL_EXCEPTIONS_RESOLVED: 'exception:allResolved', // {}
+
+    // Batch mapping
+    BATCH_MAPPING_OFFERED: 'batch:offered',       // { sourceFieldId, duplicates[], pattern }
+    BATCH_MAPPING_APPLIED: 'batch:applied',       // { fieldIds[], bboxes[] }
+    BATCH_MAPPING_CANCELLED: 'batch:cancelled',   // {}
+
+    // Progress tracking
+    MAPPING_PROGRESS_CHANGED: 'mapping:progressChanged', // { mapped, total, percentage }
+
+    // ============ VALIDATION EVENTS (V3.4) ============
+    VALIDATION_ERROR: 'validation:error',         // { fieldId, errors[], action }
+    VALIDATION_WARNING: 'validation:warning',     // { fieldId, warnings[], action }
+    EXPORT_BLOCKED: 'export:blocked',             // { errors[], warnings[] }
+
+    // ============ REPEATABLE ENTITY EVENTS (V3.4) ============
+    ENTITY_MAPPING_MODE_PROMPT: 'entity:mappingModePrompt',   // { entityId, detection, entity }
+    ENTITY_MAPPING_MODE_CHANGED: 'entity:mappingModeChanged', // { entityId, mode, previousMode }
+    ENTITY_TABLE_FLOW_START: 'entity:tableFlowStart',         // { entityId, columns[], rowCount }
+
+    // ============ QUICK FILL MODE EVENTS (V3.10) ============
+    QUICK_FILL_MODE_CHANGED: 'quickFill:modeChanged',         // { active: boolean }
+    QUICK_FILL_BOX_CREATED: 'quickFill:boxCreated',           // { bbox, screenRect, page }
+    QUICK_FILL_BOX_UPDATED: 'quickFill:boxUpdated',           // { boxId, text }
+    QUICK_FILL_BOX_DELETED: 'quickFill:boxDeleted',           // { boxId }
+    QUICK_FILL_CLEAR_ALL: 'quickFill:clearAll',               // {}
+
+    // ============ TABLE REGION EVENTS (V3.10) ============
+    TABLE_REGION_CREATED: 'tableRegion:created',              // { region }
+    TABLE_REGION_UPDATED: 'tableRegion:updated',              // { region }
+    TABLE_REGION_DELETED: 'tableRegion:deleted',              // { regionId }
+    TABLE_SELECT_MODE_STARTED: 'tableSelectMode:started',     // {}
+    TABLE_SELECT_MODE_ENDED: 'tableSelectMode:ended'          // { cancelled: boolean }
 };
 
 // Singleton instance
 export const eventBus = new EventBus();
+
+// V3.9: Crash diagnostic - call window.eventBusStats() to see event counts
+if (typeof window !== 'undefined') {
+    window.eventBusStats = () => {
+        const stats = eventBus._eventCounts || {};
+        console.table(Object.entries(stats).sort((a, b) => b[1] - a[1]));
+        console.log('Emit depth:', eventBus._emitDepth || 0);
+        console.log('Emergency mode:', eventBus._emergencyMode);
+        return stats;
+    };
+
+    // V3.9: Emergency stop - call window.emergencyStop() to halt all events
+    window.emergencyStop = () => {
+        eventBus._emergencyMode = true;
+        eventBus._permanentStop = true;
+        console.error('[EventBus] EMERGENCY STOP ACTIVATED - all events blocked');
+    };
+
+    // V3.9: Disable auto-advance - call window.disableAutoAdvance() to stop auto-mapping
+    window.disableAutoAdvance = () => {
+        window._autoAdvanceDisabled = true;
+        console.log('[SidebarController] Auto-advance DISABLED');
+    };
+}

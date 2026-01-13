@@ -4,7 +4,7 @@
  */
 import { state, Tools, Modes } from './StateManager.js';
 import { eventBus, Events } from './EventBus.js';
-import { autoBoxer } from '../engines/AutoBoxerService.js';
+import { fieldReviewScreen } from '../ui/FieldReviewScreen.js';
 
 export class MapperCore {
     constructor() {
@@ -41,9 +41,6 @@ export class MapperCore {
         // Get DOM containers
         this._initDOM();
 
-        // Register AutoBoxer engine
-        this.registerEngine('autoboxer', autoBoxer);
-
         // Setup keyboard shortcuts
         this._initKeyboard();
 
@@ -69,6 +66,41 @@ export class MapperCore {
         this.pdfContainer = document.getElementById('pdf-container');
         this.overlayLayer = document.getElementById('overlay-layer');
         this.sidebarContainer = document.getElementById('sidebar-container');
+
+        // V3.2: Initialize draft indicator
+        this._initDraftIndicator();
+    }
+
+    /**
+     * V3.2: Initialize draft indicator UI and button
+     */
+    _initDraftIndicator() {
+        this._draftIndicator = document.getElementById('draft-indicator');
+        this._draftCount = document.getElementById('draft-count');
+        this._reviewBtn = document.getElementById('btn-review');
+
+        if (this._reviewBtn) {
+            this._reviewBtn.addEventListener('click', () => {
+                this.openReviewScreen();
+            });
+        }
+    }
+
+    /**
+     * V3.2: Update draft indicator visibility and count
+     */
+    _updateDraftIndicator() {
+        if (!this._draftIndicator || !this._draftCount) return;
+
+        const draftFields = state.getDraftFields();
+        const count = draftFields.length;
+
+        if (count > 0) {
+            this._draftCount.textContent = count;
+            this._draftIndicator.classList.remove('hidden');
+        } else {
+            this._draftIndicator.classList.add('hidden');
+        }
     }
 
     /**
@@ -119,16 +151,26 @@ export class MapperCore {
                 state.setTool(Tools.SELECT);
             }
             if (e.key === 'n' || e.key === 'N') {
-                state.setTool(Tools.CAPTURE_NAME);
+                // Use click-select for field name capture
+                import('../engines/DrawController.js').then(({ drawController }) => {
+                    drawController.startFieldNameCapture();
+                });
             }
             if (e.key === 't' || e.key === 'T') {
                 state.setTool(Tools.DRAW_TEXT);
             }
+            // Checkbox and Radio use group building flow - emit events to trigger
             if (e.key === 'c' || e.key === 'C') {
-                state.setTool(Tools.DRAW_CHECKBOX);
+                eventBus.emit('tool:startCheckboxGroup');
             }
             if (e.key === 'r' || e.key === 'R') {
-                state.setTool(Tools.DRAW_RADIO);
+                eventBus.emit('tool:startRadioGroup');
+            }
+
+            // V3.2: Shift+R = Open Review screen for draft fields
+            if (e.key === 'R' && e.shiftKey) {
+                e.preventDefault();
+                this.openReviewScreen();
             }
         });
     }
@@ -144,13 +186,52 @@ export class MapperCore {
             }
         });
 
-        // Listen for field events
+        // Listen for field events - update draft indicator
         eventBus.on(Events.FIELD_CREATED, (field) => {
             console.log('[MapperCore] Field created:', field.id);
+            this._updateDraftIndicator();
         });
 
         eventBus.on(Events.FIELD_DELETED, (field) => {
             console.log('[MapperCore] Field deleted:', field.id);
+            this._updateDraftIndicator();
+        });
+
+        eventBus.on(Events.FIELD_UPDATED, () => {
+            this._updateDraftIndicator();
+        });
+
+        // V3.2: Listen for review screen request
+        eventBus.on(Events.FIELD_REVIEW_REQUESTED, () => {
+            this.openReviewScreen();
+        });
+
+        // V3.2: Listen for page change - prompt review if drafts exist on old page
+        eventBus.on(Events.PDF_PAGE_CHANGED, (data) => {
+            // Update draft indicator for current state
+            this._updateDraftIndicator();
+
+            const oldPage = data.oldPage;
+            if (!oldPage) return; // First page load
+
+            const draftsOnOldPage = state.getDraftFields(oldPage);
+            if (draftsOnOldPage.length > 0) {
+                // Show non-blocking toast with action button
+                eventBus.emit(Events.TOAST_SHOW, {
+                    message: `יש ${draftsOnOldPage.length} שדות לא מאושרים בעמוד ${oldPage}`,
+                    type: 'info',
+                    duration: 5000,
+                    action: {
+                        label: 'בדיקה עכשיו',
+                        callback: () => this.openReviewScreen({ page: oldPage })
+                    }
+                });
+            }
+        });
+
+        // V3.2: Update draft indicator when PDF is loaded
+        eventBus.on(Events.PDF_LOADED, () => {
+            this._updateDraftIndicator();
         });
     }
 
@@ -232,6 +313,52 @@ export class MapperCore {
      */
     selectField(fieldId) {
         state.selectField(fieldId);
+    }
+
+    // ============ V3.2 DRAFT FLOW API ============
+
+    /**
+     * Open the field review screen
+     * @param {Object} options - Options
+     * @param {number} options.page - Filter by page (null = all pages)
+     * @returns {Promise<Object>} Result { approved, skipped, fields }
+     */
+    async openReviewScreen({ page = null } = {}) {
+        const draftCount = page !== null
+            ? state.getDraftFields(page).length
+            : state.getDraftFields().length;
+
+        if (draftCount === 0) {
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: 'אין שדות לאישור',
+                type: 'info'
+            });
+            return { approved: false, skipped: false, fields: [] };
+        }
+
+        // Initialize and show review screen
+        fieldReviewScreen.init();
+        const result = await fieldReviewScreen.show({ page });
+
+        console.log('[MapperCore] Review screen result:', result);
+        return result;
+    }
+
+    /**
+     * Check if there are draft fields pending review
+     * @returns {boolean}
+     */
+    hasDraftFields() {
+        return state.hasDraftFields();
+    }
+
+    /**
+     * Get count of draft fields
+     * @param {number} page - Optional page filter
+     * @returns {number}
+     */
+    getDraftCount(page = null) {
+        return state.getDraftFields(page).length;
     }
 
     // ============ RADIO GROUP API ============
@@ -348,6 +475,9 @@ export class MapperCore {
             return;
         }
 
+        // V3.2: Track old page for draft reminder
+        const oldPage = state.get('document.currentPage');
+
         // ============ SAFETY: Cancel ongoing operations before page change ============
         const currentMode = state.get('mode');
 
@@ -364,6 +494,12 @@ export class MapperCore {
             state.cancelRadioGroupBuilder();
         }
 
+        // Cancel WordSelector if active
+        if (window.wordSelector && window.wordSelector.isActive()) {
+            console.log('[MapperCore] Cancelling word selection due to page change');
+            window.wordSelector.cancelSelection();
+        }
+
         // Clear selection (fields are page-specific)
         state.deselectAll();
 
@@ -373,7 +509,8 @@ export class MapperCore {
 
         // ============ Now change the page ============
         state.set('document.currentPage', pageNum);
-        eventBus.emit(Events.PDF_PAGE_CHANGED, { page: pageNum });
+        // V3.2: Include oldPage for draft reminder toast
+        eventBus.emit(Events.PDF_PAGE_CHANGED, { page: pageNum, oldPage });
     }
 
     /**

@@ -1,38 +1,19 @@
 /**
- * Table Module - Index file for clean exports
- *
- * Migrated from old mapper's table system:
- * - /src/shared/tables/tableModel.js → TableModel.js
- * - /src/shared/tables/tableStepController.js → TableFlowController.js (adapted)
- * - /src/shared/tables/tableValidatorWrapper.js → TableValidator.js
- *
- * Usage:
- * import { TableModel, TableFlowController, TableSteps, tableValidator } from './tables/index.js';
- *
- * Or individual imports:
- * import { TableModel } from './tables/TableModel.js';
- * import { TableFlowController, TableSteps, TableEvents } from './tables/TableFlowController.js';
- * import { tableValidator, validateHeader, validateColumn } from './tables/TableValidator.js';
+ * Table System v2 - Stub file
+ * Legacy table system moved to .backup files
+ * New TableRegion system will be in core/TableRegionManager.js
  */
 
-// Core model
-export { TableModel } from './TableModel.js';
+// Export empty stubs for backward compatibility
+export const TableEvents = {
+    FLOW_STARTED: 'table:flowStarted',
+    STEP_CHANGED: 'table:stepChanged',
+    FLOW_FINISHED: 'table:flowFinished',
+    FLOW_CANCELLED: 'table:flowCancelled'
+};
 
-// Flow controller and enums
-export {
-    TableFlowController,
-    TableSteps,
-    TableEvents
-} from './TableFlowController.js';
+export const TableSteps = {};
+export const TableModel = null;
+export const TableFlowController = null;
 
-// Validators
-export {
-    tableValidator,
-    validateHeader,
-    validateSampleRow,
-    validateColumn,
-    validateRowCount,
-    validateComplete,
-    validateStep,
-    calculateOverlap
-} from './TableValidator.js';
+console.log('[Tables] Legacy table system disabled. Using new TableRegion system.');

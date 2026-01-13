@@ -311,10 +311,10 @@
      */
     function calculateAutoFitFontSize(text, font, maxWidth, maxHeight, startSize) {
         let fontSize = startSize;
-        const minSize = FILL_CONFIG.MIN_FONT_SIZE;
         const padding = FILL_CONFIG.TEXT_PADDING * 2;
+        const absoluteMinSize = 1; // מינימום אבסולוטי - ממשיך להקטין עד שנכנס
 
-        while (fontSize > minSize) {
+        while (fontSize > absoluteMinSize) {
             const textWidth = measureTextWidth(text, font, fontSize);
             const lineHeight = fontSize * FILL_CONFIG.LINE_HEIGHT_FACTOR;
 
@@ -325,7 +325,7 @@
             fontSize -= 0.5;
         }
 
-        return Math.max(fontSize, minSize);
+        return Math.max(fontSize, absoluteMinSize);
     }
 
     /**
@@ -360,6 +360,57 @@
         }
 
         return lines.slice(0, FILL_CONFIG.MAX_LINES);
+    }
+
+    /**
+     * Truncate text with ellipsis to fit within maxWidth
+     * Used when text doesn't fit even at minimum font size
+     * @param {string} text - Text to truncate
+     * @param {Object} font - PDF-LIB font
+     * @param {number} fontSize - Font size
+     * @param {number} maxWidth - Maximum width available
+     * @returns {string} Truncated text with ellipsis if needed
+     */
+    function truncateTextToFit(text, font, fontSize, maxWidth) {
+        if (!text || maxWidth <= 0) return text;
+
+        const ellipsis = FILL_CONFIG.OVERFLOW_ELLIPSIS;
+        const ellipsisWidth = measureTextWidth(ellipsis, font, fontSize);
+        const textWidth = measureTextWidth(text, font, fontSize);
+
+        // Text fits - no truncation needed
+        if (textWidth <= maxWidth) {
+            return text;
+        }
+
+        // Not enough space even for ellipsis
+        if (ellipsisWidth >= maxWidth) {
+            return ellipsis;
+        }
+
+        // Binary search for optimal truncation point
+        const availableWidth = maxWidth - ellipsisWidth;
+        let left = 0;
+        let right = text.length;
+
+        while (left < right) {
+            const mid = Math.ceil((left + right) / 2);
+            const truncated = text.substring(0, mid);
+            const truncatedWidth = measureTextWidth(truncated, font, fontSize);
+
+            if (truncatedWidth <= availableWidth) {
+                left = mid;
+            } else {
+                right = mid - 1;
+            }
+        }
+
+        // Return truncated text with ellipsis
+        if (left > 0) {
+            return text.substring(0, left) + ellipsis;
+        }
+
+        return ellipsis;
     }
 
     /**
@@ -976,7 +1027,15 @@
             textToDraw = reverseForRTL(formattedValue);
         }
 
-        const textWidth = measureTextWidth(textToDraw, font, fontSize);
+        // Calculate available width for text (with padding)
+        const availableWidth = pdfCoords.width - (FILL_CONFIG.TEXT_PADDING * 2);
+
+        // Keep shrinking font until text fits (no minimum limit for table cells)
+        let textWidth = measureTextWidth(textToDraw, font, fontSize);
+        while (textWidth > availableWidth && fontSize > 1) {
+            fontSize -= 0.5;
+            textWidth = measureTextWidth(textToDraw, font, fontSize);
+        }
 
         // Calculate position
         let x;

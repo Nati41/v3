@@ -33,8 +33,9 @@ export const REFINER_BUILD_DATE = '2026-01-04';
 // ═══════════════════════════════════════════════════════════════════════════
 export const AUTOBOXER_CONFIG = Object.freeze({
     // Ink detection threshold (0-255, lower = more sensitive)
-    // Value 200 works well for standard black text on white background
-    INK_THRESHOLD: 200,
+    // V3.3: Increased from 200 to 220 to detect gray borders (common in PDF tables)
+    // Value 220 catches light gray lines while still ignoring white background
+    INK_THRESHOLD: 220,
 
     // ─────────────────────────────────────────────────────────────────────
     // FIELD DIMENSIONS - Standard sizes for different scenarios
@@ -70,13 +71,14 @@ export const AUTOBOXER_CONFIG = Object.freeze({
     // ─────────────────────────────────────────────────────────────────────
     // WALL DETECTION - Vertical line recognition
     // ─────────────────────────────────────────────────────────────────────
-    MIN_WALL_HEIGHT: 12,     // Minimum height for wall candidate
+    MIN_WALL_HEIGHT: 6,      // Minimum height for wall candidate (lowered for small tick dividers)
+    STRUCTURAL_WALL_HEIGHT: 100, // V3.2: Height threshold for "hard" structural walls (table borders)
 
     // ─────────────────────────────────────────────────────────────────────
     // CONTINUITY LAW - Distinguishes walls from digit separators
     // ─────────────────────────────────────────────────────────────────────
     // A vertical line is a wall ONLY if isolated (not part of a sequence)
-    CONTINUITY_PROBE_DISTANCE: 50,      // How far to check for neighbors
+    CONTINUITY_PROBE_DISTANCE: 70,      // How far to check for neighbors (V3.2: increased from 50)
     CONTINUITY_SIMILARITY_THRESHOLD: 0.7, // Similarity required for sequence
 
     // ─────────────────────────────────────────────────────────────────────
@@ -127,6 +129,9 @@ export const REFINER_FEATURES = Object.freeze({
     // Visual features
     SHOW_ARROWS: true,               // Arrow indicators on edges
     SHOW_CORNER_HANDLES: true,       // Visible corner handles
+
+    // V3.3: AutoBoxer wall detection features
+    USE_CEILING_CONNECTION: false,   // Check if vertical line connects to ceiling (may cause precision issues)
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -209,17 +209,11 @@ function openFieldPopover(anchorElement, fieldMeta, fieldId) {
             }
             liveFillData[fieldId].value = value;
 
-            // Re-render display with digit boxes (clear first)
-            anchorElement.innerHTML = '';
-
-            // Get dimensions and re-render
-            const screenW = anchorElement.offsetWidth;
-            const screenH = anchorElement.offsetHeight;
-            const fontSizePt = fieldMeta.fontSize || 14;
-            const fontSizePx = fontSizePt * RENDER_SCALE;
-            const paddingPx = 2 * RENDER_SCALE;
-
-            renderFieldDisplay(anchorElement, value, fieldMeta, screenW, screenH, fontSizePx, paddingPx);
+            // Re-render using Export-matching renderer
+            const fieldPt = JSON.parse(anchorElement.dataset.fieldPt || '{"width":100,"height":20}');
+            const ptToPxScale = parseFloat(anchorElement.dataset.ptToPxScale || '1');
+            const fieldStyle = liveFillData[fieldId]?.style || {};
+            renderPreviewText(anchorElement, value, fieldPt, ptToPxScale, fieldStyle);
 
             // Trigger auto-save
             triggerAutoSave();
@@ -269,18 +263,10 @@ function openTableCellPopover(anchorElement, col, tableId, rowIndex) {
             // Update value
             liveFillData.tables[tableId][rowIndex][colId] = value;
 
-            // Re-render display properly (clear old content first)
-            anchorElement.innerHTML = '';
-
-            // Get dimensions from the anchorElement
-            const screenW = anchorElement.offsetWidth;
-            const screenH = anchorElement.offsetHeight;
-            const fontSizePt = col.fontSize || 14;
-            const fontSizePx = fontSizePt * RENDER_SCALE;
-            const paddingPx = 2 * RENDER_SCALE;
-
-            // Re-render with proper digit boxes
-            renderTableCellDisplay(anchorElement, value, col, screenW, screenH, fontSizePx, paddingPx);
+            // Re-render using Export-matching renderer
+            const fieldPt = JSON.parse(anchorElement.dataset.fieldPt || '{"width":100,"height":20}');
+            const ptToPxScale = parseFloat(anchorElement.dataset.ptToPxScale || '1');
+            renderPreviewText(anchorElement, value, fieldPt, ptToPxScale, {});
 
             // Trigger auto-save
             triggerAutoSave();
@@ -1119,8 +1105,19 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
             const centerY = (1 - anchorY) * canvasCssHeight;
 
             // Fixed size for checkbox/radio at RENDER_SCALE
-            w = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
-            h = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
+            // Handle unit conversion: if overlayWidth <= 1, it's percentage (from normalizeField), convert to pixels
+            const defaultW = field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE;
+            const defaultH = field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE;
+
+            if (field.overlayWidth && field.overlayWidth <= 1) {
+                // Percentage value - convert to pixels
+                w = field.overlayWidth * canvasCssWidth;
+                h = field.overlayHeight ? field.overlayHeight * canvasCssHeight : w;
+            } else {
+                // Already pixels or not set - use as-is or default
+                w = field.overlayWidth || defaultW;
+                h = field.overlayHeight || defaultH;
+            }
 
             x = Math.round(centerX - w / 2);
             y = Math.round(centerY - h / 2);
@@ -1181,6 +1178,30 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
         if (['text','number','date','signature','id_number','phone','email'].includes(field.type)) {
             // Check if this field type should use popover (perGlyphBoxes fields)
             const usePopover = ['number', 'date', 'id_number', 'phone'].includes(field.type);
+            const currentValue = liveFillData[fieldId]?.value || '';
+            const fieldStyle = liveFillData[fieldId]?.style || {};
+
+            // Calculate field dimensions in PDF points for Export-matching render
+            let fieldPt;
+            if (field.pdfWidth !== undefined && field.pdfHeight !== undefined) {
+                // V2: already in PDF points
+                fieldPt = { width: field.pdfWidth, height: field.pdfHeight };
+            } else if (field.bbox) {
+                // V1: convert from normalized bbox
+                fieldPt = getFieldPtFromBbox(field.bbox, basePdfWidth, basePdfHeight);
+            } else {
+                fieldPt = { width: 100, height: 20 };
+            }
+
+            // Scale factor: pt → px (use average for consistency)
+            const ptToPxScale = (scaleX + scaleY) / 2;
+
+            // Render using Export-matching renderer
+            renderPreviewText(editor, currentValue, fieldPt, ptToPxScale, fieldStyle);
+
+            // Store render info for popover callback
+            editor.dataset.fieldPt = JSON.stringify(fieldPt);
+            editor.dataset.ptToPxScale = ptToPxScale;
 
             if (usePopover && window.FieldInputPopover) {
                 // Use popover for structured input
@@ -1190,27 +1211,77 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
                     selectField(fieldId);
                     openFieldPopover(editor, field, fieldId);
                 });
-                // Display current value with numeric boxes
-                const currentValue = liveFillData[fieldId]?.value || '';
-                const fontSizePt = field.fontSize || 14;
-                const fontSizePx = fontSizePt * RENDER_SCALE;
-                const paddingPx = 2 * RENDER_SCALE;
-                renderFieldDisplay(editor, currentValue, field, w, h, fontSizePx, paddingPx);
             } else {
-                // Use inline editing for text fields
-                editor.contentEditable = true;
-                editor.addEventListener('input', handleFieldInput);
-                editor.addEventListener('click', () => selectField(fieldId));
-                editor.textContent = liveFillData[fieldId]?.value || '';
-                applyStyleToElement(editor, liveFillData[fieldId]?.style);
+                // Use hidden input + rendered output for Export-matching display
+                const hiddenInput = document.createElement('input');
+                hiddenInput.type = 'text';
+                hiddenInput.value = currentValue;
+                hiddenInput.className = 'livefill-hidden-input';
+                hiddenInput.style.cssText = `
+                    position: absolute;
+                    top: 0; left: 0;
+                    width: 100%; height: 100%;
+                    opacity: 0;
+                    cursor: text;
+                    direction: rtl;
+                    font-size: 16px;
+                `;
+
+                hiddenInput.addEventListener('input', (e) => {
+                    const newValue = e.target.value;
+                    // Update data
+                    if (!liveFillData[fieldId]) {
+                        liveFillData[fieldId] = { value: '', style: getDefaultStyle() };
+                    }
+                    liveFillData[fieldId].value = newValue;
+
+                    // Re-render with Export-matching renderer
+                    const fp = JSON.parse(editor.dataset.fieldPt || '{"width":100,"height":20}');
+                    const sc = parseFloat(editor.dataset.ptToPxScale || '1');
+                    renderPreviewText(editor, newValue, fp, sc, liveFillData[fieldId]?.style || {});
+
+                    // Re-add hidden input (renderPreviewText clears innerHTML)
+                    editor.appendChild(hiddenInput);
+                    hiddenInput.focus();
+
+                    triggerAutoSave();
+                });
+
+                editor.addEventListener('click', () => {
+                    selectField(fieldId);
+                    hiddenInput.focus();
+                });
+
+                editor.appendChild(hiddenInput);
             }
             overlay.appendChild(editor);
         }
         else if (field.type === 'digitBoxes') {
             // Digit boxes: use popover for input
             editor.classList.add('digit-boxes-editor');
-            editor.style.cursor = 'pointer';
+            const value = (liveFillData[fieldId]?.value || '').toString();
+            const fieldStyle = liveFillData[fieldId]?.style || {};
 
+            // Calculate field dimensions in PDF points
+            let fieldPt;
+            if (field.pdfWidth !== undefined && field.pdfHeight !== undefined) {
+                fieldPt = { width: field.pdfWidth, height: field.pdfHeight };
+            } else if (field.bbox) {
+                fieldPt = getFieldPtFromBbox(field.bbox, basePdfWidth, basePdfHeight);
+            } else {
+                fieldPt = { width: 100, height: 20 };
+            }
+
+            const ptToPxScale = (scaleX + scaleY) / 2;
+
+            // Render using Export-matching renderer
+            renderPreviewText(editor, value, fieldPt, ptToPxScale, fieldStyle);
+
+            // Store render info for popover callback
+            editor.dataset.fieldPt = JSON.stringify(fieldPt);
+            editor.dataset.ptToPxScale = ptToPxScale;
+
+            editor.style.cursor = 'pointer';
             if (window.FieldInputPopover) {
                 editor.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -1222,11 +1293,6 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
                 editor.addEventListener('input', handleFieldInput);
                 editor.addEventListener('click', () => selectField(fieldId));
             }
-
-            // Display current value split into boxes
-            const value = (liveFillData[fieldId]?.value || '').toString();
-            editor.textContent = value;
-            applyStyleToElement(editor, liveFillData[fieldId]?.style);
             overlay.appendChild(editor);
         }
         // NOTE: Tables are handled separately by createTableOverlaysForPage()
@@ -1266,351 +1332,83 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
         }
         else if (field.type === 'radio') {
             editor.addEventListener('click', () => toggleRadio(fieldId));
-            // Show small ✓ when checked, empty when unchecked (LiveFill only)
-            editor.textContent = liveFillData[fieldId]?.checked ? '✓' : '';
+            // Show filled circle ● when checked (matches Export engine drawCircle)
+            editor.textContent = liveFillData[fieldId]?.checked ? '●' : '';
             overlay.appendChild(editor);
         }
     });
 }
 
-// ========================================
-// NumericBoxesRenderer - Display digits in individual boxes (like Export)
-// ========================================
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║  🔒 LOCKED SECTION - Preview Text Renderer Integration                     ║
+// ║  STATUS: WORKING & TESTED (2026-01-08)                                     ║
+// ║                                                                            ║
+// ║  This function delegates to PreviewTextRenderer module.                    ║
+// ║  DO NOT modify this function or the PreviewTextRenderer module.            ║
+// ║  Any changes may break the visual match between Preview and Export.        ║
+// ╚════════════════════════════════════════════════════════════════════════════╝
 
 /**
- * Check if value is purely numeric (digits only, no dashes/spaces)
- * @param {string} value - Value to check
- * @returns {boolean}
- */
-function isNumericOnly(value) {
-    return /^[0-9]+$/.test(value);
-}
-
-/**
- * Prepare numeric value for display
- * - For 9-digit values (likely ID), pad with zeros
- * - Strip non-digits
- * @param {string} value - Raw value
- * @param {string} englishId - Field identifier for context
- * @returns {string} Prepared digits string
- */
-function prepareNumericValue(value, englishId) {
-    if (!value) return '';
-
-    // If contains dash, return as-is (phone with format, etc.)
-    if (String(value).includes('-')) {
-        return String(value);
-    }
-
-    const digits = String(value).replace(/\D/g, '');
-
-    // Pad ID numbers to 9 digits
-    if (englishId === 'tz' || englishId === 'id_number') {
-        return digits.padStart(9, '0').slice(0, 9);
-    }
-
-    return digits;
-}
-
-/**
- * NumericBoxesRenderer - Renders digits in flex boxes for LiveFill preview
- * Matches Export behavior where each digit appears in its own cell
+ * 🔒 LOCKED FUNCTION - Renders text in Preview using Export-matching calculations.
+ * Delegates to PreviewTextRenderer module for exact mathematical replication.
  *
- * @param {HTMLElement} container - Parent element (the field overlay)
- * @param {string} value - The numeric value to display
- * @param {Object} style - Styling options
- * @param {string} style.fontFamily - Font family
- * @param {number} style.fontSize - Font size in px
- * @param {string} style.color - Text color
- * @param {number} style.height - Container height in px
- * @returns {HTMLElement|null} Hidden input for editing, or null if not numeric
+ * @param {HTMLElement} container - The field overlay element (positioned, sized)
+ * @param {string} value - The text value to display
+ * @param {Object} fieldPt - Field dimensions in PDF points {width, height}
+ * @param {number} scale - Scale factor: pt → px (from viewport)
+ * @param {Object} style - Style from liveFillData {fontSize, color, alignment}
  */
-function NumericBoxesRenderer(container, value, style, numBoxes = 9) {
-    const strValue = String(value || '');
-
-    // If empty or contains non-digits (like dash), don't use boxes
-    if (!strValue || !isNumericOnly(strValue)) {
-        return null;
+function renderPreviewText(container, value, fieldPt, scale, style = {}) {
+    if (!window.PreviewTextRenderer) {
+        console.error('[renderPreviewText] PreviewTextRenderer not loaded');
+        container.textContent = value || '';
+        return;
     }
 
-    // Create wrapper div
-    const wrapper = document.createElement('div');
-    wrapper.className = 'numeric-boxes';
-    wrapper.dir = 'ltr'; // Digits are always LTR
-
-    // Append wrapper first so we can measure actual container dimensions
-    container.appendChild(wrapper);
-    const boxHeight = container.clientHeight;
-    const boxWidth = container.clientWidth;
-
-    // Inset to align with printed boxes (bbox is larger than actual printed boxes)
-    const insetLeft = Math.round(boxWidth * 0.035);
-    const insetRight = Math.round(boxWidth * 0.035);
-    wrapper.style.boxSizing = 'border-box';
-    wrapper.style.paddingLeft = insetLeft + 'px';
-    wrapper.style.paddingRight = insetRight + 'px';
-
-    // Bottom anchor: use flexbox with align-items: flex-end
-    wrapper.style.display = 'flex';
-    wrapper.style.alignItems = 'flex-end';
-    wrapper.style.height = '100%';
-
-    // Bottom padding: 15% or at least 2px
-    const bottomPadding = Math.max(2, boxHeight * 0.15);
-    wrapper.style.paddingBottom = bottomPadding + 'px';
-
-    // Helper to create digit spans - always render exactly numBoxes cells
-    function createDigitSpans(str) {
-        wrapper.innerHTML = '';
-        for (let i = 0; i < numBoxes; i++) {
-            const digitSpan = document.createElement('span');
-            digitSpan.className = 'digit';
-            digitSpan.textContent = str[i] || ''; // Empty if no digit at this position
-            digitSpan.style.fontFamily = style.fontFamily || "'David Libre', serif";
-            digitSpan.style.fontSize = (style.fontSize || 16) + 'px';
-            digitSpan.style.color = style.color || '#000';
-            // No lineHeight needed - flexbox handles vertical alignment
-            wrapper.appendChild(digitSpan);
-        }
-    }
-
-    // Initial render
-    createDigitSpans(strValue);
-
-    // Hidden input for editing
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = strValue;
-    input.className = 'numeric-boxes-input';
-    input.style.position = 'absolute';
-    input.style.top = '0';
-    input.style.left = '0';
-    input.style.width = '100%';
-    input.style.height = '100%';
-    input.style.opacity = '0';
-    input.style.cursor = 'text';
-    input.dir = 'ltr';
-
-    // Update display on input
-    input.addEventListener('input', (e) => {
-        const newValue = e.target.value.replace(/\D/g, '');
-        e.target.value = newValue;
-        createDigitSpans(newValue);
+    // 🔒 Use the Export-matching renderer - DO NOT MODIFY
+    window.PreviewTextRenderer.render(container, value, {
+        fieldPt,
+        scale,
+        style
     });
-
-    container.appendChild(input);
-    container.style.cursor = 'text';
-    container.addEventListener('click', () => input.focus());
-
-    return input;
 }
 
 /**
- * Renders free text (default mode for non-numeric values) - bottom anchored
+ * Calculate field dimensions in PDF points from bbox and PDF page size
+ * @param {Array} bbox - [x, y, width, height] normalized 0-1
+ * @param {number} pdfWidth - PDF page width in points
+ * @param {number} pdfHeight - PDF page height in points
+ * @returns {Object} {width, height} in PDF points
  */
-function renderFreeText(container, value, fontSizePx, containerHeight, paddingPx) {
-    container.contentEditable = true;
-    container.textContent = value || '';
-    container.style.fontFamily = "'David Libre', serif";
-    container.style.fontWeight = '400';
-    container.style.fontSize = fontSizePx + 'px';
-    container.style.lineHeight = fontSizePx + 'px';
-    // Bottom anchor: 15% padding from bottom or at least 2px
-    const bottomPadding = Math.max(2, containerHeight * 0.15);
-    container.style.paddingTop = (containerHeight - fontSizePx - bottomPadding) + 'px';
-    container.style.paddingRight = paddingPx + 'px';
-    container.style.paddingLeft = paddingPx + 'px';
-    container.style.boxSizing = 'border-box';
-    container.style.overflow = 'hidden';
-    container.style.direction = 'rtl';
-    container.style.textAlign = 'right';
-    container.style.whiteSpace = 'nowrap';
-    container.style.textOverflow = 'clip';
-}
+function getFieldPtFromBbox(bbox, pdfWidth, pdfHeight) {
+    if (!bbox || bbox.length < 4) return { width: 100, height: 20 };
 
-/**
- * Display-only renderer for regular fields (no hidden input - for use with popover)
- * Shows numeric values in digit boxes, just like table cells
- */
-function renderFieldDisplay(container, value, field, screenW, screenH, fontSizePx, paddingPx) {
-    const fieldType = field.type || 'text';
-    const englishId = field.label_en || field.englishId || field.id || '';
-    const preparedValue = prepareNumericValue(value, englishId);
+    const [x, y, w, h] = bbox;
 
-    // Determine number of boxes based on field type
-    let numBoxes = 9; // Default for ID numbers
-    if (fieldType === 'phone' || englishId.includes('phone')) {
-        numBoxes = 10;
-    } else if (fieldType === 'date' || englishId.includes('date') || englishId.includes('birth')) {
-        numBoxes = 8; // DD/MM/YYYY without slashes = 8 digits
-    }
+    // Detect normalized vs absolute
+    const isNormalized = x <= 1 && y <= 1 && w <= 1 && h <= 1;
 
-    // Check if should use numeric boxes
-    if (isNumericOnly(preparedValue)) {
-        // Create digit display
-        const wrapper = document.createElement('div');
-        wrapper.className = 'numeric-boxes';
-        wrapper.dir = 'ltr';
-
-        const boxHeight = screenH;
-        const boxWidth = screenW;
-
-        const insetLeft = Math.round(boxWidth * 0.035);
-        const insetRight = Math.round(boxWidth * 0.035);
-        wrapper.style.boxSizing = 'border-box';
-        wrapper.style.paddingLeft = insetLeft + 'px';
-        wrapper.style.paddingRight = insetRight + 'px';
-
-        // Flex layout for digit distribution
-        wrapper.style.display = 'flex';
-        wrapper.style.alignItems = 'flex-end';
-        wrapper.style.height = '100%';
-        wrapper.style.width = '100%';
-
-        // Bottom padding: 15% or at least 2px
-        const bottomPadding = Math.max(2, boxHeight * 0.15);
-        wrapper.style.paddingBottom = bottomPadding + 'px';
-
-        const strValue = String(preparedValue || '');
-        for (let i = 0; i < numBoxes; i++) {
-            const digitSpan = document.createElement('span');
-            digitSpan.className = 'digit';
-            digitSpan.textContent = strValue[i] || '';
-            digitSpan.style.fontFamily = "'David Libre', serif";
-            digitSpan.style.fontSize = fontSizePx + 'px';
-            digitSpan.style.color = '#000';
-            digitSpan.style.flex = '1';
-            digitSpan.style.textAlign = 'center';
-            digitSpan.style.display = 'flex';
-            digitSpan.style.alignItems = 'flex-end';
-            digitSpan.style.justifyContent = 'center';
-            wrapper.appendChild(digitSpan);
-        }
-
-        container.appendChild(wrapper);
-    } else {
-        // Display free text (bottom anchored)
-        container.textContent = value || '';
-        container.style.fontFamily = "'David Libre', serif";
-        container.style.fontWeight = '400';
-        container.style.fontSize = fontSizePx + 'px';
-        container.style.lineHeight = fontSizePx + 'px';
-        const bottomPadding = Math.max(2, screenH * 0.15);
-        container.style.paddingTop = (screenH - fontSizePx - bottomPadding) + 'px';
-        container.style.paddingRight = paddingPx + 'px';
-        container.style.paddingLeft = paddingPx + 'px';
-        container.style.boxSizing = 'border-box';
-        container.style.overflow = 'hidden';
-        container.style.direction = 'rtl';
-        container.style.textAlign = 'right';
-        container.style.whiteSpace = 'nowrap';
-    }
-}
-
-/**
- * Display-only renderer for table cells (no hidden input - for use with popover)
- */
-function renderTableCellDisplay(container, value, col, screenW, screenH, fontSizePx, paddingPx) {
-    const englishId = col.englishId || col.columnId;
-    const preparedValue = prepareNumericValue(value, englishId);
-
-    // Determine number of boxes based on field type
-    let numBoxes = 9;
-    if (englishId === 'phone' || englishId === 'phone_number') {
-        numBoxes = 10;
-    }
-
-    // Check if should use numeric boxes
-    if (isNumericOnly(preparedValue)) {
-        // Create digit display without input
-        const wrapper = document.createElement('div');
-        wrapper.className = 'numeric-boxes';
-        wrapper.dir = 'ltr';
-
-        const boxHeight = screenH;
-        const boxWidth = screenW;
-
-        const insetLeft = Math.round(boxWidth * 0.035);
-        const insetRight = Math.round(boxWidth * 0.035);
-        wrapper.style.boxSizing = 'border-box';
-        wrapper.style.paddingLeft = insetLeft + 'px';
-        wrapper.style.paddingRight = insetRight + 'px';
-
-        // Flex layout for digit distribution
-        wrapper.style.display = 'flex';
-        wrapper.style.alignItems = 'flex-end';
-        wrapper.style.height = '100%';
-        wrapper.style.width = '100%';
-
-        // Bottom padding: 15% or at least 2px
-        const bottomPadding = Math.max(2, boxHeight * 0.15);
-        wrapper.style.paddingBottom = bottomPadding + 'px';
-
-        const strValue = String(preparedValue || '');
-        for (let i = 0; i < numBoxes; i++) {
-            const digitSpan = document.createElement('span');
-            digitSpan.className = 'digit';
-            digitSpan.textContent = strValue[i] || '';
-            digitSpan.style.fontFamily = "'David Libre', serif";
-            digitSpan.style.fontSize = fontSizePx + 'px';
-            digitSpan.style.color = '#000';
-            digitSpan.style.flex = '1';
-            digitSpan.style.textAlign = 'center';
-            digitSpan.style.display = 'flex';
-            digitSpan.style.alignItems = 'flex-end';
-            digitSpan.style.justifyContent = 'center';
-            wrapper.appendChild(digitSpan);
-        }
-
-        container.appendChild(wrapper);
-    } else {
-        // Display free text
-        container.textContent = value || '';
-        container.style.fontFamily = "'David Libre', serif";
-        container.style.fontWeight = '400';
-        container.style.fontSize = fontSizePx + 'px';
-        container.style.lineHeight = fontSizePx + 'px';
-        const bottomPadding = Math.max(2, screenH * 0.15);
-        container.style.paddingTop = (screenH - fontSizePx - bottomPadding) + 'px';
-        container.style.paddingRight = paddingPx + 'px';
-        container.style.paddingLeft = paddingPx + 'px';
-        container.style.boxSizing = 'border-box';
-        container.style.overflow = 'hidden';
-        container.style.direction = 'rtl';
-        container.style.textAlign = 'right';
-        container.style.whiteSpace = 'nowrap';
-    }
-}
-
-/**
- * Main renderer for table cells - decides between NumericBoxes and FreeText
- */
-function renderTableCell(container, value, col, screenW, screenH, fontSizePx, paddingPx) {
-    const englishId = col.englishId || col.columnId;
-
-    // Prepare value (pad ID numbers, etc.)
-    const preparedValue = prepareNumericValue(value, englishId);
-
-    // Determine number of boxes based on field type
-    let numBoxes = 9; // Default for ID numbers
-    if (englishId === 'phone' || englishId === 'phone_number') {
-        numBoxes = 10;
-    }
-
-    // Check if should use numeric boxes
-    if (isNumericOnly(preparedValue)) {
-        const style = {
-            fontFamily: "'David Libre', serif",
-            fontSize: fontSizePx,
-            color: '#000',
-            height: screenH
+    if (isNormalized) {
+        return {
+            width: w * pdfWidth,
+            height: h * pdfHeight
         };
-        return NumericBoxesRenderer(container, preparedValue, style, numBoxes);
     } else {
-        // Use free text renderer (bottom anchored)
-        renderFreeText(container, value, fontSizePx, screenH, paddingPx);
-        return null;
+        return {
+            width: w,
+            height: h
+        };
     }
+}
+
+/**
+ * Get scale factor from PDF points to CSS pixels
+ * @param {number} pdfWidth - PDF page width in points
+ * @param {number} canvasCssWidth - Canvas CSS width in pixels
+ * @returns {number} Scale factor
+ */
+function getPtToPixelScale(pdfWidth, canvasCssWidth) {
+    return canvasCssWidth / pdfWidth;
 }
 
 /**
@@ -1654,6 +1452,12 @@ function createTableOverlaysForPage(pageNum, pageTables) {
     // Use overlay dimensions (where elements are placed)
     const pageWidth = overlayRect.width;
     const pageHeight = overlayRect.height;
+
+    // Get PDF dimensions for Export-matching text rendering
+    const baseViewport = window._baseViewports?.[pageNum];
+    const basePdfWidth = baseViewport?.width || 595.28;  // A4 default
+    const basePdfHeight = baseViewport?.height || 841.89;
+    const ptToPxScale = pageWidth / basePdfWidth;
 
     // Debug: check if overlay matches canvas
     console.log(`[Table Debug] Page ${pageNum}:`, {
@@ -1721,45 +1525,53 @@ function createTableOverlaysForPage(pageNum, pageTables) {
                         triggerAutoSave();
                     });
                 } else {
-                    // Text/Number - use preview renderer based on field type
-                    // Match export font size (14pt default) for consistency
-                    const fontSizePt = col.fontSize || 14;
-                    const fontSizePx = fontSizePt * RENDER_SCALE; // Scale 2 = 144 DPI
-                    const paddingPx = 2 * RENDER_SCALE; // TEXT_PADDING = 2pt
+                    // Text/Number - use Export-matching renderer with hidden input (like regular fields)
+                    // Calculate cell dimensions in PDF points
+                    const cellPt = {
+                        width: cellBBox.width * basePdfWidth,
+                        height: cellBBox.height * basePdfHeight
+                    };
 
-                    // Check if should use popover (for number/date fields or by column name)
-                    const colEnglishId = (col.englishId || col.columnId || '').toLowerCase();
-                    const isNumericColumn = ['id_number', 'phone', 'birth_date', 'date'].some(key => colEnglishId.includes(key));
-                    const usePopover = window.FieldInputPopover && (
-                        ['number', 'date', 'id_number', 'phone'].includes(col.type) || isNumericColumn
-                    );
+                    // Render using Export-matching renderer
+                    renderPreviewText(cellEditor, currentValue, cellPt, ptToPxScale, {});
 
-                    if (usePopover) {
-                        // Display value but use popover for input (no hidden input)
-                        renderTableCellDisplay(cellEditor, currentValue, col, screenW, screenH, fontSizePx, paddingPx);
-                        cellEditor.style.cursor = 'pointer';
-                        cellEditor.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            openTableCellPopover(cellEditor, col, tableId, rowIndex);
-                        });
-                    } else {
-                        // Use inline editing with input element
-                        const inputElement = renderTableCell(cellEditor, currentValue, col, screenW, screenH, fontSizePx, paddingPx);
-                        // Data binding for inline editing
-                        if (inputElement) {
-                            // For digits mode - input element is returned
-                            inputElement.addEventListener('input', (e) => {
-                                liveFillData.tables[tableId][rowIndex][col.englishId || colId] = e.target.value;
-                                triggerAutoSave();
-                            });
-                        } else {
-                            // For freeText mode - cellEditor is contentEditable
-                            cellEditor.addEventListener('input', (e) => {
-                                liveFillData.tables[tableId][rowIndex][col.englishId || colId] = e.target.textContent;
-                                triggerAutoSave();
-                            });
-                        }
-                    }
+                    // Store render info for input callback
+                    cellEditor.dataset.fieldPt = JSON.stringify(cellPt);
+                    cellEditor.dataset.ptToPxScale = ptToPxScale;
+
+                    // Use hidden input + rendered output (same as regular fields)
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'text';
+                    hiddenInput.value = currentValue || '';
+                    hiddenInput.className = 'livefill-hidden-input';
+                    hiddenInput.style.cssText = `
+                        position: absolute;
+                        top: 0; left: 0;
+                        width: 100%; height: 100%;
+                        opacity: 0;
+                        cursor: text;
+                        direction: rtl;
+                        font-size: 16px;
+                    `;
+
+                    hiddenInput.addEventListener('input', (e) => {
+                        const newValue = e.target.value;
+                        liveFillData.tables[tableId][rowIndex][col.englishId || colId] = newValue;
+
+                        // Re-render with Export-matching renderer
+                        const fp = JSON.parse(cellEditor.dataset.fieldPt || '{"width":100,"height":20}');
+                        const sc = parseFloat(cellEditor.dataset.ptToPxScale || '1');
+                        renderPreviewText(cellEditor, newValue, fp, sc, {});
+
+                        // Re-add hidden input
+                        cellEditor.appendChild(hiddenInput);
+                        hiddenInput.focus();
+
+                        triggerAutoSave();
+                    });
+
+                    cellEditor.addEventListener('click', () => hiddenInput.focus());
+                    cellEditor.appendChild(hiddenInput);
                 }
 
                 overlay.appendChild(cellEditor);
@@ -1891,8 +1703,8 @@ function toggleRadio(fieldId) {
     triggerAutoSave(); // Auto-save on change
 
     const editor = document.querySelector(`[data-field-id="${fieldId}"]`);
-    // Show small ✓ when checked, empty when unchecked (LiveFill only)
-    editor.textContent = liveFillData[fieldId].checked ? '✓' : '';
+    // Show filled circle ● when checked (matches Export engine drawCircle)
+    editor.textContent = liveFillData[fieldId].checked ? '●' : '';
 }
 
 function selectField(fieldId) {

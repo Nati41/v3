@@ -8,6 +8,7 @@ import { state } from '../core/StateManager.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { fieldNamer } from '../engines/FieldNamer.js';
 import { enhanceDialog, addDialogStyles } from './DialogUtils.js';
+import { entityResolutionScreen } from './EntityResolutionScreen.js';
 
 export class FieldReviewScreen {
     constructor() {
@@ -404,7 +405,7 @@ export class FieldReviewScreen {
     /**
      * Approve all fields
      */
-    approveAll() {
+    async approveAll() {
         const updates = this._collectFormData();
         const errors = this._validateFormData(updates);
 
@@ -422,8 +423,55 @@ export class FieldReviewScreen {
         // Batch update all fields as reviewed
         state.batchMarkFieldsReviewed(updates);
 
-        // Close and resolve
+        // Close review screen
         this._hide();
+
+        console.log(`[FieldReviewScreen] Approved ${updates.length} fields`);
+
+        // ============ Patch 5: Entity Resolution ============
+        // Get all reviewed fields (including newly approved ones)
+        const allFields = state.get('fields') || [];
+        const reviewedFields = allFields.filter(f =>
+            f.status === 'reviewed' || f.status === 'complete'
+        );
+
+        console.log('[FieldReviewScreen] Checking for duplicates:', reviewedFields.length, 'fields');
+        console.log('[FieldReviewScreen] Labels:', reviewedFields.map(f => f.label_he));
+
+        // Check for duplicate labels
+        const hasDups = entityResolutionScreen.hasDuplicates(reviewedFields);
+        console.log('[FieldReviewScreen] Has duplicates?', hasDups);
+
+        if (hasDups) {
+            console.log('[FieldReviewScreen] Duplicates found, starting Entity Resolution');
+
+            try {
+                const entityResult = await entityResolutionScreen.show(reviewedFields);
+
+                if (entityResult && entityResult.resolved) {
+                    eventBus.emit(Events.TOAST_SHOW, {
+                        message: `${updates.length} שדות אושרו, ${entityResult.fieldCount || 0} ישויות הוגדרו`,
+                        type: 'success'
+                    });
+                }
+            } catch (err) {
+                if (err.cancelled) {
+                    console.log('[FieldReviewScreen] Entity resolution cancelled');
+                } else {
+                    console.error('[FieldReviewScreen] Entity resolution error:', err);
+                }
+            }
+        } else {
+            // No duplicates - mark all as complete directly
+            for (const update of updates) {
+                state.updateField(update.id, { status: 'complete' });
+            }
+
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: `${updates.length} שדות אושרו בהצלחה`,
+                type: 'success'
+            });
+        }
 
         if (this.onCompleteCallback) {
             this.onCompleteCallback({
@@ -432,13 +480,6 @@ export class FieldReviewScreen {
                 fields: updates
             });
         }
-
-        eventBus.emit(Events.TOAST_SHOW, {
-            message: `${updates.length} שדות אושרו בהצלחה`,
-            type: 'success'
-        });
-
-        console.log(`[FieldReviewScreen] Approved ${updates.length} fields`);
     }
 
     /**

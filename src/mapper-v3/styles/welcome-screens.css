@@ -1,0 +1,546 @@
+/**
+ * welcome-screens.css
+ * V3.9: Styles for WelcomeScreen and FieldLoaderScreen
+ *
+ * Completely standalone - does not modify any existing styles.
+ */
+
+/* ============================================
+   SHARED STYLES
+   ============================================ */
+
+.welcome-screen,
+.field-loader-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 40px;
+    z-index: 1000;
+    overflow-y: auto;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Loading overlay */
+.welcome-loading,
+.field-loader-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+}
+
+.welcome-loading p,
+.field-loader-loading p {
+    color: #fff;
+    margin-top: 20px;
+    font-size: 18px;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Hint message */
+.welcome-hint {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(52, 152, 219, 0.95);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    z-index: 1002;
+    animation: slideUp 0.3s ease;
+}
+
+.welcome-hint.fade-out {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Not available message overlay */
+.not-available-msg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1003;
+}
+
+.not-available-content {
+    background: #1a1a2e;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 30px 40px;
+    text-align: center;
+    max-width: 400px;
+}
+
+.not-available-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 15px;
+}
+
+.not-available-content p {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 20px 0;
+}
+
+.not-available-close {
+    background: #3498db;
+    color: #fff;
+    border: none;
+    padding: 10px 30px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.not-available-close:hover {
+    background: #2980b9;
+}
+
+/* ============================================
+   WELCOME SCREEN
+   ============================================ */
+
+.welcome-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.welcome-header h1 {
+    color: #fff;
+    font-size: 36px;
+    font-weight: 600;
+    margin: 0 0 10px 0;
+}
+
+.welcome-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    margin: 0;
+}
+
+.welcome-content {
+    display: flex;
+    gap: 60px;
+    max-width: 1000px;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Upload Section */
+.upload-section {
+    flex: 1;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.upload-dropzone {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.dragover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #3498db;
+}
+
+.upload-icon {
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 20px;
+}
+
+.upload-dropzone:hover .upload-icon,
+.upload-dropzone.dragover .upload-icon {
+    color: #3498db;
+}
+
+.upload-text {
+    color: #fff;
+    font-size: 18px;
+    margin: 0 0 10px 0;
+}
+
+.upload-hint {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    margin: 0 0 15px 0;
+}
+
+.upload-btn {
+    background: #3498db;
+    color: #fff;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.upload-btn:hover {
+    background: #2980b9;
+}
+
+/* Recent Section */
+.recent-section {
+    flex: 1;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.recent-section.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.no-recent {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 16px;
+}
+
+.recent-title {
+    color: #fff;
+    font-size: 20px;
+    margin: 0 0 20px 0;
+    font-weight: 500;
+}
+
+.recent-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.recent-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.recent-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.recent-thumbnail {
+    width: 50px;
+    height: 65px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+}
+
+.recent-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.thumbnail-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.recent-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.recent-name {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-meta {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+}
+
+.recent-remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0 5px;
+    line-height: 1;
+    transition: color 0.2s ease;
+}
+
+.recent-remove:hover {
+    color: #e74c3c;
+}
+
+.clear-recent-btn {
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.5);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: all 0.2s ease;
+}
+
+.clear-recent-btn:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* ============================================
+   FIELD LOADER SCREEN
+   ============================================ */
+
+.field-loader-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 40px;
+}
+
+.back-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.back-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.pdf-info h2 {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 500;
+    margin: 0 0 4px 0;
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pdf-info .page-count {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+}
+
+.field-loader-content {
+    text-align: center;
+    width: 100%;
+    max-width: 800px;
+}
+
+.field-loader-content h1 {
+    color: #fff;
+    font-size: 32px;
+    font-weight: 600;
+    margin: 0 0 10px 0;
+}
+
+.field-loader-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 18px;
+    margin: 0 0 40px 0;
+}
+
+.loader-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 20px;
+    justify-items: center;
+}
+
+.loader-option {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    padding: 30px 20px;
+    width: 100%;
+    max-width: 200px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.loader-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #3498db;
+    transform: translateY(-5px);
+}
+
+.option-icon {
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 15px;
+    transition: color 0.3s ease;
+}
+
+.loader-option:hover .option-icon {
+    color: #3498db;
+}
+
+.option-icon.ai-icon {
+    color: #9b59b6;
+}
+
+.loader-option:hover .option-icon.ai-icon {
+    color: #8e44ad;
+}
+
+.option-text h3 {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 0 0 8px 0;
+}
+
+.option-text p {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.option-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #9b59b6, #8e44ad);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .welcome-screen,
+    .field-loader-screen {
+        padding: 20px;
+    }
+
+    .welcome-header h1 {
+        font-size: 28px;
+    }
+
+    .welcome-content {
+        flex-direction: column;
+        gap: 30px;
+    }
+
+    .upload-section,
+    .recent-section {
+        max-width: 100%;
+    }
+
+    .field-loader-content h1 {
+        font-size: 24px;
+    }
+
+    .loader-options {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .loader-option {
+        max-width: 100%;
+        padding: 20px 15px;
+    }
+}
+
+@media (max-width: 480px) {
+    .loader-options {
+        grid-template-columns: 1fr;
+    }
+}

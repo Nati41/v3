@@ -5,6 +5,8 @@
 import { state, RadioGroupSteps } from '../core/StateManager.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { pdfEngine, PDF_DPI, CHECKBOX_SIZE, RADIO_SIZE } from './PDFEngine.js';
+import { labelOverlay } from '../overlay/LabelOverlay.js';
+import { TableEvents } from '../tables/TableFlowController.js';
 
 export class OverlayRenderer {
     constructor() {
@@ -12,6 +14,7 @@ export class OverlayRenderer {
         this.drawingLayer = null;
         this.fieldElements = new Map(); // fieldId -> DOM element
         this.tableElements = new Map(); // tableId -> DOM element
+        this.tempColumnElements = new Map(); // columnId/index -> DOM element (during table flow)
         this._pendingRenderFields = [];  // Queue for fields waiting for dimensions
     }
 
@@ -56,29 +59,34 @@ export class OverlayRenderer {
             this._processPendingFields();
         });
 
-        // CRITICAL: Re-render tables on window resize
-        // This fixes the issue where tables move when browser window is resized
+        // CRITICAL: Re-render tables on window resize (debounced)
         let resizeTimeout = null;
         window.addEventListener('resize', () => {
-            // Debounce resize events
             if (resizeTimeout) clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
-                console.log('[OverlayRenderer] Window resize detected - re-rendering');
                 this._updateLayerSize();
                 this.renderAll();
-            }, 150);
+            }, 200);
         });
 
         // Re-render when fields change
         eventBus.on(Events.FIELD_CREATED, (field) => {
             if (field.isMapped) {
                 this.renderField(field);
+                // Also render label overlay if field has labelSelection
+                if (field.labelSelection) {
+                    labelOverlay.renderLabelForField(field);
+                }
             }
         });
 
         eventBus.on(Events.FIELD_UPDATED, (field) => {
             if (field.isMapped) {
                 this.renderField(field);
+                // Also render label overlay if field has labelSelection
+                if (field.labelSelection) {
+                    labelOverlay.renderLabelForField(field);
+                }
             }
         });
 
@@ -98,28 +106,31 @@ export class OverlayRenderer {
         // ============ UNDO/REDO SUPPORT ============
         // Re-render all fields when history changes (undo/redo)
         eventBus.on(Events.HISTORY_UNDO, () => {
-            console.log('[OverlayRenderer] Undo detected - re-rendering all fields');
             this.renderAll();
         });
 
         eventBus.on(Events.HISTORY_REDO, () => {
-            console.log('[OverlayRenderer] Redo detected - re-rendering all fields');
             this.renderAll();
+        });
+
+        // ============ RESET SUPPORT ============
+        // Clear all overlays when state is reset
+        eventBus.on(Events.STATE_CHANGED, ({ action }) => {
+            if (action === 'reset') {
+                this.clear();
+            }
         });
 
         // ============ TABLE EVENTS ============
         eventBus.on(Events.TABLE_CREATED, (table) => {
-            console.log('[OverlayRenderer] Table created:', table.tableId);
             this.renderTable(table);
         });
 
         eventBus.on(Events.TABLE_UPDATED, (table) => {
-            console.log('[OverlayRenderer] Table updated:', table.tableId);
             this.renderTable(table);
         });
 
         eventBus.on(Events.TABLE_DELETED, (table) => {
-            console.log('[OverlayRenderer] Table deleted:', table.tableId);
             this.removeTable(table.tableId);
         });
 
@@ -128,6 +139,28 @@ export class OverlayRenderer {
             this._updateLayerSize();
             this.renderAll();
         });
+
+        // ============ TABLE FLOW COLUMN EVENTS ============
+        // Show column overlay during table flow (visual feedback for confirmed columns)
+        eventBus.on(TableEvents.TABLE_OVERLAY_SHOW_COLUMN, (data) => {
+            this.renderTempColumn(data);
+        });
+
+        // Clear temporary column overlays
+        eventBus.on(TableEvents.TABLE_OVERLAY_CLEAR_COLUMNS, () => {
+            this.clearTempColumns();
+        });
+
+        // Clear all temporary overlays (including columns)
+        eventBus.on(TableEvents.TABLE_OVERLAY_CLEAR_ALL, () => {
+            this.clearTempColumns();
+        });
+
+        // ============ SIDEBAR/PDF COLUMN SYNC ============
+        // Highlight PDF column when hovering sidebar item
+        eventBus.on('table:sidebar:columnHover', ({ columnId, index, hover }) => {
+            this.highlightTempColumn(columnId, hover);
+        });
     }
 
     /**
@@ -135,8 +168,6 @@ export class OverlayRenderer {
      */
     _processPendingFields() {
         if (this._pendingRenderFields.length === 0) return;
-
-        console.log(`[OverlayRenderer] Processing ${this._pendingRenderFields.length} pending fields`);
 
         const fields = [...this._pendingRenderFields];
         this._pendingRenderFields = [];
@@ -170,8 +201,6 @@ export class OverlayRenderer {
             (f.bbox || f.anchor)
         );
 
-        console.log(`[OverlayRenderer] Rendering ${fields.length} fields for page ${currentPage}`);
-
         fields.forEach(field => {
             this.renderField(field);
         });
@@ -181,6 +210,18 @@ export class OverlayRenderer {
 
         // Also render radio builder circles if active
         this.renderRadioBuilderCircles();
+
+        // Render label overlays for fields with labelSelection
+        this._renderLabelOverlays();
+    }
+
+    /**
+     * Render label overlays for fields with labelSelection
+     * Delegates to LabelOverlay module for display-only rendering
+     */
+    _renderLabelOverlays() {
+        // Use labelOverlay.renderAll() which handles page filtering internally
+        labelOverlay.renderAll();
     }
 
     /**
@@ -189,8 +230,6 @@ export class OverlayRenderer {
     renderAllTables() {
         const currentPage = state.get('document.currentPage');
         const tables = state.get('tables').filter(t => t.page === currentPage);
-
-        console.log(`[OverlayRenderer] Rendering ${tables.length} tables for page ${currentPage}`);
 
         tables.forEach(table => {
             this.renderTable(table);
@@ -358,11 +397,9 @@ export class OverlayRenderer {
             const totalDataHeight = tableScreen.height - dataAreaTop;  // From sample row to table bottom
 
             // Draw row lines using percentage positioning to avoid drift
-            // Each row occupies exactly (100 / rowCount)% of the data area
+            // Use DocumentFragment for batched DOM operations (PERFORMANCE FIX)
+            const rowLinesFragment = document.createDocumentFragment();
             for (let i = 1; i < table.rowCount; i++) {
-                // Calculate Y position as percentage of total data height
-                // This avoids cumulative floating-point errors
-                const percentFromDataTop = (i / table.rowCount) * 100;
                 const relativeY = dataAreaTop + (totalDataHeight * i / table.rowCount);
 
                 const rowLine = document.createElement('div');
@@ -376,9 +413,61 @@ export class OverlayRenderer {
                     background: rgba(16, 185, 129, 0.4);
                     pointer-events: none;
                 `;
-                // Add to table container (not overlay layer) for proper relative positioning
-                tableEl.appendChild(rowLine);
+                rowLinesFragment.appendChild(rowLine);
             }
+            // Append all row lines at once (single reflow)
+            tableEl.appendChild(rowLinesFragment);
+        }
+
+        // ============ DRAW SLOT VISUALIZATION FOR CELLS (Phase 3) ============
+        // For columns with layout.mode === 'slots', draw slot dividers in each cell
+        const LH = window.LayoutHelper;
+        if (LH && table.columns && table.rowCount > 0 && table.sampleRowBBox) {
+            const sampleRowScreen = this._tableCoordToScreen(table.sampleRowBBox, pdfW, pdfH, scaleX, scaleY);
+            const dataAreaTop = sampleRowScreen.y - tableScreen.y;
+            const totalDataHeight = tableScreen.height - dataAreaTop;
+
+            const cellsFragment = document.createDocumentFragment();
+
+            table.columns.forEach((col, colIndex) => {
+                // Check if this column has slots layout
+                if (!col.layout || col.layout.mode !== LH.MODES.SLOTS) return;
+                if (!col.bbox) return;
+
+                const colScreen = this._tableCoordToScreen(col.bbox, pdfW, pdfH, scaleX, scaleY);
+                const colLeft = colScreen.x - tableScreen.x;
+                const colWidth = colScreen.width;
+                const slotCount = col.layout.slotCount || 9;
+
+                // Draw slot overlay for each row
+                for (let rowIndex = 0; rowIndex < table.rowCount; rowIndex++) {
+                    const rowY = dataAreaTop + (totalDataHeight * rowIndex / table.rowCount);
+                    const rowHeight = totalDataHeight / table.rowCount;
+
+                    const cellSlots = document.createElement('div');
+                    cellSlots.className = 'table-cell-slots';
+                    cellSlots.style.cssText = `
+                        position: absolute;
+                        left: ${colLeft}px;
+                        top: ${rowY}px;
+                        width: ${colWidth}px;
+                        height: ${rowHeight}px;
+                        --slot-count: ${slotCount};
+                        background-image: repeating-linear-gradient(
+                            to left,
+                            transparent 0,
+                            transparent calc(100% / var(--slot-count) - 1px),
+                            rgba(0, 100, 255, 0.4) calc(100% / var(--slot-count) - 1px),
+                            rgba(0, 100, 255, 0.4) calc(100% / var(--slot-count))
+                        );
+                        pointer-events: none;
+                        z-index: 3;
+                    `;
+                    cellsFragment.appendChild(cellSlots);
+                }
+            });
+
+            tableEl.appendChild(cellsFragment);
         }
 
         // ============ ADD TABLE LABEL ============
@@ -402,8 +491,7 @@ export class OverlayRenderer {
         // Add to layer
         this.overlayLayer.appendChild(tableEl);
         this.tableElements.set(table.tableId, tableEl);
-
-        console.log(`✅ [OverlayRenderer] Rendered table: ${table.tableId}`, tableScreen);
+        // Performance: removed console.log from hot path
     }
 
     /**
@@ -455,6 +543,191 @@ export class OverlayRenderer {
         if (element) {
             element.remove();
             this.tableElements.delete(tableId);
+        }
+    }
+
+    // ============ TEMPORARY COLUMN OVERLAYS (Table Flow) ============
+
+    /**
+     * Render a temporary column overlay during table flow
+     * Provides visual feedback for confirmed columns on the PDF
+     * @param {Object} data - { index, bbox, name, columnId, layout }
+     */
+    renderTempColumn(data) {
+        if (!this.overlayLayer) return;
+
+        const { index, bbox, name, columnId, layout } = data;
+        const key = columnId || `col-${index}`;
+
+        // Remove existing if present
+        this.removeTempColumn(key);
+
+        // Get overlay layer dimensions
+        const layerWidth = this.overlayLayer.offsetWidth;
+        const layerHeight = this.overlayLayer.offsetHeight;
+
+        // Convert normalized bbox to screen pixels
+        let screenBbox;
+        if (bbox.x <= 1 && bbox.y <= 1 && bbox.width <= 1 && bbox.height <= 1) {
+            // Normalized coordinates
+            screenBbox = {
+                x: Math.round(bbox.x * layerWidth),
+                y: Math.round(bbox.y * layerHeight),
+                width: Math.round(bbox.width * layerWidth),
+                height: Math.round(bbox.height * layerHeight)
+            };
+        } else {
+            // Already screen pixels
+            screenBbox = bbox;
+        }
+
+        // Create column overlay element
+        const colEl = document.createElement('div');
+        colEl.className = 'temp-column-overlay';
+        colEl.dataset.columnId = key;
+        colEl.dataset.columnIndex = index;
+
+        colEl.style.cssText = `
+            position: absolute;
+            left: ${screenBbox.x}px;
+            top: ${screenBbox.y}px;
+            width: ${screenBbox.width}px;
+            height: ${screenBbox.height}px;
+            border: 2px solid #10b981;
+            background: rgba(16, 185, 129, 0.15);
+            pointer-events: auto;
+            z-index: 50;
+            box-sizing: border-box;
+            cursor: pointer;
+            transition: background 0.2s;
+        `;
+
+        // Add column number badge
+        const badge = document.createElement('div');
+        badge.className = 'column-number-badge';
+        badge.textContent = (index + 1).toString();
+        badge.style.cssText = `
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: none;
+        `;
+        colEl.appendChild(badge);
+
+        // Add column name tooltip at bottom
+        if (name) {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'column-name-tooltip';
+            tooltip.textContent = name;
+            tooltip.style.cssText = `
+                position: absolute;
+                bottom: -20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #10b981;
+                color: white;
+                padding: 2px 6px;
+                font-size: 10px;
+                border-radius: 3px;
+                white-space: nowrap;
+                max-width: 100px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                pointer-events: none;
+            `;
+            colEl.appendChild(tooltip);
+        }
+
+        // ============ SLOT VISUALIZATION (Phase 3) ============
+        const LH = window.LayoutHelper;
+        if (LH && layout && layout.mode === LH.MODES.SLOTS) {
+            const slotCount = layout.slotCount || 9;
+            const slotsOverlay = document.createElement('div');
+            slotsOverlay.className = 'temp-column-slots';
+            slotsOverlay.style.cssText = `
+                position: absolute;
+                inset: 2px;
+                --slot-count: ${slotCount};
+                background-image: repeating-linear-gradient(
+                    to left,
+                    transparent 0,
+                    transparent calc(100% / var(--slot-count) - 1px),
+                    rgba(0, 100, 255, 0.4) calc(100% / var(--slot-count) - 1px),
+                    rgba(0, 100, 255, 0.4) calc(100% / var(--slot-count))
+                );
+                pointer-events: none;
+                z-index: 1;
+            `;
+            colEl.appendChild(slotsOverlay);
+        }
+
+        // Hover effect
+        colEl.addEventListener('mouseenter', () => {
+            colEl.style.background = 'rgba(16, 185, 129, 0.3)';
+            // Emit event for sidebar sync
+            eventBus.emit('table:column:hover', { columnId: key, index, hover: true });
+        });
+
+        colEl.addEventListener('mouseleave', () => {
+            colEl.style.background = 'rgba(16, 185, 129, 0.15)';
+            eventBus.emit('table:column:hover', { columnId: key, index, hover: false });
+        });
+
+        // Add to layer
+        this.overlayLayer.appendChild(colEl);
+        this.tempColumnElements.set(key, colEl);
+        // Performance: removed console.log from hot path
+    }
+
+    /**
+     * Remove a single temporary column overlay
+     * @param {string} key - Column ID or key
+     */
+    removeTempColumn(key) {
+        const element = this.tempColumnElements.get(key);
+        if (element) {
+            element.remove();
+            this.tempColumnElements.delete(key);
+        }
+    }
+
+    /**
+     * Clear all temporary column overlays
+     */
+    clearTempColumns() {
+        console.log(`[OverlayRenderer] Clearing ${this.tempColumnElements.size} temp columns`);
+        this.tempColumnElements.forEach((element) => {
+            element.remove();
+        });
+        this.tempColumnElements.clear();
+    }
+
+    /**
+     * Highlight a specific column (called from sidebar hover)
+     * @param {string} columnId - Column ID to highlight
+     * @param {boolean} highlight - Whether to highlight or un-highlight
+     */
+    highlightTempColumn(columnId, highlight) {
+        const element = this.tempColumnElements.get(columnId);
+        if (element) {
+            if (highlight) {
+                element.style.background = 'rgba(16, 185, 129, 0.4)';
+                element.style.border = '3px solid #059669';
+            } else {
+                element.style.background = 'rgba(16, 185, 129, 0.15)';
+                element.style.border = '2px solid #10b981';
+            }
         }
     }
 
@@ -551,11 +824,7 @@ export class OverlayRenderer {
             x = Math.round(canvasCenterX - width / 2);
             y = Math.round(canvasCenterY - height / 2);
 
-            console.log('🔲 Checkbox/Radio render:', {
-                id: field.id, anchorX, anchorY,
-                canvasCenterX, canvasCenterY,
-                x, y, layerWidth, layerHeight
-            });
+            // Performance: removed console.log from hot path
 
         } else {
             console.warn('[OverlayRenderer] Invalid coordinates for field:', field.id);
@@ -568,6 +837,17 @@ export class OverlayRenderer {
         overlay.style.width = `${width}px`;
         overlay.style.height = `${height}px`;
         overlay.style.zIndex = '1';
+
+        // ============ SLOT VISUALIZATION (Phase 3) ============
+        // Show visual divider lines when field is in "slots" mode
+        const LH = window.LayoutHelper;
+        if (LH && LH.hasExplicitLayout(field)) {
+            const layout = LH.getFieldLayout(field);
+            if (layout.mode === LH.MODES.SLOTS) {
+                overlay.classList.add('layout-slots');
+                overlay.style.setProperty('--slot-count', layout.slotCount || 9);
+            }
+        }
 
         // Add resize handles (hidden by default)
         this._addResizeHandles(overlay);
@@ -594,8 +874,7 @@ export class OverlayRenderer {
         // Add to layer
         this.overlayLayer.appendChild(overlay);
         this.fieldElements.set(field.id, overlay);
-
-        console.log(`✅ [OverlayRenderer] Rendered field: ${field.id}`, { x, y, width, height });
+        // Performance: removed console.log from hot path
     }
 
     /**
@@ -671,6 +950,45 @@ export class OverlayRenderer {
     }
 
     /**
+     * Convert anchor (normalized 0-1) to screen coordinates
+     * Inverse of screenToAnchor
+     * @param {Array} anchor - [xPercent, yPercent] normalized 0-1
+     * @returns {Object} { x, y } center point in screen pixels
+     */
+    anchorToScreen(anchor) {
+        if (!anchor || !Array.isArray(anchor) || anchor.length !== 2) {
+            return { x: 0, y: 0 };
+        }
+
+        const pdfPageDimensions = pdfEngine.getPdfPageDimensions();
+        if (!pdfPageDimensions) return { x: 0, y: 0 };
+
+        const dpiScale = pdfEngine.getDpiScale();
+        const pdfW = pdfPageDimensions.width / dpiScale;
+        const pdfH = pdfPageDimensions.height / dpiScale;
+
+        const layerWidth = Math.max(this.overlayLayer?.offsetWidth || 1, 1);
+        const layerHeight = Math.max(this.overlayLayer?.offsetHeight || 1, 1);
+
+        // anchor is [xPercent, yPercent] where Y is from BOTTOM (PDF convention)
+        const [xPercent, yPercent] = anchor;
+
+        // Convert to PDF points
+        const xPdf = xPercent * pdfW;
+        const yPdfBottom = yPercent * pdfH;
+        const yPdfTop = pdfH - yPdfBottom;
+
+        // Scale to screen
+        const scaleX = layerWidth / pdfW;
+        const scaleY = layerHeight / pdfH;
+
+        return {
+            x: xPdf * scaleX,
+            y: yPdfTop * scaleY
+        };
+    }
+
+    /**
      * Convert bbox (normalized 0-1) back to screen coordinates
      * Inverse of screenToBbox - used for auto-detection scan areas
      * @param {Array|Object} bbox - [x, y, width, height] or {x, y, width, height} in normalized 0-1 values
@@ -711,10 +1029,11 @@ export class OverlayRenderer {
         let x, y, width, height;
 
         if (isNormalized) {
-            // Normalized coordinates (0-1) are TOP-BASED (like HTML/CSS)
-            // No Y flip needed - convert directly to screen pixels
+            // Normalized coordinates (0-1) are BOTTOM-BASED (PDF coordinate system)
+            // screenToBbox stores yPercent = (pdfH - yPdfTop - heightPdf) / pdfH
+            // So we need to reverse: y = (1 - bboxY - bboxH) * layerHeight
             x = Math.round(bboxX * layerWidth);
-            y = Math.round(bboxY * layerHeight);
+            y = Math.round((1 - bboxY - bboxH) * layerHeight);
             width = Math.round(bboxW * layerWidth);
             height = Math.round(bboxH * layerHeight);
         } else {
@@ -750,6 +1069,9 @@ export class OverlayRenderer {
         }
         this.fieldElements.clear();
         this.tableElements.clear();
+        this.tempColumnElements.clear();
+        // Also clear label overlay tracking
+        labelOverlay.clearAll();
     }
 
     /**

@@ -42,6 +42,11 @@
     --field-table-border: rgba(156, 39, 176, 0.6);
 }
 
+/* General utility class */
+.hidden {
+    display: none !important;
+}
+
 /* ============ Reset & Base ============ */
 *, *::before, *::after {
     box-sizing: border-box;
@@ -211,6 +216,99 @@ input, textarea {
     min-width: 50px;
     text-align: center;
     font-weight: 500;
+}
+
+/* ============ V3.2: Draft Indicator ============ */
+.draft-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.4);
+    border-radius: var(--border-radius);
+    animation: pulse-draft 2s ease-in-out infinite;
+    /* V3.2: Prevent layout shift - always occupy same space */
+    min-width: 140px;
+}
+
+.draft-indicator.hidden {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+@keyframes pulse-draft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+}
+
+.draft-badge {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.review-btn {
+    background: var(--warning-color) !important;
+    color: white !important;
+    padding: 4px 12px !important;
+    font-weight: 600;
+    font-size: 12px;
+    border-radius: 4px;
+    transition: background 0.15s, transform 0.1s;
+}
+
+.review-btn:hover {
+    background: #b97a04 !important;
+    transform: scale(1.02);
+}
+
+/* ============ V3.9: Auto-Advance Indicator ============ */
+.auto-advance-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.auto-advance-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px !important;
+    border-radius: var(--border-radius);
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.auto-advance-btn.active {
+    background: rgba(81, 207, 102, 0.2) !important;
+    border: 1px solid rgba(81, 207, 102, 0.5);
+}
+
+.auto-advance-btn:not(.active) {
+    background: rgba(150, 150, 150, 0.2) !important;
+    border: 1px solid rgba(150, 150, 150, 0.3);
+    opacity: 0.6;
+}
+
+.auto-advance-btn .label {
+    font-size: 12px;
+}
+
+.remaining-badge {
+    background: var(--primary-color);
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.remaining-badge.hidden {
+    display: none;
 }
 
 /* ============ Main Content ============ */
@@ -457,12 +555,55 @@ input, textarea {
 .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
 .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
 
+/* V3.5: Temporary Resize Handles (Table Flow) */
+.temp-resize-handle {
+    opacity: 0.7;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.temp-resize-handle:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
+/* Table Flow Overlays */
+.table-flow-bbox-overlay {
+    transition: border-color 0.2s;
+}
+
+.table-flow-bbox-overlay:hover {
+    border-color: #059669;
+}
+
+.table-flow-bbox-overlay.resizing {
+    border-style: dashed;
+}
+
+.table-flow-sample-row-overlay {
+    transition: border-color 0.2s;
+}
+
+.table-flow-sample-row-overlay:hover {
+    border-color: #2563eb;
+}
+
+.table-flow-sample-row-overlay.resizing {
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.temp-column-overlay.resizing {
+    background: rgba(16, 185, 129, 0.25);
+    border-style: dashed;
+}
+
 /* Drawing Preview */
+/* V3.9: Added z-index: 60 to ensure preview appears above all table overlays */
 .drawing-preview {
     position: absolute;
     border: 2px dashed #51cf66;
     background: rgba(81, 207, 102, 0.1);
     pointer-events: none;
+    z-index: 60;
 }
 
 .drawing-info {
@@ -584,6 +725,24 @@ input, textarea {
     animation: fadeOut 0.3s ease forwards;
 }
 
+/* V3.2: Toast with action button */
+.toast-action-btn {
+    margin-right: 12px;
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.toast-action-btn:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
 @keyframes slideUp {
     from {
         opacity: 0;
@@ -662,6 +821,23 @@ input, textarea {
 .field-overlay.type-radio.selected {
     border: 3px solid #2196F3;
     background: rgba(33, 150, 243, 0.2);
+}
+
+/* Cell Field Overlay - V3.10: Full-size mark area without constraints */
+.field-overlay.type-cell {
+    border-radius: 2px;
+    border: 2px solid rgba(156, 39, 176, 0.6);  /* Purple */
+    background: rgba(156, 39, 176, 0.1);
+}
+
+.field-overlay.type-cell:hover {
+    border-color: rgba(156, 39, 176, 0.8);
+    background: rgba(156, 39, 176, 0.15);
+}
+
+.field-overlay.type-cell.selected {
+    border: 3px solid #9C27B0;
+    background: rgba(156, 39, 176, 0.2);
 }
 
 /* Signature Field Overlay */
@@ -1037,6 +1213,73 @@ input, textarea {
 .layout-toggle.active {
     background: var(--primary-color);
     border-color: var(--primary-color);
+    color: white;
+}
+
+/* V3.9.1: Placement mode toggle for checkbox/radio */
+.placement-mode-row {
+    margin-bottom: 10px;
+}
+
+.placement-toggle-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.placement-toggle {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.placement-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--success-color, #27ae60);
+}
+
+.placement-toggle.active {
+    background: var(--success-color, #27ae60);
+    border-color: var(--success-color, #27ae60);
+    color: white;
+}
+
+/* V3.9.1: Mini placement toggle in header for unmapped checkbox/radio */
+.header-placement-toggle {
+    display: flex;
+    gap: 2px;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.placement-mini-btn {
+    width: 18px;
+    height: 18px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.placement-mini-btn:hover {
+    border-color: var(--success-color, #27ae60);
+    background: var(--bg-tertiary);
+}
+
+.placement-mini-btn.active {
+    background: var(--success-color, #27ae60);
+    border-color: var(--success-color, #27ae60);
     color: white;
 }
 
@@ -1594,6 +1837,154 @@ input, textarea {
     color: var(--error-color);
 }
 
+.btn-table-expand {
+    flex: none !important;
+    width: 32px !important;
+    padding: 6px !important;
+}
+
+/* ============ V3.6: Expanded Table Content ============ */
+.table-item.expanded {
+    background: var(--bg-primary);
+}
+
+.table-header-clickable {
+    cursor: pointer;
+}
+
+.table-header-clickable:hover {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.table-expanded-content {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.table-info-section {
+    background: var(--bg-secondary);
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.table-info-section .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.table-info-section .info-row:last-child {
+    margin-bottom: 0;
+}
+
+.table-info-section .info-label {
+    color: var(--text-secondary);
+}
+
+.table-info-section .info-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.table-columns-section {
+    margin-top: 8px;
+}
+
+.table-columns-section .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-column-item {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.table-column-item .column-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--bg-tertiary);
+    font-size: 12px;
+}
+
+.table-column-item .column-icon {
+    font-size: 14px;
+}
+
+.table-column-item .column-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.table-column-item .column-type {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.table-column-item .column-field-count {
+    color: var(--primary-color);
+    font-size: 11px;
+    background: rgba(59, 130, 246, 0.1);
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.table-column-item .column-fields {
+    padding: 6px 10px;
+}
+
+.table-field-mini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-field-mini:last-child {
+    border-bottom: none;
+}
+
+.table-field-mini .field-row-num {
+    color: var(--text-secondary);
+    min-width: 50px;
+}
+
+.table-field-mini .field-label {
+    color: var(--text-primary);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.table-field-mini .mapped-check {
+    color: #10b981;
+    font-weight: bold;
+}
+
+.table-column-item .more-fields {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 4px;
+    font-style: italic;
+}
+
 /* ============ Table Flow Panel ============ */
 .table-flow-panel {
     position: fixed;
@@ -1792,6 +2183,30 @@ input, textarea {
 .columns-list .col-type {
     font-size: 11px;
     color: var(--text-muted);
+}
+
+/* Autobox button */
+.btn-autobox {
+    width: 100%;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-autobox:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.btn-autobox.hidden {
+    display: none;
 }
 
 .flow-summary {
@@ -2314,3 +2729,2420 @@ input, textarea {
     flex-shrink: 0;
 }
 
+/* ============ Patch 5: Entity Resolution Screen ============ */
+.entity-resolution-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.entity-resolution-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.entity-resolution-container {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 800px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.entity-resolution-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.entity-resolution-header h2 {
+    margin: 0 0 8px 0;
+    font-size: 20px;
+    color: var(--text-primary);
+}
+
+.entity-resolution-subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.entity-resolution-body {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+}
+
+.entity-resolution-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+/* Duplicate Group */
+.duplicate-group {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.duplicate-group:last-child {
+    margin-bottom: 0;
+}
+
+.duplicate-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.duplicate-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.duplicate-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    border-radius: 12px;
+}
+
+.duplicate-group-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Entity Groups Container */
+.entity-groups-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+/* Entity Group (drop zone) */
+.entity-group {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg-primary);
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.entity-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.entity-group-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.btn-remove-group {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--danger-color);
+    color: white;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.btn-remove-group:hover {
+    opacity: 1;
+}
+
+/* Dropzone */
+.entity-group-dropzone {
+    min-height: 60px;
+    padding: 8px;
+    border: 2px dashed transparent;
+    border-radius: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.entity-group-dropzone.drag-over {
+    border-color: var(--primary-color);
+    background: rgba(33, 150, 243, 0.08);
+}
+
+/* Field Card (draggable) */
+.field-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: grab;
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+    user-select: none;
+}
+
+.field-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+}
+
+.field-card.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.field-card-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.field-card-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+}
+
+.field-card-canonical {
+    color: var(--primary-color);
+    background: rgba(33, 150, 243, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.field-card-page {
+    color: var(--text-muted);
+}
+
+/* Entity Naming */
+.entity-group-naming {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.entity-group-naming label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.entity-selector-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.entity-select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    background: white;
+    color: var(--text-primary);
+}
+
+.entity-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.entity-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.15);
+}
+
+/* Add Group Button */
+.btn-add-group {
+    align-self: flex-start;
+    padding: 6px 12px;
+    border: 1px dashed var(--border-color);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.btn-add-group:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: rgba(33, 150, 243, 0.05);
+}
+
+/* ============ V3.3: Template Import Dialog ============ */
+.template-import-dialog {
+    width: 500px;
+    max-width: 95vw;
+}
+
+.template-input-section {
+    margin-bottom: 16px;
+}
+
+.file-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.btn-choose-file {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-choose-file:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--primary-color);
+}
+
+.file-name {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.template-textarea {
+    min-height: 120px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    resize: vertical;
+    direction: ltr;
+    text-align: left;
+}
+
+/* Template Preview Section */
+.template-preview-section {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.preview-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.preview-icon {
+    font-size: 18px;
+}
+
+.preview-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.preview-content {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.preview-stat {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border-radius: 4px;
+}
+
+.preview-stat .stat-icon {
+    font-size: 16px;
+}
+
+.preview-stat .stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.preview-stat .stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-right: auto;
+}
+
+.preview-stat.exception-stat {
+    grid-column: span 2;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+}
+
+.preview-stat.exception-stat .stat-value {
+    color: #d97706;
+}
+
+/* Entity list in preview */
+.preview-entities {
+    margin-top: 12px;
+}
+
+.entities-title {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.entities-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.entity-tag {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+/* Template error message */
+.template-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--border-radius);
+    margin-top: 12px;
+}
+
+.template-error .error-icon {
+    font-size: 18px;
+}
+
+.template-error .error-message {
+    font-size: 13px;
+    color: #dc2626;
+}
+
+/* ============ V3.3: Template Status Indicators in Sidebar ============ */
+/* Field status icons */
+.field-status-icon {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.field-status-icon.unmapped {
+    background: #ef4444; /* Red */
+}
+
+.field-status-icon.mapped {
+    background: #eab308; /* Yellow */
+}
+
+.field-status-icon.complete {
+    background: #22c55e; /* Green */
+}
+
+.field-status-icon.skipped {
+    background: #9ca3af; /* Gray */
+}
+
+/* Template progress bar in sidebar */
+.template-progress-section {
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.progress-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.progress-stats {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.progress-bar-container {
+    height: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* Entity group in sidebar (V3.3) */
+.entity-section {
+    margin-bottom: 8px;
+}
+
+.entity-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.entity-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.entity-header .entity-icon {
+    font-size: 14px;
+}
+
+.entity-header .entity-name {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.entity-header .entity-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 2px 8px;
+    background: var(--bg-primary);
+    border-radius: 10px;
+}
+
+.entity-header .entity-expand {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.entity-section.expanded .entity-expand {
+    transform: rotate(180deg);
+}
+
+.entity-fields {
+    display: none;
+    padding: 4px 0;
+}
+
+.entity-section.expanded .entity-fields {
+    display: block;
+}
+
+/* V3.8: Guided mode section styles (Field Intelligence) */
+.guided-progress {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.05) 100%);
+}
+
+.guided-section {
+    margin-bottom: 8px;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.guided-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+}
+
+.guided-section .section-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.guided-section .section-header.clickable {
+    cursor: pointer;
+}
+
+.guided-section .section-icon {
+    font-size: 14px;
+}
+
+.guided-section .section-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.guided-section .section-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 2px 8px;
+    background: var(--bg-primary);
+    border-radius: 10px;
+}
+
+.guided-section .expand-icon {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+}
+
+.guided-section.expanded .expand-icon {
+    transform: rotate(90deg);
+}
+
+.guided-section .field-items {
+    display: none;
+    padding: 4px 0;
+    background: var(--bg-primary);
+}
+
+.guided-section.expanded .field-items {
+    display: block;
+}
+
+/* Guided mode field item status */
+.guided-section .field-item .field-status {
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+/* Guided mode field item layout */
+.guided-field-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+}
+
+.guided-field-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.guided-field-item.selected-for-mapping {
+    background: rgba(59, 130, 246, 0.1);
+    border-right: 3px solid #3b82f6;
+}
+
+.guided-field-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.guided-field-header .field-status {
+    font-size: 14px;
+}
+
+.guided-field-header .field-type-icon {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.guided-field-header .field-name {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.guided-field-header .field-actions {
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.guided-field-item:hover .field-actions {
+    opacity: 1;
+}
+
+.guided-field-item.selected-for-mapping .field-actions {
+    opacity: 1;
+}
+
+/* V3.9: Unified mode styles */
+.unified-progress {
+    background: var(--bg-secondary);
+}
+
+.unified-progress.guided {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.05) 100%);
+}
+
+.unified-progress.template {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(34, 197, 94, 0.05) 100%);
+}
+
+.unified-progress.standard {
+    background: var(--bg-secondary);
+}
+
+/* Field names container */
+.guided-field-header .field-names {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.guided-field-header .field-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.guided-field-header .field-name-en-small {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    direction: ltr;
+    text-align: right;
+}
+
+/* Active template target indicator */
+.field-item.active-target {
+    border-right: 3px solid var(--primary-color);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.field-item.active-target::before {
+    content: '▶';
+    position: absolute;
+    right: -18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--primary-color);
+    font-size: 10px;
+}
+
+/* Just mapped animation */
+@keyframes justMapped {
+    0% { background: rgba(34, 197, 94, 0.2); }
+    100% { background: transparent; }
+}
+
+.field-item.just-mapped {
+    animation: justMapped 2s ease-out;
+}
+
+/* Highlight pulse for auto-advance */
+@keyframes highlightPulse {
+    0% { background: rgba(37, 99, 235, 0.3); }
+    50% { background: rgba(37, 99, 235, 0.15); }
+    100% { background: rgba(37, 99, 235, 0.05); }
+}
+
+.field-item.highlight-pulse {
+    animation: highlightPulse 1s ease-out;
+}
+
+/* Batch mapping indicator */
+.field-item.batch-candidate {
+    border-right: 3px solid #8b5cf6;
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.batch-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    background: #8b5cf6;
+    color: white;
+    border-radius: 4px;
+    font-size: 10px;
+    margin-right: 8px;
+}
+
+/* Template locked state */
+.template-locked-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.template-locked-banner .icon {
+    font-size: 16px;
+}
+
+/* ============ V3.4: Mapped Field Info ============ */
+.field-mapped-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 11px;
+}
+
+.field-mapped-info .mapped-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    background: #22c55e;
+    color: white;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.field-mapped-info .mapped-page {
+    color: var(--text-muted);
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.field-mapped-info .mapped-size {
+    color: var(--text-muted);
+    font-family: monospace;
+    font-size: 10px;
+}
+
+/* ============ V3.4: Duplicate Field Info ============ */
+.field-duplicate-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #8b5cf6;
+    cursor: help;
+}
+
+.field-duplicate-info .duplicate-icon {
+    font-size: 12px;
+}
+
+.field-duplicate-info .duplicate-text {
+    font-weight: 500;
+}
+
+/* Locate button */
+.btn-locate {
+    padding: 4px 6px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+}
+
+.btn-locate:hover {
+    opacity: 1;
+}
+
+/* Field status icon improvements */
+.field-status-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.field-status-icon.unmapped {
+    background: #9ca3af;
+    box-shadow: 0 0 0 2px rgba(156, 163, 175, 0.2);
+}
+
+.field-status-icon.mapped {
+    background: #22c55e;
+    box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.field-status-icon.complete {
+    background: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.field-status-icon.skipped {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+/* ============ V3.3: Exception Review Panel ============ */
+.exception-panel {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 450px;
+    max-width: 95vw;
+    background: var(--bg-primary);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    z-index: 2500;
+    overflow: hidden;
+}
+
+.exception-panel.hidden {
+    display: none;
+}
+
+.exception-panel-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #fef3c7;
+    border-bottom: 1px solid #fde68a;
+}
+
+.exception-panel-header .header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.exception-panel-header .icon {
+    font-size: 18px;
+}
+
+.exception-panel-header .title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #92400e;
+}
+
+.exception-panel-header .header-progress {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 13px;
+    color: #92400e;
+    background: rgba(146, 64, 14, 0.1);
+    padding: 4px 10px;
+    border-radius: 12px;
+    margin-left: 12px;
+}
+
+.exception-panel-header .btn-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #92400e;
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-right: -4px;
+}
+
+.exception-panel-header .btn-close:hover {
+    background: rgba(146, 64, 14, 0.1);
+}
+
+.exception-panel-body {
+    padding: 16px;
+}
+
+.exception-type {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.exception-type .type-icon {
+    font-size: 20px;
+}
+
+.exception-type .type-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.exception-message {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+}
+
+.exception-choices {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 2px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: right;
+}
+
+.choice-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--primary-color);
+}
+
+.choice-btn .choice-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.choice-btn .choice-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.choice-btn .choice-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.choice-btn .choice-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.exception-panel-footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.exception-panel-footer button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.exception-panel-footer .btn-skip {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+.exception-panel-footer .btn-skip:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.exception-panel-footer .btn-skip-all {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.exception-panel-footer .btn-skip-all:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+/* V3.4: Improved exception panel styling */
+.exception-field-name {
+    font-size: 15px;
+    margin-bottom: 8px;
+}
+
+.exception-field-name .field-english {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-right: 6px;
+}
+
+.exception-explanation {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.interpretations-preview,
+.dup-preview {
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.interp-item {
+    padding: 2px 0;
+}
+
+.choice-btn.choice-primary {
+    background: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+}
+
+.choice-btn.choice-primary:hover {
+    background: #1976D2;
+}
+
+.choice-btn.choice-secondary {
+    background: var(--bg-tertiary);
+    border-style: dashed;
+}
+
+/* ============ V3.4: ENTITY TABLE MODE STYLES ============ */
+
+.entity-badge.table-mode {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.entity-table-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: #f5f5f5;
+    border-radius: 6px;
+    color: #666;
+    font-size: 13px;
+}
+
+.entity-table-notice .notice-icon {
+    font-size: 16px;
+}
+
+.entity-table-notice .notice-text {
+    flex: 1;
+}
+
+/* Entity header with table icon */
+.entity-section .entity-header .entity-icon {
+    font-size: 14px;
+}
+
+/* ============ V3.9: Duplicate Field Dialog ============ */
+.duplicate-dialog {
+    max-width: 320px;
+}
+
+.duplicate-field-name {
+    color: var(--primary-color);
+    font-weight: 500;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.repeat-hint {
+    font-size: 12px;
+    color: var(--success-color, #27ae60);
+    margin-bottom: 16px;
+    padding: 6px 10px;
+    background: rgba(39, 174, 96, 0.1);
+    border-radius: 4px;
+}
+
+.duplicate-dialog .form-group {
+    margin-bottom: 16px;
+}
+
+.duplicate-dialog label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.count-control {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.count-btn {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.count-btn:hover {
+    background: var(--bg-tertiary);
+}
+
+.count-btn.minus { color: #e74c3c; }
+.count-btn.plus { color: #27ae60; }
+
+.count-control input {
+    width: 60px;
+    height: 36px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.direction-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.direction-btn {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.direction-btn:hover {
+    background: var(--bg-tertiary);
+}
+
+.direction-btn.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.spacing-input {
+    width: 80px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.spacing-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* V3.10: Small button for row height detection */
+.btn-small {
+    padding: 4px 10px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-small:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* Duplicate button in sidebar */
+.btn-duplicate {
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.btn-duplicate:hover {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* ============ V3.10: QUICK FILL MODE STYLES ============ */
+
+/* Flow Mode Toggle in Toolbar */
+.flow-mode-toggle {
+    display: flex;
+    align-items: center;
+}
+
+.flow-mode-switcher {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 2px;
+    border: 1px solid var(--border-color);
+}
+
+.flow-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.flow-mode-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.flow-mode-btn.active {
+    background: var(--primary-color);
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.flow-mode-btn .icon {
+    font-size: 14px;
+}
+
+.flow-mode-btn .label {
+    font-weight: 500;
+}
+
+/* Quick Fill Container */
+.quick-fill-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 500; /* Higher than field overlays */
+    /* DEBUG: uncomment to see container bounds */
+    /* outline: 2px dashed red; */
+}
+
+.quick-fill-container.hidden {
+    display: none;
+}
+
+/* Quick Fill Box - styled like LiveFill's .field-editor */
+/* CRITICAL: These styles must match LiveFill for proper text anchoring */
+.quick-fill-box {
+    position: absolute;
+    border: 2px solid var(--primary-color);
+    background: rgba(37, 99, 235, 0.08);
+    border-radius: 4px;
+    pointer-events: auto;
+    box-sizing: border-box;
+    padding: 0; /* 🔒 CRITICAL: Must be 0 for text anchoring to work */
+    overflow: hidden;
+    cursor: text;
+    /* LiveFill matching styles for proper text rendering */
+    font-family: 'David Libre', Arial, sans-serif;
+    white-space: nowrap;
+    direction: rtl;
+}
+
+/* V3.10: Draggable cursor */
+.quick-fill-box {
+    cursor: grab;
+}
+
+.quick-fill-box:hover {
+    border-color: var(--primary-hover);
+    background: rgba(37, 99, 235, 0.1);
+}
+
+.quick-fill-box:active {
+    cursor: grabbing;
+}
+
+.quick-fill-box:focus-within {
+    border-color: var(--primary-hover);
+    background: rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    cursor: text;
+}
+
+.quick-fill-box.hidden {
+    display: none;
+}
+
+/* Quick Fill Hidden Input - transparent overlay for typing */
+.quick-fill-hidden-input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    cursor: text;
+    font-size: 16px;
+    z-index: 10;
+    border: none;
+    outline: none;
+}
+
+/* V3.10: Delete button removed - use undo instead */
+
+/* ============ Signature Modal ============ */
+.signature-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.signature-modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 450px;
+    max-width: 90vw;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.signature-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.signature-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.signature-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    line-height: 1;
+}
+
+.signature-modal-close:hover {
+    color: var(--text-primary);
+}
+
+.signature-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.signature-tab {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+}
+
+.signature-tab:hover {
+    background: var(--bg-tertiary);
+}
+
+.signature-tab.active {
+    background: white;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.signature-tab-content {
+    padding: 20px;
+}
+
+.signature-panel {
+    display: none;
+}
+
+.signature-panel.active {
+    display: block;
+}
+
+/* Signature Canvas */
+#signature-canvas {
+    width: 100%;
+    height: 150px;
+    border: 2px dashed var(--border-color);
+    border-radius: 8px;
+    cursor: crosshair;
+    touch-action: none;
+}
+
+.signature-draw-actions {
+    margin-top: 12px;
+    text-align: center;
+}
+
+.signature-clear-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.signature-clear-btn:hover {
+    background: var(--bg-secondary);
+}
+
+/* Typed Signature */
+#signature-text-input {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+#signature-text-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.signature-preview {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 32px;
+    color: #000;
+}
+
+.signature-font-options {
+    display: flex;
+    gap: 8px;
+}
+
+.signature-font-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.signature-font-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.signature-font-btn.active {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--primary-color);
+}
+
+/* Signature Fonts */
+.signature-font-cursive1 {
+    font-family: 'Brush Script MT', 'Segoe Script', cursive;
+}
+
+.signature-font-cursive2 {
+    font-family: 'Lucida Handwriting', 'Comic Sans MS', cursive;
+}
+
+.signature-font-cursive3 {
+    font-family: 'Bradley Hand', 'Marker Felt', cursive;
+}
+
+/* Modal Footer */
+.signature-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.signature-cancel-btn {
+    padding: 10px 20px;
+    border: 1px solid var(--border-color);
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.signature-cancel-btn:hover {
+    background: var(--bg-tertiary);
+}
+
+.signature-confirm-btn {
+    padding: 10px 20px;
+    border: none;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.signature-confirm-btn:hover {
+    background: var(--primary-hover);
+}
+
+/* Signature Box */
+.quick-fill-signature {
+    border: 2px solid var(--primary-color);
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.quick-fill-signature:hover {
+    border-color: var(--primary-hover);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+}
+
+.quick-fill-signature img {
+    pointer-events: none;
+}
+
+.quick-fill-signature .signature-text {
+    pointer-events: none;
+}
+
+/* ============ QuickFill Toolbar Integration ============ */
+/* QuickFill buttons - same style as existing toolbar buttons */
+
+/* QuickFill toolbar groups - hidden by default, shown in QuickFill mode */
+.toolbar-group.quick-fill-tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.toolbar-group.quick-fill-tools.hidden {
+    display: none;
+}
+
+.toolbar-separator.quick-fill-tools.hidden {
+    display: none;
+}
+
+/* QuickFill tool buttons - identical to .toolbar-btn.tool-btn */
+.quick-fill-tools .qf-tool-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-primary);
+    transition: background 0.15s, color 0.15s;
+}
+
+.quick-fill-tools .qf-tool-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.quick-fill-tools .qf-tool-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.quick-fill-tools .qf-tool-btn.active:hover {
+    background: var(--primary-hover);
+}
+
+/* Box Count in toolbar */
+.quick-fill-tools .qf-box-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 50px;
+    text-align: center;
+    font-weight: 500;
+    padding: 0 8px;
+}
+
+/* Export Button - text with icon */
+.quick-fill-tools .export-pdf-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.15s;
+}
+
+.quick-fill-tools .export-pdf-btn .icon {
+    font-size: 14px;
+}
+
+.quick-fill-tools .export-pdf-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.quick-fill-tools .export-pdf-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Load Mapping & Clear Buttons - standard toolbar style */
+.quick-fill-tools .load-mapping-btn,
+.quick-fill-tools .clear-all-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+
+.quick-fill-tools .load-mapping-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.quick-fill-tools .clear-all-btn:hover {
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--error-color);
+}
+
+/* QuickFill undo/redo buttons - standard toolbar style */
+.quick-fill-tools .qf-undo-btn,
+.quick-fill-tools .qf-redo-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--text-primary);
+    transition: background 0.15s;
+}
+
+.quick-fill-tools .qf-undo-btn:hover:not(:disabled),
+.quick-fill-tools .qf-redo-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+}
+
+.quick-fill-tools .qf-undo-btn:disabled,
+.quick-fill-tools .qf-redo-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Quick Fill Mode - subtle indicator on toolbar */
+body.quick-fill-mode .toolbar {
+    border-bottom-color: var(--primary-color);
+}
+
+body.quick-fill-mode #overlay-layer {
+    cursor: crosshair;
+}
+
+/* Quick Fill Checkbox/Radio/Cell Styles */
+.quick-fill-box.quick-fill-checkbox,
+.quick-fill-box.quick-fill-radio,
+.quick-fill-box.quick-fill-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid var(--primary-color);
+}
+
+.quick-fill-box.quick-fill-checkbox:hover,
+.quick-fill-box.quick-fill-radio:hover,
+.quick-fill-box.quick-fill-cell:hover {
+    border-color: var(--primary-hover);
+    background: rgba(255, 255, 255, 1);
+}
+
+.quick-fill-box.quick-fill-checkbox[data-checked="true"],
+.quick-fill-box.quick-fill-radio[data-checked="true"],
+.quick-fill-box.quick-fill-cell[data-checked="true"] {
+    background: rgba(37, 99, 235, 0.1);
+}
+
+.quick-fill-box.quick-fill-radio {
+    border-radius: 50%;
+}
+
+/* Cell type - purple border to distinguish from checkbox */
+.quick-fill-box.quick-fill-cell {
+    border-color: #9C27B0;
+}
+
+.quick-fill-box.quick-fill-cell:hover {
+    border-color: #7B1FA2;
+}
+
+.quick-fill-box.quick-fill-cell[data-checked="true"] {
+    background: rgba(156, 39, 176, 0.1);
+}
+
+.quick-fill-symbol {
+    /* מרכוז כמו ב-LiveFill: absolute + transform */
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    line-height: 1;
+    color: #333;
+    font-weight: bold;
+}
+
+.quick-fill-box[data-checked="true"] .quick-fill-symbol {
+    color: var(--primary-color);
+}
+
+/* טקסט יותר דבוק לריצפה - override ל-PreviewTextRenderer (15% → 5%) */
+.quick-fill-box span[style*="translateY"] {
+    transform: translateY(5%) !important;
+}
+.quick-fill-box span[style*="translateX(-50%)"] {
+    transform: translateX(-50%) translateY(5%) !important;
+}
+
+/* ============ V3.10: QuickFill Public Mode ============ */
+/* When in public mode, expand PDF viewer to full width */
+.main-content.no-sidebar {
+    /* PDF viewer takes full width */
+}
+
+.main-content.no-sidebar .canvas-area {
+    flex: 1;
+    max-width: 100%;
+}
+
+/* Advanced mode button styling */
+.advanced-mode-btn {
+    opacity: 0.6;
+    font-size: 12px !important;
+}
+
+.advanced-mode-btn:hover {
+    opacity: 1;
+}
+
+.advanced-mode-btn .label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+/* Body class for public mode - additional hiding via CSS */
+body.quickfill-public-mode .toolbar-separator:nth-of-type(2),
+body.quickfill-public-mode .toolbar-separator:nth-of-type(3) {
+    display: none;
+}
+
+/* Force hide welcome screens in public mode */
+body.quickfill-public-mode #welcome-screen-container,
+body.quickfill-public-mode #field-loader-screen-container,
+body.quickfill-public-mode .welcome-screen,
+body.quickfill-public-mode .field-loader-screen {
+    display: none !important;
+}
+
+/* Ensure mapper container is visible in public mode */
+body.quickfill-public-mode #mapper-container {
+    display: flex !important;
+}
+
+/* Ensure toolbar is visible in public mode */
+body.quickfill-public-mode .toolbar {
+    display: flex !important;
+}
+
+/* ============ V3.10: Table Region Dialog ============ */
+.table-region-confirm-dialog {
+    background: var(--bg-primary);
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    max-width: 350px;
+    min-width: 280px;
+    font-family: 'Heebo', sans-serif;
+    direction: rtl;
+}
+
+.table-region-dialog-content {
+    padding: 20px;
+}
+
+.table-region-dialog-content h3 {
+    margin: 0 0 16px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.table-region-columns-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.table-region-column-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-region-column-item:last-child {
+    border-bottom: none;
+}
+
+.table-region-column-item .col-name {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.table-region-column-item .col-type {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.no-columns-message {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 20px;
+}
+
+.row-count-hint {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0 0 12px 0;
+}
+
+.row-count-input {
+    width: 100%;
+    padding: 12px;
+    font-size: 18px;
+    text-align: center;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.row-count-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.table-region-dialog-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.table-region-dialog-buttons button {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.table-region-dialog-buttons .btn-confirm {
+    background: var(--success-color);
+    color: white;
+}
+
+.table-region-dialog-buttons .btn-confirm:hover:not(:disabled) {
+    background: #15803d;
+}
+
+.table-region-dialog-buttons .btn-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.table-region-dialog-buttons .btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.table-region-dialog-buttons .btn-cancel:hover {
+    background: var(--border-color);
+}
+
+/* ============ V3.10: Table Replicate Dialog ============ */
+.table-replicate-dialog {
+    font-family: 'Heebo', sans-serif;
+}
+
+.table-replicate-content {
+    padding: 16px 20px;
+    text-align: center;
+}
+
+.table-replicate-content h4 {
+    margin: 0 0 8px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.table-replicate-content p {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.table-replicate-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.table-replicate-buttons button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.table-replicate-buttons .btn-replicate {
+    background: var(--success-color);
+    color: white;
+}
+
+.table-replicate-buttons .btn-replicate:hover {
+    background: #15803d;
+}
+
+.table-replicate-buttons .btn-skip {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.table-replicate-buttons .btn-skip:hover {
+    background: var(--border-color);
+}
+
+/* ============ V3.10: Table Regions Section ============ */
+.table-regions-section {
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+}
+
+.table-regions-section .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.table-regions-section .section-icon {
+    font-size: 16px;
+}
+
+.table-regions-section .section-count {
+    margin-right: auto;
+    background: var(--bg-secondary);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.table-regions-list {
+    padding: 0 8px;
+}
+
+.table-region-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    margin: 4px 0;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.table-region-item:hover {
+    border-color: var(--primary-color);
+}
+
+.table-region-item.locked {
+    background: rgba(22, 163, 74, 0.1);
+    border-color: rgba(22, 163, 74, 0.3);
+}
+
+.table-region-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.table-region-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.table-region-stats {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.table-region-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.table-pending {
+    font-size: 11px;
+    color: var(--warning-color);
+}
+
+.table-ready {
+    color: var(--success-color);
+    font-size: 14px;
+}
+
+.btn-delete-region {
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 4px;
+}
+
+.btn-delete-region:hover {
+    opacity: 1;
+}
+
+/* ============ V3.10: Improved Table Replicate Dialog ============ */
+.table-replicate-content .field-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--primary-color);
+    margin: 0 0 12px 0;
+    text-align: center;
+}
+
+.replicate-settings {
+    margin-bottom: 16px;
+}
+
+.replicate-settings .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.replicate-settings label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    min-width: 80px;
+}
+
+.replicate-settings input {
+    flex: 1;
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.replicate-settings input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.replicate-settings .btn-detect-height {
+    padding: 8px 10px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.replicate-settings .btn-detect-height:hover {
+    background: var(--bg-tertiary);
+}
+
+/* ============ V3.10: Collapsible Table Regions in Sidebar ============ */
+.table-regions-section .table-region-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-primary);
+    overflow: hidden;
+}
+
+.table-region-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.table-region-header:hover {
+    background: var(--bg-secondary);
+}
+
+.table-expand-icon {
+    font-size: 10px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+}
+
+.table-region-item.expanded .table-expand-icon {
+    transform: rotate(0deg);
+}
+
+.table-regions-section .table-region-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.table-regions-section .table-region-stats {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.table-field-count {
+    font-size: 11px;
+    color: var(--primary-color);
+    margin-right: auto;
+}
+
+.table-regions-section .table-region-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.table-regions-section .table-pending {
+    color: var(--warning-color);
+    font-size: 12px;
+}
+
+.table-regions-section .table-ready {
+    color: var(--success-color);
+    font-size: 14px;
+}
+
+.table-regions-section .btn-delete-region {
+    padding: 4px 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.table-regions-section .btn-delete-region:hover {
+    opacity: 1;
+}
+
+/* Table Fields List (when expanded) */
+.table-fields-list {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.table-fields-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.table-column-group {
+    margin-bottom: 6px;
+}
+
+.table-column-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.table-column-header .column-icon {
+    font-size: 12px;
+}
+
+.table-column-header .column-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.table-column-header .column-rows {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+/* Auto-calc note in replicate dialog */
+.auto-calc-note {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin: 8px 0 12px 0;
+    font-style: italic;
+}

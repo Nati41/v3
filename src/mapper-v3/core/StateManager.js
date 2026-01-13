@@ -1,11 +1,16 @@
 /**
  * StateManager - Single source of truth for all Mapper state
  * Immutable updates, history tracking, persistence
+ *
+ * V3.4: Added TemplateValidator integration for strict invariant enforcement
+ * V3.5: Added FillEngineExporter integration for enhanced exports
  */
 import { eventBus, Events } from './EventBus.js';
+import { TemplateValidator } from './TemplateValidator.js';
 import { canonicalSelector } from '../helpers/CanonicalSelector.js';
 import { UnifiedImportAdapter } from '../pre-mapper/UnifiedImportAdapter.js';
 import { SmartTableDetector } from '../pre-mapper/SmartTableDetector.js';
+import { exportForFillEngine, FILL_ENGINE_EXPORT_VERSION } from './FillEngineExporter.js';
 
 // Tool types
 export const Tools = {
@@ -14,6 +19,8 @@ export const Tools = {
     DRAW_CHECKBOX: 'draw_checkbox',
     DRAW_RADIO: 'draw_radio',
     DRAW_TABLE: 'draw_table',
+    DRAW_SIGNATURE: 'draw_signature',
+    DRAW_CELL: 'draw_cell',  // V3.10: Cell type - rectangular mark areas without size constraints
     PAN: 'pan',
     CAPTURE_NAME: 'capture_name'  // Field name capture tool
 };
@@ -36,6 +43,12 @@ export const RadioGroupSteps = {
     CLICK_CIRCLES: 'click_circles',  // Step 2: User clicks on radio circles (numbered ①②③)
     AUTO_DETECT: 'auto_detect',      // Step 3: System auto-detects labels near circles
     CONFIRM: 'confirm'               // Step 4: User reviews and confirms in dialog
+};
+
+// V3.10: Flow modes - switches between mapping and quick fill
+export const FlowModes = {
+    MAPPING: 'mapping',              // Normal mapping mode - creates fields
+    QUICK_FILL: 'quick_fill'         // Quick fill mode - draws boxes for direct text input
 };
 
 /**
@@ -109,7 +122,13 @@ function createInitialState() {
             field: 0,
             radioGroup: 0,
             table: 0
-        }
+        },
+
+        // V3.3: Template reference (when using AI template)
+        templateId: null,
+
+        // V3.10: Flow mode - mapping vs quick fill
+        flowMode: FlowModes.MAPPING
     };
 }
 
@@ -308,27 +327,57 @@ export class StateManager {
         // V3.2: Default status to 'complete' for backward compatibility
         const status = fieldData.status || 'complete';
 
+        // V3.4: Ensure page is set if bbox is provided (invariant enforcement)
+        const page = fieldData.page ?? (fieldData.bbox ? this.state.document.currentPage : null);
+
+        // V3.4: Sync isMapped with actual geometry
+        const hasGeometry = !!(fieldData.bbox || fieldData.anchor);
+        const isMapped = fieldData.isMapped !== undefined ? fieldData.isMapped : hasGeometry;
+
+        // V3.4: Sync status with isMapped (if mapped, can't be unmapped status)
+        let finalStatus = status;
+        if (isMapped && status === 'unmapped') {
+            finalStatus = 'mapped';
+        }
+
         const field = {
             id,
             type: 'text',
-            page: this.state.document.currentPage,
+            page: page,
             bbox: null,
             label_he: '',
             label_en: '',
-            isMapped: false,
+            isMapped: isMapped,
             // Semantic fields (V3)
             canonical: fieldData.canonical || null,
             context: context,  // Always set, defaults to 'employee'
             category: fieldData.category || null,
             format: fieldData.format || null,
             // V3.2 Draft flow fields
-            status: status,
+            status: finalStatus,
             detectedType: fieldData.detectedType || null,
             detectedStructure: fieldData.detectedStructure || null,
             ...fieldData,
-            context: context,  // Ensure context is always set even if spread overwrites
-            status: status    // Ensure status is always set
+            // V3.4: Force these values to ensure invariants
+            id: id,
+            page: page,
+            isMapped: isMapped,
+            context: context,
+            status: finalStatus
         };
+
+        // V3.4: Validate before adding
+        const validation = TemplateValidator.validateField(field, { allowUnmapped: true });
+        if (!validation.valid) {
+            console.error('[StateManager] addField blocked - invalid field:', validation.errors);
+            TemplateValidator.emitValidationError(field, validation.errors, 'addField');
+            return null;
+        }
+
+        // Log warnings but don't block
+        if (validation.warnings.length > 0) {
+            console.warn('[StateManager] addField warnings:', validation.warnings);
+        }
 
         const newFields = [...this.state.fields, field];
         this.set('fields', newFields, true);
@@ -394,12 +443,56 @@ export class StateManager {
      * @param {Object} updates - Updates to apply
      * @param {boolean} addToHistory - Whether to add to history (default: true)
      *        Set to false for two-phase mapping to keep operations as single undo
+     *
+     * V3.4: Added validation gate - rejects updates that would create invalid state
      */
     updateField(fieldId, updates, addToHistory = true) {
         const index = this.state.fields.findIndex(f => f.id === fieldId);
         if (index === -1) return null;
 
-        const updatedField = { ...this.state.fields[index], ...updates };
+        const existingField = this.state.fields[index];
+
+        // V3.4: INVARIANT ENFORCEMENT
+        // If setting bbox, ensure page is also set
+        let enrichedUpdates = { ...updates };
+        if (updates.bbox != null && updates.page === undefined && existingField.page == null) {
+            // Auto-set page to current page (critical fix for template mapping)
+            enrichedUpdates.page = this.state.document.currentPage;
+            console.log(`[StateManager] V3.4: Auto-setting page=${enrichedUpdates.page} for field ${fieldId}`);
+        }
+
+        // V3.4: Sync isMapped with geometry
+        if (enrichedUpdates.bbox != null || enrichedUpdates.anchor != null) {
+            const hasBbox = enrichedUpdates.bbox ?? existingField.bbox;
+            const hasAnchor = enrichedUpdates.anchor ?? existingField.anchor;
+            if (hasBbox || hasAnchor) {
+                enrichedUpdates.isMapped = true;
+            }
+        }
+
+        // V3.4: Sync status with isMapped
+        if (enrichedUpdates.isMapped === true) {
+            const currentStatus = enrichedUpdates.status ?? existingField.status;
+            if (currentStatus === 'unmapped') {
+                enrichedUpdates.status = 'mapped';
+            }
+        }
+
+        const updatedField = { ...existingField, ...enrichedUpdates };
+
+        // V3.4: Validate merged result
+        const validation = TemplateValidator.validateField(updatedField, { allowUnmapped: false });
+        if (!validation.valid) {
+            console.error('[StateManager] updateField blocked - invalid state:', validation.errors);
+            TemplateValidator.emitValidationError(updatedField, validation.errors, 'updateField');
+            return null;
+        }
+
+        // Log warnings but don't block
+        if (validation.warnings.length > 0) {
+            console.warn('[StateManager] updateField warnings:', validation.warnings);
+        }
+
         const newFields = [...this.state.fields];
         newFields[index] = updatedField;
 
@@ -557,6 +650,138 @@ export class StateManager {
         this.batch(updates, true);
 
         console.log(`[StateManager] Batch marked ${fieldUpdates.length} fields as reviewed`);
+    }
+
+    // ============ V3.3 TEMPLATE INTEGRATION ============
+
+    /**
+     * Import fields from a loaded template
+     * Creates field stubs with isMapped=false that link to template definitions
+     * V3.5: Refactored to use single history entry for entire import
+     * @param {Object} templateStore - TemplateStore instance with loaded template
+     * @returns {Array} Created field stubs
+     */
+    importTemplateFields(templateStore) {
+        if (!templateStore || !templateStore.isLoaded()) {
+            console.warn('[StateManager] No template loaded in TemplateStore');
+            return [];
+        }
+
+        const templateFields = templateStore.getFields();
+        const createdFields = [];
+
+        // V3.5: Create all fields first WITHOUT adding to history
+        for (const tplField of templateFields) {
+            const id = `fld_${++this.state.counters.field}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+
+            const field = {
+                id,
+                type: tplField.type || 'text',
+                page: null,  // No page until mapped
+                bbox: null,  // No bbox until mapped
+                isMapped: false,
+                label_he: tplField.label_he,
+                label_en: tplField.label_en,
+                // V3.4: Support flat format 'name' field as English identifier
+                name: tplField.name || null,
+                // Template linkage (V3.3)
+                templateFieldId: tplField.template_field_id,
+                canonical: tplField.canonical,
+                entity_id: tplField.entity_id,
+                instance: tplField.instance || null,
+                duplicateGroup: tplField.duplicateGroup || null,
+                status: 'unmapped',
+                // Carry over hints
+                renderHint: tplField.renderHint,
+                required: tplField.required,
+                validations: tplField.validations
+            };
+
+            createdFields.push(field);
+        }
+
+        // V3.5: Add all fields at once as SINGLE history entry
+        const newFields = [...this.state.fields, ...createdFields];
+        this.set('fields', newFields, true);  // Single history entry for all fields
+
+        // Update templateId in state (no history for this)
+        this.set('templateId', templateStore.templateId);
+
+        // Emit events for each field (for UI updates)
+        createdFields.forEach(field => {
+            eventBus.emit(Events.FIELD_CREATED, field);
+        });
+
+        console.log(`[StateManager] Imported ${createdFields.length} fields from template (single undo)`);
+        return createdFields;
+    }
+
+    /**
+     * Get field by template field ID
+     * @param {string} templateFieldId - Template field ID
+     * @returns {Object|null} Field object or null
+     */
+    getFieldByTemplateId(templateFieldId) {
+        return this.state.fields.find(f => f.templateFieldId === templateFieldId) || null;
+    }
+
+    /**
+     * Get all unmapped template fields
+     * @returns {Array} Fields with status='unmapped' and templateFieldId
+     */
+    getUnmappedTemplateFields() {
+        return this.state.fields.filter(f =>
+            f.templateFieldId && (f.status === 'unmapped' || !f.isMapped)
+        );
+    }
+
+    /**
+     * Get ALL unmapped fields (regardless of templateFieldId)
+     * Used for auto-advance in JSON import mode
+     * @returns {Array} All fields that are not mapped (no bbox/position)
+     */
+    getAllUnmappedFields() {
+        return this.state.fields.filter(f =>
+            !f.isMapped &&
+            !f.groupId &&  // Exclude group members
+            !f._groupBuilding  // Exclude fields being built
+        );
+    }
+
+    /**
+     * Batch update multiple fields atomically (single history entry)
+     * Used for batch mapping of duplicate fields
+     * @param {Array} updates - Array of { fieldId, ...updates }
+     * @returns {Array} Updated fields
+     */
+    batchUpdateFields(updates) {
+        if (!updates || updates.length === 0) return [];
+
+        const newFields = [...this.state.fields];
+        const updatedFields = [];
+
+        for (const { fieldId, ...data } of updates) {
+            const index = newFields.findIndex(f => f.id === fieldId);
+            if (index !== -1) {
+                newFields[index] = {
+                    ...newFields[index],
+                    ...data
+                };
+                updatedFields.push(newFields[index]);
+            }
+        }
+
+        // Single history entry for entire batch
+        this.set('fields', newFields, true);
+
+        console.log(`[StateManager] Batch updated ${updatedFields.length} fields`);
+
+        // Emit events for each updated field
+        updatedFields.forEach(field => {
+            eventBus.emit(Events.FIELD_UPDATED, field);
+        });
+
+        return updatedFields;
     }
 
     // ============ SELECTION ============
@@ -1075,6 +1300,37 @@ export class StateManager {
         eventBus.emit(Events.MODE_CHANGED, { mode, oldMode });
     }
 
+    // ============ FLOW MODE (V3.10) ============
+
+    /**
+     * Set flow mode (mapping vs quick fill)
+     * @param {string} flowMode - FlowModes.MAPPING or FlowModes.QUICK_FILL
+     */
+    setFlowMode(flowMode) {
+        if (this.state.flowMode === flowMode) return;
+        const oldFlowMode = this.state.flowMode;
+        this.set('flowMode', flowMode);
+        const isQuickFill = flowMode === FlowModes.QUICK_FILL;
+        eventBus.emit(Events.QUICK_FILL_MODE_CHANGED, { active: isQuickFill, oldFlowMode });
+        console.log(`[StateManager] Flow mode changed: ${oldFlowMode} → ${flowMode}`);
+    }
+
+    /**
+     * Get current flow mode
+     * @returns {string} Current flow mode
+     */
+    getFlowMode() {
+        return this.state.flowMode || FlowModes.MAPPING;
+    }
+
+    /**
+     * Check if in quick fill mode
+     * @returns {boolean}
+     */
+    isQuickFillMode() {
+        return this.state.flowMode === FlowModes.QUICK_FILL;
+    }
+
     // ============ HISTORY (UNDO/REDO) ============
     //
     // SIMPLE MODEL:
@@ -1174,8 +1430,25 @@ export class StateManager {
     /**
      * Export only mapped fields (for V2 compatibility / production export)
      * Only includes fields that have been mapped (have coordinates)
+     * V3.5: Enhanced with fill engine compatible format
+     *
+     * @param {Object} options - Export options
+     * @param {boolean} options.fillEngineFormat - Use fill engine format with semantic hints (default: true)
+     * @returns {Object} Export data
      */
-    exportMappedFields() {
+    exportMappedFields(options = {}) {
+        const { fillEngineFormat = true } = options;
+
+        // V3.5: Use FillEngineExporter for enhanced output
+        if (fillEngineFormat) {
+            try {
+                return exportForFillEngine({ includeUnmapped: false, enrichFromTemplate: true });
+            } catch (e) {
+                console.warn('[StateManager] FillEngineExporter failed, falling back to legacy format:', e);
+            }
+        }
+
+        // Legacy export format (fallback)
         // Filter only mapped fields
         const mappedFields = this.state.fields.filter(f => f.isMapped);
 
@@ -1273,8 +1546,9 @@ export class StateManager {
             return tableCopy;
         });
 
-        return {
-            version: '3.0',
+        // V3.3: Include template metadata if present
+        const exportData = {
+            version: '3.3',
             exportedAt: new Date().toISOString(),
             document: this.state.document,
             fields: cleanedFields,
@@ -1286,6 +1560,13 @@ export class StateManager {
                 unmappedFields: this.state.fields.length - mappedFields.length
             }
         };
+
+        // Add template reference if using template
+        if (this.state.templateId) {
+            exportData.templateId = this.state.templateId;
+        }
+
+        return exportData;
     }
 
     /**
@@ -1344,6 +1625,19 @@ export class StateManager {
             throw new Error('Invalid state data: unrecognized format');
         }
 
+        // ============ V3.9: COLLAPSE REPEATING FIELDS ============
+        // Detect patterns like child1_name, child2_name... and collapse to single representative
+        const originalCount = fieldsToImport.length;
+        fieldsToImport = this._collapseRepeatingFields(fieldsToImport);
+
+        if (fieldsToImport.length < originalCount) {
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: `קופלו ${originalCount - fieldsToImport.length} שדות כפולים`,
+                type: 'info',
+                duration: 3000
+            });
+        }
+
         // ============ APPLY IMPORT ============
 
         this.batch({
@@ -1353,15 +1647,17 @@ export class StateManager {
             'settings': { ...this.state.settings, ...(data.settings || {}) }
         }, false);
 
-        console.log(`[StateManager] Imported: ${fieldsToImport.length} fields, ${radioGroupsToImport.length} radioGroups, ${tablesToImport.length} tables`);
+        console.log(`[StateManager] Imported: ${fieldsToImport.length} fields (collapsed from ${originalCount}), ${radioGroupsToImport.length} radioGroups, ${tablesToImport.length} tables`);
         console.log(`[StateManager] After import - state.tables:`, this.state.tables);
         eventBus.emit(Events.PROJECT_LOAD, data);
 
-        // Smart Table Detection: Scan imported fields for repeating patterns
-        // Run after a short delay to let UI update first
-        setTimeout(() => {
-            this._detectSmartTablesFromFields(fieldsToImport);
-        }, 100);
+        // V3.9: Smart Table Detection DISABLED
+        // The detection was converting pre-expanded fields (child1_name, child2_name...)
+        // into tables unnecessarily. Users should use "Duplicate × N" feature instead.
+        // To re-enable, uncomment the block below:
+        // setTimeout(() => {
+        //     this._detectSmartTablesFromFields(fieldsToImport);
+        // }, 100);
     }
 
     /**
@@ -1373,7 +1669,7 @@ export class StateManager {
      * @returns {Object} Import statistics
      */
     importUnifiedJson(unifiedJson) {
-        console.log('[StateManager] Importing Unified JSON...');
+        console.log('[StateManager] ⭐ importUnifiedJson called with', unifiedJson?.fields?.length, 'fields');
 
         // Validate schema
         const validation = UnifiedImportAdapter.validate(unifiedJson);
@@ -1383,7 +1679,23 @@ export class StateManager {
         }
 
         // Parse and normalize using the adapter
-        const { fields, groups, tables, stats } = UnifiedImportAdapter.import(unifiedJson);
+        let { fields, groups, tables, stats } = UnifiedImportAdapter.import(unifiedJson);
+
+        // V3.9: Collapse repeating fields (child1_name, child2_name... → single representative)
+        const originalFieldCount = fields.length;
+        fields = this._collapseRepeatingFields(fields);
+
+        if (fields.length < originalFieldCount) {
+            const collapsedCount = originalFieldCount - fields.length;
+            console.log(`[StateManager] Collapsed ${collapsedCount} repeating fields`);
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: `קופלו ${collapsedCount} שדות כפולים`,
+                type: 'info',
+                duration: 3000
+            });
+            // Update stats
+            stats.fieldsImported = fields.length;
+        }
 
         // Merge with existing state (append, don't replace)
         const newFields = [...this.state.fields, ...fields];
@@ -1407,11 +1719,11 @@ export class StateManager {
             type: 'success'
         });
 
-        // Smart Table Detection: Scan imported fields for repeating patterns
-        // Run after a short delay to let UI update first
-        setTimeout(() => {
-            this._detectSmartTablesFromFields(fields);
-        }, 100);
+        // V3.9: Smart Table Detection DISABLED
+        // See comment in importProjectData() for details
+        // setTimeout(() => {
+        //     this._detectSmartTablesFromFields(fields);
+        // }, 100);
 
         return stats;
     }
@@ -1561,6 +1873,103 @@ export class StateManager {
             rows: t.rows || [],
             isComplete: t.isComplete !== false
         }));
+    }
+
+    /**
+     * V3.9: Collapse repeating fields into unique representatives
+     * Detects patterns like child1_name, child2_name... and keeps only one
+     * Stores the row count as metadata for Duplicate × N feature
+     *
+     * @param {Array} fields - Array of fields to collapse
+     * @returns {Array} Collapsed fields with _repeatCount metadata
+     */
+    _collapseRepeatingFields(fields) {
+        console.log('[StateManager] 🔄 _collapseRepeatingFields called with', fields?.length, 'fields');
+
+        if (!fields || fields.length === 0) return fields;
+
+        // Pattern: prefix + number + suffix (e.g., child1_name, child2_name)
+        // Also handles: name_1, name_2 or name1, name2
+        const patterns = [
+            /^(.+?)(\d+)(.*)$/,      // child1_name → child, 1, _name
+            /^(.+?)_(\d+)$/,          // name_1 → name_, 1, ""
+            /^(\d+)_(.+)$/            // 1_name → "", 1, _name (less common)
+        ];
+
+        const groups = new Map(); // base → { fields: [], maxNum: 0 }
+
+        fields.forEach((field, idx) => {
+            const name = field.label_en || field.name || field.id;
+            if (idx < 5) console.log(`[StateManager] Field ${idx}: label_en="${field.label_en}", name="${field.name}", using="${name}"`);
+            let matched = false;
+
+            for (const pattern of patterns) {
+                const match = name.match(pattern);
+                if (match) {
+                    // Build base key (without the number)
+                    let baseKey;
+                    if (pattern === patterns[2]) {
+                        // Pattern: 1_name
+                        baseKey = match[2];
+                    } else {
+                        // Pattern: child1_name or name_1
+                        baseKey = match[1] + (match[3] || '');
+                    }
+
+                    const num = parseInt(match[2] || match[1]);
+
+                    if (!groups.has(baseKey)) {
+                        groups.set(baseKey, { fields: [], maxNum: 0, nums: new Set() });
+                    }
+
+                    const group = groups.get(baseKey);
+                    group.fields.push(field);
+                    group.nums.add(num);
+                    group.maxNum = Math.max(group.maxNum, num);
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                // No pattern match - treat as unique field with key = id
+                groups.set(field.id, { fields: [field], maxNum: 1, nums: new Set([1]) });
+            }
+        });
+
+        // Now collapse: keep first field from each group, add _repeatCount
+        const collapsed = [];
+        const collapsedInfo = [];
+
+        groups.forEach((group, baseKey) => {
+            if (group.fields.length > 1 && group.nums.size > 1) {
+                // This is a repeating pattern - keep first, add count
+                const representative = { ...group.fields[0] };
+                representative._repeatCount = group.nums.size;
+                representative._repeatMax = group.maxNum;
+                representative._collapsedFrom = group.fields.map(f => f.id);
+
+                // Clean up the label to show base name
+                // e.g., "שם ילד 1" → "שם ילד"
+                if (representative.label_he) {
+                    representative.label_he = representative.label_he.replace(/\s*\d+\s*$/, '').trim();
+                }
+
+                collapsed.push(representative);
+                collapsedInfo.push(`${baseKey}: ${group.nums.size} instances collapsed`);
+            } else {
+                // Single field or no repeating pattern - keep as is
+                collapsed.push(group.fields[0]);
+            }
+        });
+
+        if (collapsedInfo.length > 0) {
+            console.log(`[StateManager] Collapsed repeating fields:`);
+            collapsedInfo.forEach(info => console.log(`  - ${info}`));
+            console.log(`[StateManager] ${fields.length} fields → ${collapsed.length} unique fields`);
+        }
+
+        return collapsed;
     }
 
     /**

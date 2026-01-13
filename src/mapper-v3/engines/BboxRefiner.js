@@ -38,6 +38,14 @@ import { autoBoxer } from './AutoBoxer.js';
 import { REFINER_CONFIG, REFINER_VERSION } from './RefinerConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V3.9: DEBUG MODE - Disable verbose logging to prevent browser crash
+// Enable via console: window.BBOXREFINER_DEBUG = true
+// ═══════════════════════════════════════════════════════════════════════════
+const DEBUG = () => typeof window !== 'undefined' && window.BBOXREFINER_DEBUG;
+const log = (...args) => { if (DEBUG()) console.log(...args); };
+const warn = (...args) => { if (DEBUG()) console.warn(...args); };
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MODULE VERSION - Must match RefinerConfig version
 // ═══════════════════════════════════════════════════════════════════════════
 const MODULE_VERSION = '1.0.0';
@@ -56,6 +64,11 @@ export class BboxRefiner {
         this._floorY = null;
         this._problemType = null;
         this._neighborBboxes = [];  // Previous fields for alignment
+
+        // V3.2: Wall cycling state
+        this._currentCandidateIndex = { left: 0, right: 0, top: 0, bottom: 0 };
+        this._hardLimits = { left: 0, right: Infinity, top: 0, bottom: Infinity };
+        this._floorBounds = null;  // { leftExtent, rightExtent } from floor detection
     }
 
     /**
@@ -75,6 +88,9 @@ export class BboxRefiner {
     async initFromClick(clickX, clickY) {
         this._clickPoint = { x: clickX, y: clickY };
 
+        // V3.2: Pass neighbor fields to AutoBoxer so it treats them as walls
+        autoBoxer.setNeighborFields(this._neighborBboxes);
+
         // Get initial bbox from AutoBoxer
         const initialBbox = await autoBoxer.computeBbox(clickX, clickY);
 
@@ -89,7 +105,7 @@ export class BboxRefiner {
         this._problemType = await this._detectProblemType(clickX, clickY, initialBbox);
         this._candidates = await this._generateCandidates(clickX, clickY, initialBbox);
 
-        console.log('[BboxRefiner] Initialized:', {
+        log('[BboxRefiner] Initialized:', {
             bbox: this._currentBbox,
             problemType: this._problemType,
             candidates: {
@@ -117,13 +133,13 @@ export class BboxRefiner {
      */
     async refine(clickX, clickY) {
         if (!this._currentBbox) {
-            console.warn('[BboxRefiner] No active bbox to refine');
+            warn('[BboxRefiner] No active bbox to refine');
             return null;
         }
 
         const analysis = this._analyzeClickPosition(clickX, clickY, this._currentBbox);
 
-        console.log('[BboxRefiner] Click analysis:', analysis);
+        log('[BboxRefiner] Click analysis:', analysis);
 
         // Center click = no action
         if (analysis.type === 'CENTER') {
@@ -174,17 +190,27 @@ export class BboxRefiner {
 
     /**
      * Move edge TO the click point (respecting text AND field boundaries)
+     * V3.10: Added page bounds checking to prevent expanding beyond PDF
      */
     async _moveEdgeToClickPoint(edge, clickX, clickY) {
         const bbox = { ...this._currentBbox };
         const floorY = bbox.y + bbox.height;
         const MIN_SIZE = 20;
 
+        // V3.10: Get page bounds from overlay layer
+        const overlayLayer = document.getElementById('overlay-layer');
+        const pageWidth = overlayLayer?.offsetWidth || 1000;
+        const pageHeight = overlayLayer?.offsetHeight || 1000;
+        const PAGE_MARGIN = 5; // Small margin from edge
+
         let targetPos, textBoundary, fieldBoundary, newPos;
 
         switch (edge) {
             case 'left':
                 targetPos = clickX;
+                // V3.10: Clamp to page bounds
+                targetPos = Math.max(targetPos, PAGE_MARGIN);
+
                 if (targetPos < bbox.x) {
                     // Expanding left - check for text AND existing fields
                     textBoundary = await autoBoxer.findTextBoundaryX(bbox.x, targetPos, floorY, 'left');
@@ -207,6 +233,9 @@ export class BboxRefiner {
 
             case 'right':
                 targetPos = clickX;
+                // V3.10: Clamp to page bounds
+                targetPos = Math.min(targetPos, pageWidth - PAGE_MARGIN);
+
                 if (targetPos > bbox.x + bbox.width) {
                     // Expanding right - check for text AND existing fields
                     textBoundary = await autoBoxer.findTextBoundaryX(bbox.x + bbox.width, targetPos, floorY, 'right');
@@ -227,6 +256,9 @@ export class BboxRefiner {
 
             case 'top':
                 targetPos = clickY;
+                // V3.10: Clamp to page bounds
+                targetPos = Math.max(targetPos, PAGE_MARGIN);
+
                 if (targetPos < bbox.y) {
                     // Expanding up - check for text AND existing fields
                     textBoundary = await autoBoxer.findTextBoundaryY(bbox.y, targetPos, bbox.x, bbox.x + bbox.width, 'up');
@@ -249,6 +281,9 @@ export class BboxRefiner {
 
             case 'bottom':
                 targetPos = clickY;
+                // V3.10: Clamp to page bounds
+                targetPos = Math.min(targetPos, pageHeight - PAGE_MARGIN);
+
                 if (targetPos > bbox.y + bbox.height) {
                     // Expanding down - check for text AND existing fields
                     textBoundary = await autoBoxer.findTextBoundaryY(bbox.y + bbox.height, targetPos, bbox.x, bbox.x + bbox.width, 'down');
@@ -274,12 +309,14 @@ export class BboxRefiner {
     /**
      * Adjust initial bbox to not overlap with existing fields
      * Shrinks the bbox if it would overlap any neighbor
+     * V3.3: Returns null if complete overlap cannot be resolved
      */
     _adjustForExistingFields(bbox) {
-        console.log('[BboxRefiner] Checking overlap with', this._neighborBboxes.length, 'existing fields');
+        log('[BboxRefiner] Checking overlap with', this._neighborBboxes.length, 'existing fields');
         if (this._neighborBboxes.length === 0) return bbox;
 
         const PADDING = 2;
+        const MIN_SIZE = 15;  // V3.3: Minimum dimension after adjustment
         let adjusted = { ...bbox };
         let wasAdjusted = false;
 
@@ -291,7 +328,20 @@ export class BboxRefiner {
             const overlapBottom = adjusted.y + adjusted.height > field.y;
 
             const hasOverlap = overlapLeft && overlapRight && overlapTop && overlapBottom;
-            console.log('[BboxRefiner] Field check:', {
+
+            // V3.3: Check for complete overlap (bbox entirely inside existing field)
+            const isCompletelyInside =
+                adjusted.x >= field.x &&
+                adjusted.x + adjusted.width <= field.x + field.width &&
+                adjusted.y >= field.y &&
+                adjusted.y + adjusted.height <= field.y + field.height;
+
+            if (isCompletelyInside) {
+                log('[BboxRefiner] ❌ Bbox is completely inside existing field - cannot create');
+                return null;  // V3.3: Block creation instead of allowing overlap
+            }
+
+            log('[BboxRefiner] Field check:', {
                 field, adjusted,
                 checks: { overlapLeft, overlapRight, overlapTop, overlapBottom },
                 hasOverlap
@@ -306,24 +356,36 @@ export class BboxRefiner {
                 const fieldCenterX = field.x + field.width / 2;
                 const fieldCenterY = field.y + field.height / 2;
 
+                // V3.3: Calculate overlap amounts for smarter adjustment
+                const overlapAmountLeft = (field.x + field.width) - adjusted.x;
+                const overlapAmountRight = (adjusted.x + adjusted.width) - field.x;
+                const overlapAmountTop = (field.y + field.height) - adjusted.y;
+                const overlapAmountBottom = (adjusted.y + adjusted.height) - field.y;
+
                 // If click is to the right of field center, shrink left edge
                 // If click is to the left of field center, shrink right edge
                 if (clickX > fieldCenterX) {
                     // Our click is to the right - field is to our left
                     // Shrink our left edge to not overlap
                     const newLeft = field.x + field.width + PADDING;
-                    if (newLeft > adjusted.x && newLeft < adjusted.x + adjusted.width - 20) {
-                        adjusted.width -= (newLeft - adjusted.x);
+                    const newWidth = adjusted.x + adjusted.width - newLeft;
+                    if (newWidth >= MIN_SIZE) {
+                        adjusted.width = newWidth;
                         adjusted.x = newLeft;
                         wasAdjusted = true;
+                    } else {
+                        log('[BboxRefiner] ⚠️ Cannot shrink left - would be too small');
                     }
                 } else {
                     // Our click is to the left - field is to our right
                     // Shrink our right edge to not overlap
                     const newRight = field.x - PADDING;
-                    if (newRight < adjusted.x + adjusted.width && newRight > adjusted.x + 20) {
-                        adjusted.width = newRight - adjusted.x;
+                    const newWidth = newRight - adjusted.x;
+                    if (newWidth >= MIN_SIZE) {
+                        adjusted.width = newWidth;
                         wasAdjusted = true;
+                    } else {
+                        log('[BboxRefiner] ⚠️ Cannot shrink right - would be too small');
                     }
                 }
 
@@ -331,24 +393,44 @@ export class BboxRefiner {
                 if (clickY > fieldCenterY) {
                     // Our click is below - field is above
                     const newTop = field.y + field.height + PADDING;
-                    if (newTop > adjusted.y && newTop < adjusted.y + adjusted.height - 20) {
-                        adjusted.height -= (newTop - adjusted.y);
+                    const newHeight = adjusted.y + adjusted.height - newTop;
+                    if (newHeight >= MIN_SIZE) {
+                        adjusted.height = newHeight;
                         adjusted.y = newTop;
                         wasAdjusted = true;
+                    } else {
+                        log('[BboxRefiner] ⚠️ Cannot shrink top - would be too small');
                     }
                 } else {
                     // Our click is above - field is below
                     const newBottom = field.y - PADDING;
-                    if (newBottom < adjusted.y + adjusted.height && newBottom > adjusted.y + 20) {
-                        adjusted.height = newBottom - adjusted.y;
+                    const newHeight = newBottom - adjusted.y;
+                    if (newHeight >= MIN_SIZE) {
+                        adjusted.height = newHeight;
                         wasAdjusted = true;
+                    } else {
+                        log('[BboxRefiner] ⚠️ Cannot shrink bottom - would be too small');
                     }
                 }
             }
         }
 
+        // V3.3: Final check - if still overlapping after all adjustments, block creation
+        for (const field of this._neighborBboxes) {
+            const stillOverlaps =
+                adjusted.x < field.x + field.width &&
+                adjusted.x + adjusted.width > field.x &&
+                adjusted.y < field.y + field.height &&
+                adjusted.y + adjusted.height > field.y;
+
+            if (stillOverlaps) {
+                log('[BboxRefiner] ❌ Could not resolve overlap - blocking creation');
+                return null;
+            }
+        }
+
         if (wasAdjusted) {
-            console.log('[BboxRefiner] Adjusted initial bbox to avoid field overlap:', adjusted);
+            log('[BboxRefiner] Adjusted initial bbox to avoid field overlap:', adjusted);
         }
 
         return adjusted;
@@ -462,6 +544,168 @@ export class BboxRefiner {
         this._clickPoint = null;
         this._floorY = null;
         this._problemType = null;
+
+        // V3.2: Reset cycling state
+        this._currentCandidateIndex = { left: 0, right: 0, top: 0, bottom: 0 };
+        this._hardLimits = { left: 0, right: Infinity, top: 0, bottom: Infinity };
+        this._floorBounds = null;
+    }
+
+    // ==================== V3.2: WALL CYCLING ====================
+
+    /**
+     * Cycle to the next wall candidate for a given edge
+     * @param {string} edge - 'left', 'right', 'top', or 'bottom'
+     * @returns {Object|null} { bbox, action, message } or null if can't cycle
+     */
+    cycleWall(edge) {
+        if (!this._currentBbox || !this._candidates) {
+            warn('[BboxRefiner] No active bbox to cycle');
+            return null;
+        }
+
+        const candidates = this._candidates[edge];
+        if (!candidates || candidates.length === 0) {
+            return { bbox: this._currentBbox, action: 'none', message: 'אין מועמדים' };
+        }
+
+        const currentIndex = this._currentCandidateIndex[edge];
+        const nextIndex = currentIndex + 1;
+
+        // Check if we've reached the end of candidates
+        if (nextIndex >= candidates.length) {
+            console.log(`[BboxRefiner] cycleWall ${edge}: Already at last candidate`);
+            return { bbox: this._currentBbox, action: 'none', message: 'הגעת לקיר האחרון' };
+        }
+
+        const nextCandidate = candidates[nextIndex];
+
+        // Check if next candidate exceeds hard limit
+        if (this._exceedsHardLimit(edge, nextCandidate.value)) {
+            console.log(`[BboxRefiner] cycleWall ${edge}: Next candidate exceeds hard limit`);
+            return { bbox: this._currentBbox, action: 'blocked', message: 'חסום ע"י קיר קשיח' };
+        }
+
+        // Apply the candidate
+        this._currentCandidateIndex[edge] = nextIndex;
+        const newBbox = this._applyCandidate(edge, nextCandidate);
+
+        console.log(`[BboxRefiner] cycleWall ${edge}: Moved to candidate ${nextIndex} (${nextCandidate.type})`);
+
+        return {
+            bbox: newBbox,
+            action: 'cycle',
+            edge: edge,
+            candidate: nextCandidate,
+            message: nextCandidate.description
+        };
+    }
+
+    /**
+     * Cycle back to the previous wall candidate for a given edge
+     * @param {string} edge - 'left', 'right', 'top', or 'bottom'
+     * @returns {Object|null} { bbox, action, message } or null if can't cycle
+     */
+    cycleWallBack(edge) {
+        if (!this._currentBbox || !this._candidates) {
+            warn('[BboxRefiner] No active bbox to cycle');
+            return null;
+        }
+
+        const candidates = this._candidates[edge];
+        if (!candidates || candidates.length === 0) {
+            return { bbox: this._currentBbox, action: 'none', message: 'אין מועמדים' };
+        }
+
+        const currentIndex = this._currentCandidateIndex[edge];
+
+        // Check if we're already at the first candidate
+        if (currentIndex <= 0) {
+            console.log(`[BboxRefiner] cycleWallBack ${edge}: Already at first candidate`);
+            return { bbox: this._currentBbox, action: 'none', message: 'הגעת לקיר הראשון' };
+        }
+
+        const prevIndex = currentIndex - 1;
+        const prevCandidate = candidates[prevIndex];
+
+        // Apply the candidate
+        this._currentCandidateIndex[edge] = prevIndex;
+        const newBbox = this._applyCandidate(edge, prevCandidate);
+
+        console.log(`[BboxRefiner] cycleWallBack ${edge}: Moved to candidate ${prevIndex} (${prevCandidate.type})`);
+
+        return {
+            bbox: newBbox,
+            action: 'cycle_back',
+            edge: edge,
+            candidate: prevCandidate,
+            message: prevCandidate.description
+        };
+    }
+
+    /**
+     * Check if a value exceeds the hard limit for an edge
+     */
+    _exceedsHardLimit(edge, value) {
+        switch (edge) {
+            case 'left':
+                return value < this._hardLimits.left;
+            case 'right':
+                return value > this._hardLimits.right;
+            case 'top':
+                return value < this._hardLimits.top;
+            case 'bottom':
+                return value > this._hardLimits.bottom;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Apply a candidate to the current bbox
+     */
+    _applyCandidate(edge, candidate) {
+        const bbox = { ...this._currentBbox };
+
+        switch (edge) {
+            case 'left':
+                const deltaLeft = bbox.x - candidate.value;
+                bbox.x = candidate.value;
+                bbox.width += deltaLeft;
+                break;
+            case 'right':
+                bbox.width = candidate.value - bbox.x;
+                break;
+            case 'top':
+                const deltaTop = bbox.y - candidate.value;
+                bbox.y = candidate.value;
+                bbox.height += deltaTop;
+                break;
+            case 'bottom':
+                bbox.height = candidate.value - bbox.y;
+                break;
+        }
+
+        this._currentBbox = bbox;
+        return bbox;
+    }
+
+    /**
+     * Get current candidate info for an edge (for UI display)
+     */
+    getCandidateInfo(edge) {
+        if (!this._candidates || !this._candidates[edge]) return null;
+
+        const candidates = this._candidates[edge];
+        const currentIndex = this._currentCandidateIndex[edge];
+
+        return {
+            current: candidates[currentIndex],
+            currentIndex,
+            total: candidates.length,
+            hasNext: currentIndex < candidates.length - 1,
+            hasPrev: currentIndex > 0
+        };
     }
 
     // ==================== PROBLEM DETECTION ====================
@@ -565,52 +809,55 @@ export class BboxRefiner {
         const candidates = [];
         const floorY = bbox.y + bbox.height;
 
-        // Candidate 0: Current (first wall found)
+        // V3.2: ALWAYS add current position as candidate[0]
+        // This ensures cycling starts from current and goes to next wall
         candidates.push({
-            type: 'FIRST_WALL',
+            type: 'CURRENT',
             value: bbox.x,
-            description: 'קיר ראשון'
+            description: 'מיקום נוכחי',
+            isHard: false
         });
 
-        // Candidate 1: Skip small obstacles (for "/" etc.)
-        // Find next wall that's taller than MIN_HEIGHT
-        const skipObstacleX = this._findWallSkippingSmall(clickX, floorY, 'left');
-        if (skipObstacleX !== null && skipObstacleX < bbox.x) {
+        // V3.2: Use AutoBoxer's findAllWalls to get all candidates with hard/soft classification
+        const { walls, hardLimit } = autoBoxer.findAllWalls(clickX, floorY, 'left', this._floorBounds);
+
+        // Store hard limit
+        this._hardLimits.left = hardLimit;
+
+        // Add walls as candidates
+        for (const wall of walls) {
+            // Skip walls beyond the current bbox (we're looking for walls to expand TO)
+            if (wall.x >= bbox.x) continue;
+
             candidates.push({
-                type: 'SKIP_OBSTACLES',
-                value: skipObstacleX,
-                description: 'דילוג על מכשולים קטנים'
+                type: wall.type,
+                value: wall.x,
+                description: wall.description,
+                isHard: wall.isHard
             });
         }
 
-        // Candidate 2: Align to neighbor above/below
+        // Add neighbor alignment if available
         const neighborX = this._findNeighborAlignment('left');
-        if (neighborX !== null) {
+        if (neighborX !== null && neighborX < bbox.x) {
             candidates.push({
                 type: 'ALIGN_NEIGHBOR',
                 value: neighborX,
-                description: 'יישור לשדה שכן'
+                description: 'יישור לשדה שכן',
+                isHard: false
             });
         }
 
-        // Candidate 3: Expand to white space
-        const whiteSpaceX = this._findWhiteSpaceEdge(clickX, floorY, 'left');
-        if (whiteSpaceX !== null) {
-            candidates.push({
-                type: 'WHITE_SPACE',
-                value: whiteSpaceX,
-                description: 'הרחבה לשטח לבן'
-            });
-        }
+        // Sort by distance from current edge (closest first), but keep CURRENT at index 0
+        const currentCandidate = candidates[0];
+        const otherCandidates = candidates.slice(1);
+        otherCandidates.sort((a, b) => (bbox.x - a.value) - (bbox.x - b.value));
 
-        // Candidate 4: Page edge
-        candidates.push({
-            type: 'PAGE_EDGE',
-            value: 0,
-            description: 'קצה הדף'
-        });
+        const result = [currentCandidate, ...otherCandidates];
 
-        return candidates;
+        console.log(`[BboxRefiner] Left candidates: ${result.length}`, result.map(c => `${c.type}:${Math.round(c.value)}`));
+
+        return result;
     }
 
     _generateRightCandidates(clickX, clickY, bbox) {
@@ -618,52 +865,55 @@ export class BboxRefiner {
         const floorY = bbox.y + bbox.height;
         const bboxRight = bbox.x + bbox.width;
 
-        // Candidate 0: Current
+        // V3.2: ALWAYS add current position as candidate[0]
+        // This ensures cycling starts from current and goes to next wall
         candidates.push({
-            type: 'FIRST_WALL',
+            type: 'CURRENT',
             value: bboxRight,
-            description: 'קיר ראשון'
+            description: 'מיקום נוכחי',
+            isHard: false
         });
 
-        // Candidate 1: Skip small obstacles
-        const skipObstacleX = this._findWallSkippingSmall(clickX, floorY, 'right');
-        if (skipObstacleX !== null && skipObstacleX > bboxRight) {
+        // V3.2: Use AutoBoxer's findAllWalls to get all candidates with hard/soft classification
+        const { walls, hardLimit } = autoBoxer.findAllWalls(clickX, floorY, 'right', this._floorBounds);
+
+        // Store hard limit
+        this._hardLimits.right = hardLimit;
+
+        // Add walls as candidates
+        for (const wall of walls) {
+            // Skip walls before the current bbox right edge (we're looking for walls to expand TO)
+            if (wall.x <= bboxRight) continue;
+
             candidates.push({
-                type: 'SKIP_OBSTACLES',
-                value: skipObstacleX,
-                description: 'דילוג על מכשולים קטנים'
+                type: wall.type,
+                value: wall.x,
+                description: wall.description,
+                isHard: wall.isHard
             });
         }
 
-        // Candidate 2: Align to neighbor
+        // Add neighbor alignment if available
         const neighborX = this._findNeighborAlignment('right');
-        if (neighborX !== null) {
+        if (neighborX !== null && neighborX > bboxRight) {
             candidates.push({
                 type: 'ALIGN_NEIGHBOR',
                 value: neighborX,
-                description: 'יישור לשדה שכן'
+                description: 'יישור לשדה שכן',
+                isHard: false
             });
         }
 
-        // Candidate 3: White space edge
-        const whiteSpaceX = this._findWhiteSpaceEdge(clickX, floorY, 'right');
-        if (whiteSpaceX !== null) {
-            candidates.push({
-                type: 'WHITE_SPACE',
-                value: whiteSpaceX,
-                description: 'הרחבה לשטח לבן'
-            });
-        }
+        // Sort by distance from current edge (closest first), but keep CURRENT at index 0
+        const currentCandidate = candidates[0];
+        const otherCandidates = candidates.slice(1);
+        otherCandidates.sort((a, b) => (a.value - bboxRight) - (b.value - bboxRight));
 
-        // Candidate 4: Page edge
-        const pageWidth = this._getPageWidth();
-        candidates.push({
-            type: 'PAGE_EDGE',
-            value: pageWidth,
-            description: 'קצה הדף'
-        });
+        const result = [currentCandidate, ...otherCandidates];
 
-        return candidates;
+        console.log(`[BboxRefiner] Right candidates: ${result.length}`, result.map(c => `${c.type}:${Math.round(c.value)}`));
+
+        return result;
     }
 
     _generateTopCandidates(clickX, clickY, bbox) {

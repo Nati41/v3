@@ -40,8 +40,8 @@ function validateExportData(fieldsMapping, liveFillData) {
             return;
         }
 
-        // Checkbox/Radio - check anchor
-        if (field.type === 'checkbox' || field.type === 'radio') {
+        // Checkbox/Radio/Cell - check anchor (cell is like checkbox but full size)
+        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell') {
             if (!field.anchor || field.anchor.length !== 2) {
                 errors.push(`${fid}: חסר anchor לסוג ${field.type}`);
             } else {
@@ -52,7 +52,7 @@ function validateExportData(fieldsMapping, liveFillData) {
             }
         }
         // Text fields - check bbox
-        else if (field.type !== 'checkbox' && field.type !== 'radio') {
+        else if (field.type !== 'checkbox' && field.type !== 'radio' && field.type !== 'cell') {
             if (!field.bbox || field.bbox.length !== 4) {
                 errors.push(`${fid}: חסר bbox או bbox לא תקין`);
             } else {
@@ -310,14 +310,14 @@ window.ExportEngine = {
                 // Get field data with validation
                 let data = liveFillData[fid];
 
-                // ✅ DEBUG: Log data for checkbox/radio fields
-                if (type === 'checkbox' || type === 'radio') {
+                // ✅ DEBUG: Log data for checkbox/radio/cell fields
+                if (type === 'checkbox' || type === 'radio' || type === 'cell') {
                     console.log(`🔍 Export ${type} ${fid}: data =`, JSON.stringify(data), `checked =`, data?.checked);
                 }
 
                 if (!data) {
-                    // Initialize missing data for checkboxes/radios
-                    if (type === 'checkbox' || type === 'radio') {
+                    // Initialize missing data for checkboxes/radios/cells
+                    if (type === 'checkbox' || type === 'radio' || type === 'cell') {
                         console.warn(`⚠️ Export: No data for ${type} ${fid}, initializing as unchecked`);
                         liveFillData[fid] = { checked: false };
                         data = liveFillData[fid];
@@ -336,9 +336,10 @@ window.ExportEngine = {
                 const { width: pw, height: ph } = page.getSize();
 
                 // ============================
-                // CHECKBOX & RADIO – DIRECT PDF POINTS (NO COORDINATE CONVERSION)
+                // CHECKBOX & RADIO & CELL – DIRECT PDF POINTS (NO COORDINATE CONVERSION)
+                // V3.10: Cell type uses full drawn rectangle size (no constraints)
                 // ============================
-                if (field.type === 'checkbox' || field.type === 'radio') {
+                if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell') {
                     if (data.checked === true) {
                         let boxX, boxY, boxW, boxH;
 
@@ -376,18 +377,95 @@ window.ExportEngine = {
                             boxY = centerYPdf - boxH / 2;
                         }
                         else {
-                            console.warn(`⚠️ Export: Checkbox/Radio ${fid} missing coordinates, skipping`);
+                            console.warn(`⚠️ Export: Checkbox/Radio/Cell ${fid} missing coordinates, skipping`);
                             continue;
                         }
 
                         console.log(`✅ Export ${field.type} ${fid}: PDF box=(${boxX.toFixed(1)}, ${boxY.toFixed(1)}, ${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
 
+                        // Cell type uses 'checkbox' style (checkmark V)
+                        const drawType = field.type === 'cell' ? 'checkbox' : field.type;
                         await drawCheckmark(page, {
                             x: boxX,
                             y: boxY,
                             width: boxW,
                             height: boxH
-                        }, field.type, zapfFont);
+                        }, drawType, zapfFont);
+                    }
+                    continue;
+                }
+
+                // ============================
+                // SIGNATURE – DRAW IMAGE OR STYLED TEXT
+                // ============================
+                console.log(`🔍 Export check field ${fid}: type="${field.type}"`);
+                if (field.type === 'signature') {
+                    console.log(`✅ Signature field detected: ${fid}`);
+                    if (!data.value) continue;
+
+                    let boxX, boxY, boxW, boxH;
+
+                    // V2 coordinates (already in PDF points)
+                    if (field.pdfX !== undefined && field.pdfY !== undefined &&
+                        field.pdfWidth !== undefined && field.pdfHeight !== undefined) {
+                        boxX = field.pdfX;
+                        boxY = field.pdfY;
+                        boxW = field.pdfWidth;
+                        boxH = field.pdfHeight;
+                    }
+                    // V1 bbox (percentages)
+                    else if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+                        const normalized = coord._normalizeBbox(field.bbox);
+                        boxX = normalized.x;
+                        boxY = normalized.y;
+                        boxW = normalized.w;
+                        boxH = normalized.h;
+                    } else {
+                        console.warn(`⚠️ Export: Signature ${fid} missing coordinates, skipping`);
+                        continue;
+                    }
+
+                    if (data.mode === 'draw') {
+                        // Drawn signature - embed as image
+                        try {
+                            // data.value is a base64 data URL
+                            const base64Data = data.value.split(',')[1];
+                            const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+                            const pngImage = await pdfDoc.embedPng(imageBytes);
+
+                            page.drawImage(pngImage, {
+                                x: boxX,
+                                y: boxY,
+                                width: boxW,
+                                height: boxH
+                            });
+
+                            console.log(`✅ Export signature (draw) ${fid}: embedded image at (${boxX.toFixed(1)}, ${boxY.toFixed(1)}, ${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
+                        } catch (imgErr) {
+                            console.error(`❌ Failed to embed signature image ${fid}:`, imgErr);
+                        }
+                    } else {
+                        // Typed signature - draw as text
+                        const signatureText = data.value;
+                        if (!signatureText.trim()) continue;
+
+                        // Use larger font for signature, fitting the box
+                        const sigFontSize = Math.min(boxH * 0.7, 24);
+                        const textWidth = hebrewFont.widthOfTextAtSize(signatureText, sigFontSize);
+
+                        // Center text in box
+                        const tx = boxX + (boxW - textWidth) / 2;
+                        const ty = boxY + (boxH - sigFontSize) / 2;
+
+                        page.drawText(signatureText, {
+                            x: tx,
+                            y: ty,
+                            size: sigFontSize,
+                            font: hebrewFont,
+                            color: PDFLib.rgb(0, 0, 0)
+                        });
+
+                        console.log(`✅ Export signature (type) ${fid}: "${signatureText}" at (${tx.toFixed(1)}, ${ty.toFixed(1)})`);
                     }
                     continue;
                 }
@@ -430,15 +508,25 @@ window.ExportEngine = {
                                         height: colField.height || 20
                                     }, 'checkbox', zapfFont);
                                 } else if (colField.type === 'text') {
-                                    const colFontSize = colField.fontSize || 12;
-                                    const textWidth = hebrewFont.widthOfTextAtSize(colValue.toString(), colFontSize);
+                                    let colFontSize = colField.fontSize || 12;
+                                    const colPadding = 4;
+                                    const colAvailableWidth = (colField.width || 20) - colPadding;
+                                    const colText = colValue.toString();
+
+                                    // Keep shrinking font until text fits
+                                    let textWidth = hebrewFont.widthOfTextAtSize(colText, colFontSize);
+                                    while (textWidth > colAvailableWidth && colFontSize > 1) {
+                                        colFontSize -= 0.5;
+                                        textWidth = hebrewFont.widthOfTextAtSize(colText, colFontSize);
+                                    }
+
                                     // Right-align for RTL
-                                    const tx = colField.x + (colField.width - textWidth);
+                                    const tx = colField.x + ((colField.width || 20) - textWidth);
                                     // Bottom anchor: 15% padding from bottom or at least 2pt
-                                    const bottomPad = Math.max(2, colField.height * 0.15);
+                                    const bottomPad = Math.max(2, (colField.height || 20) * 0.15);
                                     const ty = colField.y + bottomPad;
 
-                                    page.drawText(colValue.toString(), {
+                                    page.drawText(colText, {
                                         x: tx,
                                         y: ty,
                                         size: colFontSize,
@@ -490,7 +578,7 @@ window.ExportEngine = {
                 if (!rawValue.trim()) continue;
 
                 const style = data.style || {};
-                const fontSize = style.fontSize || 14;
+                let fontSize = style.fontSize || 14;
                 const colorHex = style.color || "#000000";
                 const align = style.alignment || "right";
                 const baseline = 1.2;
@@ -520,7 +608,15 @@ window.ExportEngine = {
                 // -----------------------------
                 // ✔ TEXT רגיל (flow text - bottom anchored)
                 // -----------------------------
-                const textWidth = hebrewFont.widthOfTextAtSize(rawValue, fontSize);
+                const padding = 4; // 2pt padding on each side
+                const availableWidth = wPDF - padding;
+
+                // Keep shrinking font until text fits
+                let textWidth = hebrewFont.widthOfTextAtSize(rawValue, fontSize);
+                while (textWidth > availableWidth && fontSize > 1) {
+                    fontSize -= 0.5;
+                    textWidth = hebrewFont.widthOfTextAtSize(rawValue, fontSize);
+                }
 
                 let tx = xPDF;
                 if (align === "center") {
@@ -605,7 +701,7 @@ window.ExportEngine = {
                                 if (!textValue.trim()) continue;
 
                                 const isNumeric = /^[0-9]+$/.test(textValue);
-                                const fontSize = 14;
+                                let fontSize = 14;
 
                                 if (isNumeric) {
                                     // Numbers: use drawNumericInBoxes (same as regular fields)
@@ -622,7 +718,16 @@ window.ExportEngine = {
                                     );
                                 } else {
                                     // Text: same logic as regular fields (RTL, right-align, bottom-anchored)
-                                    const textWidth = hebrewFont.widthOfTextAtSize(textValue, fontSize);
+                                    const cellPadding = 4;
+                                    const cellAvailableWidth = cellW - cellPadding;
+
+                                    // Keep shrinking font until text fits
+                                    let textWidth = hebrewFont.widthOfTextAtSize(textValue, fontSize);
+                                    while (textWidth > cellAvailableWidth && fontSize > 1) {
+                                        fontSize -= 0.5;
+                                        textWidth = hebrewFont.widthOfTextAtSize(textValue, fontSize);
+                                    }
+
                                     const tx = cellX + (cellW - textWidth);
                                     // Bottom anchor: 15% padding from bottom or at least 2pt
                                     const cellBottomPadding = Math.max(2, pdfCellH * 0.15);

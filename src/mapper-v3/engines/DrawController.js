@@ -23,7 +23,7 @@
  * Extended with AutoBoxer for single-click field placement
  * Extended with BboxRefiner for progressive refinement + drag support
  */
-import { state, Tools, Modes, RadioGroupSteps } from '../core/StateManager.js';
+import { state, Tools, Modes, RadioGroupSteps, FlowModes } from '../core/StateManager.js';
 import { radioGroupDialog } from '../ui/RadioGroupDialog.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { overlayRenderer } from './OverlayRenderer.js';
@@ -37,6 +37,17 @@ import { autoBoxer } from './AutoBoxer.js';
 import { bboxRefiner } from './BboxRefiner.js';
 import { REFINER_CONFIG } from './RefinerConfig.js';
 import { canonicalSelector } from '../helpers/CanonicalSelector.js';
+import { templateStore, TemplateFieldStatus, EntityMappingMode } from '../core/TemplateStore.js';
+
+// V3.5: Guided Mapping integration
+import { guidedMappingUI, GuidedMappingEvents } from '../ui/GuidedMappingUI.js';
+import { fieldIntelligenceStore } from '../core/FieldIntelligenceStore.js';
+
+// V3.9: Intent-based drawing
+import { intentManager, IntentType, IntentSource } from '../core/IntentManager.js';
+
+// V3.10: QuickFill collision detection
+import { quickFillOverlay } from '../ui/QuickFillOverlay.js';
 
 export class DrawController {
     constructor() {
@@ -66,6 +77,11 @@ export class DrawController {
         this._dragState = null;  // { edge, startX, startY, startBbox }
         this._boundDragMove = this._onDragMove.bind(this);
         this._boundDragEnd = this._onDragEnd.bind(this);
+
+        // V3.9: CRASH PROTECTION - Prevent concurrent quick placements
+        this._quickPlacementInProgress = false;
+        this._lastMappingTime = 0;
+        this._mappingCount = 0;
     }
 
     /**
@@ -116,10 +132,25 @@ export class DrawController {
         });
         document.addEventListener('mouseup', (e) => this._onMouseUp(e));
 
+        // V3.2: Prevent context menu during refiner mode (we use right-click for cycling)
+        this.overlayLayer.addEventListener('contextmenu', (e) => {
+            if (this._refinerActive) {
+                e.preventDefault();
+                // V3.2: Handle right-click for cycling back (works on laptops too)
+                const coords = this._getLayerCoordinates(e.clientX, e.clientY);
+                this._handleRightClickCycle(coords.x, coords.y);
+            }
+        });
+
         // Touch support
         this.overlayLayer.addEventListener('touchstart', (e) => this._onTouchStart(e), { passive: false });
         document.addEventListener('touchmove', (e) => this._onTouchMove(e), { passive: false });
         document.addEventListener('touchend', (e) => this._onTouchEnd(e));
+
+        // V3.4: Window resize handler - cancel active drawing to prevent coordinate mismatch
+        // When window resizes, the overlay layer dimensions change but startX/startY are stale
+        this._boundResizeHandler = this._onWindowResize.bind(this);
+        window.addEventListener('resize', this._boundResizeHandler);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -203,8 +234,39 @@ export class DrawController {
         });
 
         // Clear AutoBoxer geometry cache on page change
+        // V3.10: Also cancel any active refiner/drawing state
         eventBus.on(Events.PDF_PAGE_CHANGED, () => {
             autoBoxer.clearCache();
+            this._cleanupOnPageChange();
+        });
+
+        // V3.10: Clean up on flow mode change (Mapping ↔ QuickFill)
+        eventBus.on(Events.QUICK_FILL_MODE_CHANGED, () => {
+            this._cleanupOnModeChange();
+        });
+
+        // V3.4: Handle entity mapping mode choice
+        eventBus.on(Events.ENTITY_MAPPING_MODE_CHANGED, ({ entityId, mode, detection }) => {
+            console.log('[DrawController] Entity mapping mode changed:', entityId, mode);
+
+            if (mode === EntityMappingMode.BATCH) {
+                // User chose batch mode - offer batch mapping if applicable
+                // Find the most recently mapped field in this entity to use as source
+                const activeTarget = templateStore.getActiveTarget();
+                if (activeTarget && activeTarget.entity_id === entityId) {
+                    const duplicates = templateStore.getDuplicatesOf(activeTarget.template_field_id);
+                    if (duplicates && duplicates.length > 0) {
+                        const stateField = state.getFieldByTemplateId(activeTarget.template_field_id);
+                        if (stateField && stateField.bbox) {
+                            this._offerBatchMapping(stateField, stateField.bbox, duplicates);
+                            return;
+                        }
+                    }
+                }
+                // No duplicates or no active target - just advance
+                this._advanceToNextUnmapped();
+            }
+            // TABLE mode is handled by the dialog emitting ENTITY_TABLE_FLOW_START
         });
 
         // ============ RADIO LABEL SELECTION ============
@@ -232,6 +294,103 @@ export class DrawController {
         eventBus.on('tool:startCheckboxGroup', () => {
             this.startCheckboxGroupFlow();
         });
+
+        // ============ V3.5: GUIDED MAPPING INTEGRATION ============
+        // When a guided mapping field is activated, set up pendingFieldData
+        if (GuidedMappingEvents) {
+            eventBus.on(GuidedMappingEvents.FIELD_ACTIVATED, (data) => {
+                this._onGuidedFieldActivated(data);
+            });
+
+            // When guided mapping is deactivated, clear any pending data
+            eventBus.on(GuidedMappingEvents.DEACTIVATED, () => {
+                this._onGuidedMappingDeactivated();
+            });
+        }
+    }
+
+    /**
+     * V3.5: Handle guided mapping field activation
+     * Sets up pendingFieldData from Field Intelligence
+     * @param {Object} data - { field, order, total }
+     */
+    _onGuidedFieldActivated(data) {
+        const { field, order, total } = data;
+        if (!field) return;
+
+        console.log(`[DrawController] Guided field activated: #${order}/${total} - "${field.name_he}"`);
+
+        // Get full field data from Field Intelligence
+        const fullField = fieldIntelligenceStore.getFieldFull(field.id);
+
+        // Determine the correct field type
+        const fieldType = this._mapSemanticDataType(fullField?.semantics?.data_type);
+
+        // Set pending field data for the next draw operation
+        this.pendingFieldData = {
+            label_he: field.name_he,
+            label_en: field.id, // Use the field ID as English name
+            type: fieldType,
+            canonical: field.id,
+            context: fullField?.semantics?.purpose_short || '',
+            category: fullField?.section_id || null,
+            source: 'guided_mapping',
+            guidedOrder: order,
+            guidedFieldId: field.id
+        };
+
+        // V3.5: Set the correct tool based on field type
+        let tool = Tools.DRAW_TEXT;
+        if (fieldType === 'checkbox') {
+            tool = Tools.DRAW_CHECKBOX;
+        } else if (fieldType === 'radio') {
+            tool = Tools.DRAW_RADIO;
+        } else if (fieldType === 'signature') {
+            tool = Tools.DRAW_TEXT; // Signature uses text tool for now
+        }
+        state.setTool(tool);
+
+        console.log('[DrawController] Pending data set for guided field:', this.pendingFieldData, 'tool:', tool);
+    }
+
+    /**
+     * V3.5: Handle guided mapping deactivation
+     */
+    _onGuidedMappingDeactivated() {
+        // Clear any pending guided data
+        if (this.pendingFieldData?.source === 'guided_mapping') {
+            console.log('[DrawController] Clearing guided mapping pending data');
+            this.pendingFieldData = null;
+        }
+    }
+
+    /**
+     * V3.5: Map semantic data type from Field Intelligence to field type
+     * @param {string} semanticType - Semantic data type from Field Intelligence
+     * @returns {string} Field type for state
+     */
+    _mapSemanticDataType(semanticType) {
+        const typeMap = {
+            'israeli_id': 'text',
+            'passport_number': 'text',
+            'person_name': 'text',
+            'organization_name': 'text',
+            'phone': 'text',
+            'email': 'text',
+            'address': 'text',
+            'city': 'text',
+            'postal_code': 'text',
+            'date': 'text',
+            'currency': 'number',
+            'percentage': 'number',
+            'count': 'number',
+            'number': 'number',
+            'enum': 'text',
+            'boolean': 'checkbox',
+            'free_text': 'text',
+            'signature': 'signature'
+        };
+        return typeMap[semanticType] || 'text';
     }
 
     /**
@@ -244,13 +403,23 @@ export class DrawController {
             return true;
         }
 
-        // Always allow drawing when table flow is active
+        // V3.10: Check new TableSelectMode
+        if (window.tableSelectMode && window.tableSelectMode.isActive()) {
+            return true;
+        }
+
+        // Always allow drawing when table flow is active (V1)
         if (window.tableFlowUI && window.tableFlowUI.isActive()) {
             return true;
         }
 
+        // Check TableToolbarMode (legacy toolbar-integrated mode)
+        if (window.tableToolbarMode && window.tableToolbarMode.isActive()) {
+            return true;
+        }
+
         const tool = state.get('tool');
-        return [Tools.DRAW_TEXT, Tools.DRAW_CHECKBOX, Tools.DRAW_RADIO, Tools.DRAW_TABLE, Tools.CAPTURE_NAME].includes(tool);
+        return [Tools.DRAW_TEXT, Tools.DRAW_CHECKBOX, Tools.DRAW_RADIO, Tools.DRAW_TABLE, Tools.DRAW_SIGNATURE, Tools.DRAW_CELL, Tools.CAPTURE_NAME].includes(tool);
     }
 
     /**
@@ -283,6 +452,19 @@ export class DrawController {
      * @param {MouseEvent} e
      */
     _onMouseDown(e) {
+        // === TABLE TOOLBAR MODE – MUST BE FIRST ===
+        // When table mode is active, it has exclusive control over drawing
+        if (window.tableToolbarMode?.isActive?.()) {
+            // Table mode handles its own drawing via DRAW_END event
+            // Just let the normal drawing flow continue - _finishDraw will route to table mode
+            // But prevent any radio/checkbox/guided mode interference
+            const tool = state.get('tool');
+            if (tool !== Tools.DRAW_TABLE && tool !== 'draw_table') {
+                // Force table tool
+                state.setTool(Tools.DRAW_TABLE);
+            }
+        }
+
         if (!this._isDrawingTool()) return;
 
         // Don't interfere with WordSelector - let it handle clicks
@@ -299,8 +481,23 @@ export class DrawController {
 
         const coords = this._getLayerCoordinates(e.clientX, e.clientY);
 
+        // V3.2: Right-click during refiner = cycle back
+        if (e.button === 2 && this._refinerActive) {
+            e.preventDefault();
+            this._handleRightClickCycle(coords.x, coords.y);
+            return;
+        }
+
+        // ============ TABLE AUTOBOXER: Single-click for COLUMNS step ============
+        // When table flow is in COLUMNS step, use AutoBoxer for cell detection
+        if (window.tableFlowUI && window.tableFlowUI.supportsAutoBoxClick()) {
+            window.tableFlowUI.onClickForAutoBox(coords.x, coords.y);
+            return;
+        }
+
         // ============ AUTOBOXER: Single-click for DRAW_TEXT tool ============
         // AutoBoxer computes bbox from click, then existing _finishDraw handles field creation
+        // Note: Checkbox/Radio have their own engine - do NOT use AutoBoxer for them
         const tool = state.get('tool');
         if (tool === Tools.DRAW_TEXT) {
             this._autoBoxAndFinish(coords.x, coords.y);
@@ -309,6 +506,38 @@ export class DrawController {
 
         // All other tools use manual drawing
         this._startDraw(coords.x, coords.y);
+    }
+
+    /**
+     * V3.2: Handle right-click to cycle back to previous wall
+     */
+    _handleRightClickCycle(clickX, clickY) {
+        const bbox = bboxRefiner.getCurrentBbox();
+        const edge = this._detectCycleEdge(clickX, clickY, bbox);
+
+        if (!edge) {
+            // Right-click in center - cancel
+            this._cancelRefiner();
+            return;
+        }
+
+        const result = bboxRefiner.cycleWallBack(edge);
+
+        if (!result) {
+            this._showToast('לא ניתן לחזור אחורה', 'warning');
+            return;
+        }
+
+        // Update preview
+        this._updateRefinerPreview(result.bbox, result.action, result.edge);
+
+        if (result.action === 'cycle_back') {
+            const info = bboxRefiner.getCandidateInfo(edge);
+            const progress = info ? `(${info.currentIndex + 1}/${info.total})` : '';
+            this._showToast(`חזרה: ${result.message} ${progress}`, 'info');
+        } else if (result.action === 'none') {
+            this._showToast(result.message || 'כבר בקיר הראשון', 'info');
+        }
     }
 
     /**
@@ -328,18 +557,99 @@ export class DrawController {
         const timeSinceLastClick = now - this._lastClickTime;
         this._lastClickTime = now;
 
+        // ============ V3.9: INTENT SHORTCUT - Skip refiner for PLACE_FIELD ============
+        // When placing an existing field (e.g., from sidebar click), use quick single-click flow
+        const intent = intentManager.getIntent();
+        if (intent.type === IntentType.PLACE_FIELD && intent.targetId) {
+            // CRASH PROTECTION: Prevent concurrent placements
+            if (this._quickPlacementInProgress) {
+                console.warn('[DrawController] Quick placement already in progress, ignoring');
+                return;
+            }
+
+            // CRASH PROTECTION: Rate limit - max 3 mappings per second
+            const now = Date.now();
+            if (now - this._lastMappingTime < 300) {
+                this._mappingCount++;
+                if (this._mappingCount > 5) {
+                    console.error('[DrawController] CRITICAL: Mapping too fast, blocking');
+                    return;
+                }
+            } else {
+                this._mappingCount = 0;
+            }
+            this._lastMappingTime = now;
+
+            // Get the target field to check placementMode
+            const targetField = state.getField(intent.targetId);
+
+            // V3.9.1: Symbol placement for checkbox/radio
+            // - Radio: ALWAYS small circle (no auto mode)
+            // - Checkbox: small square by default, or AutoBoxer if placementMode === 'auto'
+            const isRadio = targetField?.type === 'radio';
+            const isCheckbox = targetField?.type === 'checkbox';
+            const useSymbolPlacement = isRadio || (isCheckbox && targetField?.placementMode !== 'auto');
+
+            if (useSymbolPlacement) {
+                // Symbol placement: create fixed-size box at click position
+                this._quickPlacementInProgress = true;
+                console.log('[DrawController] PLACE_FIELD Symbol mode:', intent.targetId);
+
+                const SYMBOL_SIZE = 24;
+                const bbox = {
+                    x: clickX - SYMBOL_SIZE / 2,
+                    y: clickY - SYMBOL_SIZE / 2,
+                    width: SYMBOL_SIZE,
+                    height: SYMBOL_SIZE
+                };
+
+                this.startX = bbox.x;
+                this.startY = bbox.y;
+                this.isDrawing = true;
+
+                if (this.previewElement) {
+                    this.previewElement.remove();
+                }
+                this.previewElement = document.createElement('div');
+                this.previewElement.className = 'drawing-preview';
+                this.drawingLayer.appendChild(this.previewElement);
+
+                state.setMode(Modes.DRAWING);
+                this._finishDraw(bbox.x + bbox.width, bbox.y + bbox.height);
+
+                this._quickPlacementInProgress = false;
+                return;
+            }
+
+            // V3.9.1: For 'auto' placementMode or regular text fields:
+            // Fall through to full AutoBoxer flow with refiner UI
+            // Intent stays active - _finishDraw will use it to update the existing field
+            console.log('[DrawController] PLACE_FIELD Auto mode - using full AutoBoxer flow:', intent.targetId);
+        }
+
         // Double-click detection (within 400ms) - confirm immediately
         const isDoubleClick = timeSinceLastClick < 400 && this._refinerActive;
 
         // ============ ACTIVE REFINEMENT SESSION ============
-        // Only Enter key confirms - clicks determine expansion DIRECTION
+        // V3.2: Clicks cycle through wall candidates instead of moving to exact point
         if (this._refinerActive) {
-            console.log('[DrawController] Refiner active - processing refinement click');
+            console.log('[DrawController] Refiner active - processing cycle click');
 
-            const result = await bboxRefiner.refine(clickX, clickY);
+            // Detect which edge to cycle based on click position
+            const bbox = bboxRefiner.getCurrentBbox();
+            const edge = this._detectCycleEdge(clickX, clickY, bbox);
+
+            if (!edge) {
+                // Click in center - do nothing (Enter to confirm)
+                this._showToast('Enter לאישור | קליק בצד להרחבה', 'info');
+                return;
+            }
+
+            // V3.2: Cycle to next wall candidate
+            const result = bboxRefiner.cycleWall(edge);
 
             if (!result) {
-                this._showToast('לא ניתן לזהות גבול במיקום זה', 'warning');
+                this._showToast('לא ניתן להרחיב', 'warning');
                 return;
             }
 
@@ -349,14 +659,14 @@ export class DrawController {
             this._updateRefinerPreview(result.bbox, result.action, result.edge);
 
             // Show feedback based on result
-            if (result.message) {
-                this._showToast(result.message, 'info');
-            } else if (result.action === 'expand' && result.edge) {
-                this._showToast(`הרחבה ${this._edgeToHebrew(result.edge)} | Enter לאישור`, 'info');
-            } else if (result.action === 'shrink' && result.edge) {
-                this._showToast(`כיווץ ${this._edgeToHebrew(result.edge)} | Enter לאישור`, 'info');
+            if (result.action === 'cycle') {
+                const info = bboxRefiner.getCandidateInfo(edge);
+                const progress = info ? `(${info.currentIndex + 1}/${info.total})` : '';
+                this._showToast(`${result.message} ${progress} | Enter לאישור`, 'info');
+            } else if (result.action === 'blocked') {
+                this._showToast(`${result.message} - קיר קשיח`, 'warning');
             } else if (result.action === 'none') {
-                this._showToast('Enter לאישור', 'info');
+                this._showToast(result.message || 'Enter לאישור', 'info');
             }
 
             return;
@@ -365,12 +675,28 @@ export class DrawController {
         // ============ FIRST CLICK - INITIALIZE ============
         console.log('[DrawController] AutoBoxer mode - initializing bbox from click at', clickX, clickY);
 
+        // V3.9.1: Check if we have an active PLACE_FIELD intent (for excluding target from neighbors)
+        const activeIntent = intentManager.getIntent();
+        const targetFieldId = (activeIntent.type === IntentType.PLACE_FIELD) ? activeIntent.targetId : null;
+
         // Provide neighbor bboxes for collision detection
         const existingFields = state.get('fields') || [];
         const neighborBboxes = existingFields
-            .filter(f => f.bbox)  // Any field with bbox, not just mapped
+            .filter(f => f.bbox && f.id !== targetFieldId)  // Exclude target field if placing
             .map(f => overlayRenderer.bboxToScreen(f.bbox));
-        console.log('[DrawController] Existing fields for collision:', neighborBboxes.length, neighborBboxes);
+
+        // V3.10: Also include QuickFill boxes for collision detection
+        const isQuickFillMode = state.getFlowMode() === FlowModes.QUICK_FILL;
+        if (isQuickFillMode && quickFillOverlay) {
+            const currentPage = pdfEngine.currentPage;
+            const quickFillBoxes = quickFillOverlay.getAllBoxes()
+                .filter(box => box.page === currentPage && box.screenRect)
+                .map(box => box.screenRect);  // screenRect is already { x, y, width, height }
+            neighborBboxes.push(...quickFillBoxes);
+            console.log('[DrawController] Added', quickFillBoxes.length, 'QuickFill boxes for collision');
+        }
+
+        console.log('[DrawController] Existing fields for collision:', neighborBboxes.length, 'excluding:', targetFieldId);
         bboxRefiner.setNeighbors(neighborBboxes);
 
         // Initialize refiner with first click
@@ -412,14 +738,20 @@ export class DrawController {
             this._refinerPreview.remove();
         }
 
+        // V3.2: Round coordinates to match final field rendering (prevents pixel shift on confirm)
+        const x = Math.round(bbox.x);
+        const y = Math.round(bbox.y);
+        const width = Math.round(bbox.width);
+        const height = Math.round(bbox.height);
+
         this._refinerPreview = document.createElement('div');
         this._refinerPreview.className = 'refiner-preview';
         this._refinerPreview.style.cssText = `
             position: absolute;
-            left: ${bbox.x}px;
-            top: ${bbox.y}px;
-            width: ${bbox.width}px;
-            height: ${bbox.height}px;
+            left: ${x}px;
+            top: ${y}px;
+            width: ${width}px;
+            height: ${height}px;
             border: 2px solid #2196F3;
             background: rgba(33, 150, 243, 0.08);
             pointer-events: none;
@@ -525,6 +857,15 @@ export class DrawController {
         `;
         centerZone.addEventListener('mousedown', (e) => this._onCenterDragStart(e));
         centerZone.addEventListener('click', (e) => this._onCenterClick(e));
+        // V3.2: Right-click on center zone = cycle back (works on laptops)
+        centerZone.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = this.drawingLayer.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+            this._handleRightClickCycle(clickX, clickY);
+        });
         this._refinerPreview.appendChild(centerZone);
 
         // Add arrow indicators (visual hint)
@@ -773,16 +1114,32 @@ export class DrawController {
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
 
-        // Use refiner to handle the shrink (same logic as before)
-        const result = await bboxRefiner.refine(clickX, clickY);
+        // V3.2: Use wall cycling instead of old refine()
+        const bbox = bboxRefiner.getCurrentBbox();
+        if (!bbox) {
+            console.warn('[DrawController] _onCenterClick: No current bbox');
+            return;
+        }
+
+        // Detect which edge was clicked based on position
+        const edge = this._detectCycleEdge(clickX, clickY, bbox);
+
+        if (!edge) {
+            console.log('[DrawController] Click in center - no edge to cycle');
+            return;
+        }
+
+        console.log(`[DrawController] Cycling ${edge} wall`);
+        const result = bboxRefiner.cycleWall(edge);
 
         if (result && result.bbox) {
             this._updateRefinerPreview(result.bbox, result.action, result.edge);
 
-            if (result.message) {
+            if (result.action === 'cycle') {
+                const info = bboxRefiner.getCandidateInfo(edge);
+                this._showToast(`${this._edgeToHebrew(edge)}: ${info.currentIndex + 1}/${info.total} - ${result.candidate?.description || ''}`, 'info');
+            } else if (result.message) {
                 this._showToast(result.message, 'info');
-            } else if (result.action === 'shrink' && result.edge) {
-                this._showToast(`כיווץ ${this._edgeToHebrew(result.edge)}`, 'info');
             }
         }
     }
@@ -796,12 +1153,18 @@ export class DrawController {
             return;
         }
 
+        // V3.2: Round coordinates to match final field rendering (prevents pixel shift on confirm)
+        const x = Math.round(bbox.x);
+        const y = Math.round(bbox.y);
+        const width = Math.round(bbox.width);
+        const height = Math.round(bbox.height);
+
         // Animate the change
         this._refinerPreview.style.transition = 'all 0.15s ease-out';
-        this._refinerPreview.style.left = `${bbox.x}px`;
-        this._refinerPreview.style.top = `${bbox.y}px`;
-        this._refinerPreview.style.width = `${bbox.width}px`;
-        this._refinerPreview.style.height = `${bbox.height}px`;
+        this._refinerPreview.style.left = `${x}px`;
+        this._refinerPreview.style.top = `${y}px`;
+        this._refinerPreview.style.width = `${width}px`;
+        this._refinerPreview.style.height = `${height}px`;
 
         // Flash green when edge changes
         if (edge) {
@@ -881,6 +1244,50 @@ export class DrawController {
     }
 
     /**
+     * V3.10: Clean up state when page changes
+     * Silently cancels any active refiner/drawing (no toast)
+     */
+    _cleanupOnPageChange() {
+        // Cancel refiner without toast
+        if (this._refinerActive) {
+            if (this._dragState) {
+                document.removeEventListener('mousemove', this._boundDragMove);
+                document.removeEventListener('mouseup', this._boundDragEnd);
+                this._dragState = null;
+            }
+            if (this._refinerPreview) {
+                this._refinerPreview.remove();
+                this._refinerPreview = null;
+            }
+            this._refinerActive = false;
+            this._refinerClickCount = 0;
+            bboxRefiner.reset();
+            console.log('[DrawController] Refiner cancelled on page change');
+        }
+
+        // Cancel drawing without toast
+        if (this.isDrawing) {
+            if (this.previewElement) {
+                this.previewElement.remove();
+                this.previewElement = null;
+            }
+            this.isDrawing = false;
+            state.setMode(Modes.IDLE);
+            console.log('[DrawController] Drawing cancelled on page change');
+        }
+    }
+
+    /**
+     * V3.10: Clean up state when flow mode changes (Mapping ↔ QuickFill)
+     * Silently cancels any active refiner/drawing (no toast)
+     */
+    _cleanupOnModeChange() {
+        // Same cleanup as page change
+        this._cleanupOnPageChange();
+        console.log('[DrawController] Cleanup on flow mode change');
+    }
+
+    /**
      * Helper: Edge name to Hebrew
      */
     _edgeToHebrew(edge) {
@@ -891,6 +1298,49 @@ export class DrawController {
             'bottom': 'למטה'
         };
         return names[edge] || edge;
+    }
+
+    /**
+     * V3.2: Detect which edge to cycle based on click position
+     * Click OUTSIDE bbox → return that edge direction
+     * Click INSIDE center → return null (no cycle)
+     * @param {number} clickX
+     * @param {number} clickY
+     * @param {Object} bbox - { x, y, width, height }
+     * @returns {string|null} 'left', 'right', 'top', 'bottom', or null
+     */
+    _detectCycleEdge(clickX, clickY, bbox) {
+        if (!bbox) return null;
+
+        const bboxRight = bbox.x + bbox.width;
+        const bboxBottom = bbox.y + bbox.height;
+        const centerX = bbox.x + bbox.width / 2;
+        const centerY = bbox.y + bbox.height / 2;
+
+        // Click outside bbox - determine which side
+        if (clickX < bbox.x) return 'left';
+        if (clickX > bboxRight) return 'right';
+        if (clickY < bbox.y) return 'top';
+        if (clickY > bboxBottom) return 'bottom';
+
+        // Click inside bbox - check if near an edge (within 30% of that dimension)
+        const edgeZone = 0.3;
+        const leftZone = bbox.x + bbox.width * edgeZone;
+        const rightZone = bboxRight - bbox.width * edgeZone;
+        const topZone = bbox.y + bbox.height * edgeZone;
+        const bottomZone = bboxBottom - bbox.height * edgeZone;
+
+        // Inside but near left edge
+        if (clickX < leftZone) return 'left';
+        // Inside but near right edge
+        if (clickX > rightZone) return 'right';
+        // Inside but near top edge
+        if (clickY < topZone) return 'top';
+        // Inside but near bottom edge
+        if (clickY > bottomZone) return 'bottom';
+
+        // Click in center - no edge to cycle
+        return null;
     }
 
     /**
@@ -920,6 +1370,14 @@ export class DrawController {
      * @param {TouchEvent} e
      */
     _onTouchStart(e) {
+        // === TABLE TOOLBAR MODE – MUST BE FIRST ===
+        if (window.tableToolbarMode?.isActive?.()) {
+            const tool = state.get('tool');
+            if (tool !== Tools.DRAW_TABLE && tool !== 'draw_table') {
+                state.setTool(Tools.DRAW_TABLE);
+            }
+        }
+
         if (!this._isDrawingTool()) return;
         if (e.touches.length !== 1) return;
 
@@ -941,6 +1399,7 @@ export class DrawController {
         const coords = this._getLayerCoordinates(touch.clientX, touch.clientY);
 
         // ============ AUTOBOXER: Single-tap for DRAW_TEXT tool ============
+        // Note: Checkbox/Radio have their own engine - do NOT use AutoBoxer for them
         const tool = state.get('tool');
         if (tool === Tools.DRAW_TEXT) {
             this._autoBoxAndFinish(coords.x, coords.y);
@@ -1096,10 +1555,31 @@ export class DrawController {
         const currentMode = state.get('mode');
         console.log('[DrawController] _finishDraw - currentMode:', currentMode, 'RADIO_GROUP_BUILDING:', Modes.RADIO_GROUP_BUILDING);
 
-        // ============ TABLE FLOW MODE - Check for active table flow ============
-        // When table flow is active, forward drawing to it
+        // ============ TABLE SELECT MODE (V3.10) - New simple table system ============
+        if (window.tableSelectMode?.isActive?.()) {
+            console.log('[DrawController] TABLE SELECT MODE ACTIVE - emitting DRAW_END for table');
+            // Use overlayRenderer.screenToBbox() for correct Y-axis flip
+            // PDF coordinates use Y=0 at bottom, screen uses Y=0 at top
+            const bbox = overlayRenderer.screenToBbox({ x, y, width, height });
+            eventBus.emit(Events.DRAW_END, { bbox, tool: Tools.DRAW_TABLE });
+            this.isDrawing = false;
+            return;
+        }
+
+        // ============ TABLE TOOLBAR MODE (LEGACY) - MUST BE FIRST ============
+        // When table mode is active, it has exclusive control - emit DRAW_END and exit
+        if (window.tableToolbarMode?.isActive?.()) {
+            console.log('[DrawController] TABLE MODE ACTIVE - emitting DRAW_END for table');
+            const bbox = [x, y, width, height];  // Array format for consistency
+            eventBus.emit(Events.DRAW_END, { bbox, tool: Tools.DRAW_TABLE });
+            this.isDrawing = false;
+            return;
+        }
+
+        // ============ TABLE FLOW MODE (OLD) - Check for active table flow ============
+        // Legacy support - forward drawing to old table flow UI
         if (window.tableFlowUI && window.tableFlowUI.isActive()) {
-            console.log('[DrawController] Forwarding to TableFlowUI');
+            console.log('[DrawController] Forwarding to TableFlowUI (legacy)');
             const bbox = { x, y, width, height };
             window.tableFlowUI.onRectangleDrawn(bbox);
             this.isDrawing = false;
@@ -1123,10 +1603,13 @@ export class DrawController {
         // Determine field type from current tool
         const tool = state.get('tool');
         const isCheckboxOrRadio = tool === Tools.DRAW_CHECKBOX || tool === Tools.DRAW_RADIO;
+        const isCell = tool === Tools.DRAW_CELL;  // V3.10: Cell type - no size constraints
+        const isSignature = tool === Tools.DRAW_SIGNATURE;
 
         // ============ ONE-CLICK CREATION ============
         // If drawing is too small, handle based on tool type
         const ONE_CLICK_SIZE = 24;  // Fixed size for one-click checkbox/radio
+        const ONE_CLICK_SIGNATURE_SIZE = { width: 120, height: 40 }; // Default signature size
         const isSmallDraw = width < this.options.minFieldSize || height < this.options.minFieldSize;
 
         let finalX = x;
@@ -1136,18 +1619,40 @@ export class DrawController {
 
         if (isSmallDraw) {
             if (isCheckboxOrRadio) {
-                // One-click creation: use click position as center, create 24×24 field
+                // One-click creation for manual checkbox/radio: use click position as center, create 24×24 field
                 finalX = this.startX - ONE_CLICK_SIZE / 2;
                 finalY = this.startY - ONE_CLICK_SIZE / 2;
                 finalWidth = ONE_CLICK_SIZE;
                 finalHeight = ONE_CLICK_SIZE;
                 console.log('[DrawController] One-click checkbox/radio at', this.startX, this.startY);
+            } else if (isSignature) {
+                // One-click creation for signature: use click position as top-left, create default size
+                finalX = this.startX;
+                finalY = this.startY;
+                finalWidth = ONE_CLICK_SIGNATURE_SIZE.width;
+                finalHeight = ONE_CLICK_SIGNATURE_SIZE.height;
+                console.log('[DrawController] One-click signature at', this.startX, this.startY);
             } else {
-                // For text fields, cancel if too small
+                // For text fields, cancel if too small (AutoBoxer handles text field sizing)
                 console.log('[DrawController] Drawing too small, cancelled');
                 this._cancelDraw();
                 return;
             }
+        }
+
+        // V3.9: CHECKBOX SIZE CONSTRAINT - Maximum 30x30 pixels for manual toolbar drawing
+        // Sidebar checkbox/radio fields use DRAW_TEXT tool (AutoBoxer), so this only affects toolbar
+        // V3.10: Cell type is EXCLUDED from constraints - preserves full drawn rectangle size
+        const MAX_CHECKBOX_SIZE = 30;
+        if (isCheckboxOrRadio && !isCell && (finalWidth > MAX_CHECKBOX_SIZE || finalHeight > MAX_CHECKBOX_SIZE)) {
+            // Constrain to max size, centered on the drawn rectangle center
+            const centerX = finalX + finalWidth / 2;
+            const centerY = finalY + finalHeight / 2;
+            finalWidth = Math.min(finalWidth, MAX_CHECKBOX_SIZE);
+            finalHeight = Math.min(finalHeight, MAX_CHECKBOX_SIZE);
+            finalX = centerX - finalWidth / 2;
+            finalY = centerY - finalHeight / 2;
+            console.log('[DrawController] Constrained checkbox/radio to max size:', finalWidth, 'x', finalHeight);
         }
 
         // Determine field type from current tool (tool already declared above)
@@ -1164,6 +1669,9 @@ export class DrawController {
             case Tools.DRAW_RADIO:
                 fieldType = 'radio';
                 break;
+            case Tools.DRAW_CELL:
+                fieldType = 'cell';
+                break;
             case Tools.DRAW_TABLE:
                 fieldType = 'table';
                 break;
@@ -1174,8 +1682,8 @@ export class DrawController {
         // Use finalX/Y/Width/Height (may be adjusted for one-click creation)
         const bbox = overlayRenderer.screenToBbox({ x: finalX, y: finalY, width: finalWidth, height: finalHeight });
 
-        // For checkbox/radio, also store anchor point (center of the field)
-        if (fieldType === 'checkbox' || fieldType === 'radio') {
+        // For checkbox/radio/cell, also store anchor point (center of the field)
+        if (fieldType === 'checkbox' || fieldType === 'radio' || fieldType === 'cell') {
             const centerX = finalX + finalWidth / 2;
             const centerY = finalY + finalHeight / 2;
             const anchor = overlayRenderer.screenToAnchor(centerX, centerY);
@@ -1185,8 +1693,104 @@ export class DrawController {
             fieldData.overlayHeight = finalHeight;
         }
 
+        // ============ V3.10: QUICK FILL MODE - MUST BE CHECKED FIRST ============
+        // In Quick Fill mode, we emit an event instead of creating a field
+        // This allows LiveFill engine to handle the box directly
+        const isQuickFill = state.isQuickFillMode();
+        console.log('[DrawController] Quick Fill check:', {
+            isQuickFill: isQuickFill,
+            flowMode: state.getFlowMode(),
+            bbox: bbox,
+            screenRect: { x: finalX, y: finalY, width: finalWidth, height: finalHeight }
+        });
+
+        if (isQuickFill) {
+            console.log('[DrawController] QUICK FILL MODE - emitting QUICK_FILL_BOX_CREATED event');
+
+            eventBus.emit(Events.QUICK_FILL_BOX_CREATED, {
+                bbox: bbox,
+                screenRect: { x: finalX, y: finalY, width: finalWidth, height: finalHeight },
+                page: state.get('document.currentPage'),
+                tool: tool
+            });
+
+            // Clean up and exit - NO field created
+            this.isDrawing = false;
+            state.setMode(Modes.IDLE);
+            return;
+        }
+
         let field;
 
+        // ============ V3.9: INTENT-BASED HANDLING (NEW UNIFIED FLOW) ============
+        // Check Intent FIRST - this is the new canonical way to handle drawing
+        const intent = intentManager.getIntent();
+        console.log('[DrawController] _finishDraw - Intent:', intent.type, 'targetId:', intent.targetId);
+
+        if (intent.type === IntentType.PLACE_FIELD && intent.targetId) {
+            // V3.9: Place existing field using Intent
+            const fieldId = intent.targetId;
+            const existingField = state.getField(fieldId);
+
+            if (existingField) {
+                const currentPage = state.get('document.currentPage');
+
+                // V3.10: For checkbox/radio/cell, ALWAYS store overlayWidth/Height
+                // This ensures proper rendering and duplication for both symbol and auto modes
+                const isMarkField = existingField.type === 'checkbox' ||
+                                   existingField.type === 'radio' ||
+                                   existingField.type === 'cell';
+
+                if (isMarkField) {
+                    fieldData.overlayWidth = finalWidth;
+                    fieldData.overlayHeight = finalHeight;
+                    console.log('[DrawController] PLACE_FIELD storing overlay dims:', finalWidth, 'x', finalHeight, 'mode:', existingField.placementMode || 'symbol');
+                }
+
+                // Update field with position
+                field = state.updateField(fieldId, {
+                    bbox: bbox,
+                    page: currentPage,
+                    isMapped: true,
+                    status: 'mapped',
+                    ...fieldData
+                }, true);  // Add to history
+
+                // V3.9: Skip toast if auto-advance is enabled (it shows its own toast)
+                if (!window.autoAdvanceController?.isEnabled()) {
+                    this._showToast(`שדה "${existingField.label_he || fieldId}" מופה בהצלחה!`, 'success');
+                }
+                console.log('[DrawController] V3.9 Intent: Placed field:', fieldId, 'bbox:', bbox, 'page:', currentPage, 'source:', intent.source);
+
+                // Emit FIELD_MAPPED event
+                eventBus.emit(Events.FIELD_MAPPED, { fieldId, source: intent.source });
+
+                // V3.9: Emit DRAW_END so SidebarController can update UI
+                eventBus.emit(Events.DRAW_END, { field });
+
+                // Clear intent
+                intentManager.clearIntent();
+
+                // LEGACY: Also clear pendingFieldId for backward compatibility
+                this.pendingFieldId = null;
+
+                // Handle template integration if applicable
+                if (templateStore.isLoaded() && existingField.templateFieldId) {
+                    this._handleTemplateFieldMapped(existingField, bbox);
+                }
+            } else {
+                console.warn('[DrawController] V3.9 Intent: Field not found:', fieldId);
+                intentManager.clearIntent();
+                this.pendingFieldId = null;
+            }
+
+            // Done - exit early
+            this.isDrawing = false;
+            state.setMode(Modes.IDLE);
+            return;
+        }
+
+        // LEGACY: Old pendingFieldId check (will be removed after migration)
         console.log('[DrawController] _finishDraw - pendingFieldId:', this.pendingFieldId);
 
         // ============ TWO-PHASE MAPPING: Check for pending field ============
@@ -1198,23 +1802,44 @@ export class DrawController {
             const mappedFieldId = this.pendingFieldId;  // Save before clearing
 
             if (pendingField) {
+                // V3.4: CRITICAL - Always set page when mapping (fixes template field bug)
+                const currentPage = state.get('document.currentPage');
+
+                // V3.5: Always add to history so mapping can be undone
+                // (Previously skipped history for "two-phase" but this made undo impossible)
                 field = state.updateField(this.pendingFieldId, {
                     bbox: bbox,
+                    page: currentPage,  // V3.4: Explicit page assignment (invariant enforcement)
                     isMapped: true,
+                    status: 'mapped',   // V3.4: Sync status with isMapped
                     ...fieldData
-                }, false);  // Skip history - keeps two-phase as single undo
+                }, true);  // V3.5: Add to history for proper undo support
 
-                this._showToast(`שדה "${pendingField.label_he}" מופה בהצלחה!`, 'success');
-                console.log('[DrawController] Mapped pending field:', this.pendingFieldId, 'bbox:', bbox);
+                // V3.9: Skip toast if auto-advance is enabled (it shows its own toast)
+                if (!window.autoAdvanceController?.isEnabled()) {
+                    this._showToast(`שדה "${pendingField.label_he}" מופה בהצלחה!`, 'success');
+                }
+                console.log('[DrawController] Mapped pending field:', this.pendingFieldId, 'bbox:', bbox, 'page:', currentPage);
 
                 // AUTO-EXPAND: Emit event to expand the field in sidebar for quick configuration
+                console.log('[DrawController] Emitting FIELD_MAPPED event for:', mappedFieldId);
                 eventBus.emit(Events.FIELD_MAPPED, { fieldId: mappedFieldId });
+
+                // ============ V3.3: TEMPLATE INTEGRATION ============
+                if (templateStore.isLoaded() && pendingField.templateFieldId) {
+                    // Clear pendingFieldId BEFORE handleTemplateFieldMapped
+                    // because _advanceToNextUnmapped will set a NEW pendingFieldId
+                    this.pendingFieldId = null;
+                    this._handleTemplateFieldMapped(pendingField, bbox);
+                    // Note: pendingFieldId is now set to next unmapped field (or null if complete)
+                } else {
+                    // Clear pending field only if NOT in template mode
+                    this.pendingFieldId = null;
+                }
             } else {
                 console.warn('[DrawController] Pending field not found:', this.pendingFieldId);
+                this.pendingFieldId = null;
             }
-
-            // Clear pending field
-            this.pendingFieldId = null;
 
         } else {
             // ═══════════════════════════════════════════════════════════════
@@ -1264,8 +1889,13 @@ export class DrawController {
                 // Clear pending data
                 this.pendingFieldData = null;
 
-                // V3.2: Return to label selection mode for next field
-                this._returnToLabelSelectionMode();
+                // V3.5: In guided mode, don't return to label selection - guided UI handles flow
+                const isGuidedActive = guidedMappingUI && typeof guidedMappingUI.isActive === 'function' && guidedMappingUI.isActive();
+                if (!isGuidedActive) {
+                    // V3.2: Return to label selection mode for next field
+                    this._returnToLabelSelectionMode();
+                }
+                // Guided mode: GuidedMappingUI will auto-advance via FIELD_CREATED event
 
             } else {
                 // No pending label - create draft with auto-detection only
@@ -1295,8 +1925,15 @@ export class DrawController {
             state.selectField(field.id);
         }
 
-        // Switch back to select tool
-        state.setTool(Tools.SELECT);
+        // V3.3: In template mode, keep DRAW_TEXT tool active for next field
+        // Only switch to SELECT if NOT in template mode with pending field
+        if (templateStore.isLoaded() && this.pendingFieldId) {
+            // Stay in DRAW_TEXT mode - _advanceToNextUnmapped already set pendingFieldId
+            console.log('[DrawController] Template mode: keeping DRAW_TEXT tool for next field');
+        } else {
+            // Switch back to select tool
+            state.setTool(Tools.SELECT);
+        }
 
         eventBus.emit(Events.DRAW_END, { field });
     }
@@ -1375,6 +2012,25 @@ export class DrawController {
 
         eventBus.emit(Events.DRAW_CANCEL);
         console.log('[DrawController] Drawing cancelled');
+    }
+
+    /**
+     * V3.4: Handle window resize - cancel active drawing/refiner
+     * Prevents coordinate mismatch when viewport changes during operation
+     */
+    _onWindowResize() {
+        // Cancel active drawing
+        if (this.isDrawing) {
+            console.log('[DrawController] Window resized during drawing - cancelling to prevent coordinate mismatch');
+            this._cancelDraw();
+            this._showToast('הציור בוטל עקב שינוי גודל חלון', 'warning');
+        }
+
+        // Cancel active refiner (note: _cancelRefiner already shows its own toast)
+        if (this._refinerActive) {
+            console.log('[DrawController] Window resized during refiner - cancelling');
+            this._cancelRefiner();
+        }
     }
 
     /**
@@ -2469,6 +3125,308 @@ export class DrawController {
         eventBus.emit(Events.DRAW_END, { field, isDraft: true });
 
         console.log(`[DrawController] Draft feedback: ${icon} ${message} (confidence: ${structure.confidence?.toFixed(2) || 'N/A'})`);
+    }
+
+    // ============ V3.3: TEMPLATE MAPPING INTEGRATION ============
+
+    /**
+     * Handle template field being mapped
+     * Updates template status, checks for duplicates, auto-advances
+     * V3.4: Checks for repeatable entity and prompts for mapping mode choice
+     * @param {Object} field - The mapped field with templateFieldId
+     * @param {Array} bbox - The bbox that was drawn
+     */
+    async _handleTemplateFieldMapped(field, bbox) {
+        const templateFieldId = field.templateFieldId;
+        console.log('[DrawController] Template field mapped:', templateFieldId);
+
+        // 1. Update template field status
+        templateStore.setFieldStatus(templateFieldId, TemplateFieldStatus.MAPPED);
+        templateStore.linkMappedField(templateFieldId, field.id);
+
+        // Emit template field mapped event
+        eventBus.emit(Events.TEMPLATE_FIELD_MAPPED, {
+            fieldId: field.id,
+            templateFieldId: templateFieldId,
+            canonical: field.canonical || field.label_en,
+            bbox: bbox
+        });
+
+        // V3.4: Check if this field belongs to a repeatable entity that needs mode decision
+        console.log('[DrawController] V3.4: Checking for repeatable entity decision...');
+        const decisionNeeded = templateStore.needsMappingModeDecision(templateFieldId);
+        console.log('[DrawController] V3.4: decisionNeeded =', decisionNeeded);
+        if (decisionNeeded) {
+            const { entityId, detection } = decisionNeeded;
+            const entity = templateStore.getEntity(entityId);
+
+            console.log('[DrawController] Repeatable entity detected, prompting for mode:', entityId);
+
+            // Show the mapping mode dialog
+            // Pass the field info so it can be removed if TABLE mode is chosen
+            eventBus.emit(Events.ENTITY_MAPPING_MODE_PROMPT, {
+                entityId,
+                detection,
+                entity,
+                // V3.4: Include mapped field info for cleanup if TABLE chosen
+                mappedFieldId: field.id,
+                mappedTemplateFieldId: templateFieldId
+            });
+
+            // The dialog will handle routing to table flow or batch mode
+            // Don't auto-advance here - let the mode handler do it
+            return;
+        }
+
+        // 2. Check for duplicate fields that could be batch-mapped
+        const duplicates = templateStore.getDuplicatesOf(templateFieldId);
+        if (duplicates && duplicates.length > 0) {
+            // Check if entity already decided for batch mode
+            const templateField = templateStore.getField(templateFieldId);
+            if (templateField) {
+                const mode = templateStore.getEntityMappingMode(templateField.entity_id);
+                // Only offer batch if in batch mode or undecided (for non-repeatable entities)
+                if (mode !== 'table') {
+                    this._offerBatchMapping(field, bbox, duplicates);
+                    return;
+                }
+            }
+        }
+
+        // 3. Auto-advance to next unmapped field
+        this._advanceToNextUnmapped();
+
+        // 4. Update progress
+        const progress = templateStore.getMappingProgress();
+        eventBus.emit(Events.MAPPING_PROGRESS_CHANGED, progress);
+
+        // 5. Check if all fields are mapped
+        if (templateStore.isComplete()) {
+            this._showToast('🎉 כל השדות מופו! התבנית מוכנה', 'success');
+            templateStore.lockTemplate();
+        }
+    }
+
+    /**
+     * Offer batch mapping for duplicate fields
+     * Shows a toast with action button to apply batch mapping
+     * @param {Object} sourceField - The field that was just mapped
+     * @param {Array} sourceBbox - The bbox that was drawn
+     * @param {Array} duplicates - Array of duplicate template fields
+     */
+    _offerBatchMapping(sourceField, sourceBbox, duplicates) {
+        const count = duplicates.length;
+        const pattern = this._detectDuplicatePattern(sourceField, duplicates);
+
+        console.log('[DrawController] Offering batch mapping:', count, 'duplicates, pattern:', pattern);
+
+        // Emit batch offered event for UI to show
+        eventBus.emit(Events.BATCH_MAPPING_OFFERED, {
+            sourceFieldId: sourceField.id,
+            duplicates: duplicates,
+            pattern: pattern
+        });
+
+        // Show toast with action
+        eventBus.emit(Events.TOAST_SHOW, {
+            message: `זוהו ${count} שדות דומים. להחיל מיפוי אוטומטי?`,
+            type: 'info',
+            duration: 8000,
+            action: {
+                label: 'החל',
+                callback: () => this._applyBatchMapping(sourceField, sourceBbox, duplicates)
+            }
+        });
+    }
+
+    /**
+     * Detect the pattern for duplicate fields (e.g., vertical stack, row shift)
+     * @param {Object} sourceField - Source field
+     * @param {Array} duplicates - Duplicate template fields
+     * @returns {Object} Pattern description { type, deltaY, deltaX }
+     */
+    _detectDuplicatePattern(sourceField, duplicates) {
+        // Get template fields to analyze naming pattern
+        const sourceTemplateField = templateStore.getField(sourceField.templateFieldId);
+        if (!sourceTemplateField || duplicates.length === 0) {
+            return { type: 'unknown' };
+        }
+
+        // Analyze field names to detect pattern
+        // e.g., child_1_name, child_2_name -> vertical stack
+        const sourceMatch = sourceTemplateField.label_en?.match(/(\d+)/);
+        const firstDupMatch = duplicates[0].label_en?.match(/(\d+)/);
+
+        if (sourceMatch && firstDupMatch) {
+            const sourceNum = parseInt(sourceMatch[1]);
+            const dupNum = parseInt(firstDupMatch[1]);
+
+            if (dupNum === sourceNum + 1) {
+                // Sequential numbering suggests vertical stacking
+                return { type: 'vertical_stack', deltaY: null }; // deltaY calculated from bbox height
+            }
+        }
+
+        // Default: assume simple vertical repeat
+        return { type: 'vertical_repeat' };
+    }
+
+    /**
+     * Apply batch mapping to all duplicate fields
+     * @param {Object} sourceField - Source field with bbox
+     * @param {Array} sourceBbox - The source bbox [x, y, w, h]
+     * @param {Array} duplicates - Duplicate template fields to map
+     */
+    _applyBatchMapping(sourceField, sourceBbox, duplicates) {
+        console.log('[DrawController] Applying batch mapping to', duplicates.length, 'fields');
+
+        const [x, y, w, h] = sourceBbox;
+        const currentPage = state.get('document.currentPage');
+
+        // Calculate delta based on field height (assume vertical stacking)
+        // Add small gap between fields
+        const deltaY = h + (h * 0.1); // 10% gap
+
+        // V3.10: Get overlay dimensions from source field for checkbox/radio
+        // Use overlayWidth/overlayHeight if available, otherwise calculate from bbox
+        const isCheckboxOrRadio = sourceField.type === 'checkbox' || sourceField.type === 'radio';
+        let sourceOverlayWidth = sourceField.overlayWidth;
+        let sourceOverlayHeight = sourceField.overlayHeight;
+
+        // Fallback: calculate overlay dimensions from bbox if not explicitly set
+        if (isCheckboxOrRadio && (!sourceOverlayWidth || !sourceOverlayHeight)) {
+            // Convert bbox to screen coords to get actual overlay size
+            const screenRect = overlayRenderer.bboxToScreen(sourceBbox);
+            if (screenRect) {
+                sourceOverlayWidth = screenRect.width;
+                sourceOverlayHeight = screenRect.height;
+                console.log('[DrawController] Batch mapping: calculated overlay dimensions from bbox:', sourceOverlayWidth, sourceOverlayHeight);
+            }
+        }
+
+        const updates = [];
+        const fieldIds = [];
+
+        duplicates.forEach((dupTemplateField, index) => {
+            // V3.4: Use template_field_id (not id) for template fields
+            const tfId = dupTemplateField.template_field_id;
+
+            // Find the StateManager field for this template field
+            const stateField = state.getFieldByTemplateId(tfId);
+            if (!stateField) {
+                console.warn('[DrawController] No state field for template:', tfId);
+                return;
+            }
+
+            // Calculate new bbox position
+            // V3.4: SUBTRACT to move DOWN visually (PDF Y=0 is at bottom)
+            const newY = y - (deltaY * (index + 1));
+            const newBbox = [x, newY, w, h];
+
+            // V3.4: Fixed structure to match batchUpdateFields expected format
+            const update = {
+                fieldId: stateField.id,
+                bbox: newBbox,
+                isMapped: true,
+                status: 'mapped',
+                page: currentPage
+            };
+
+            // V3.10: For checkbox/radio, copy overlay dimensions and calculate new anchor
+            if (isCheckboxOrRadio && sourceOverlayWidth && sourceOverlayHeight) {
+                update.overlayWidth = sourceOverlayWidth;
+                update.overlayHeight = sourceOverlayHeight;
+
+                // Calculate new anchor from new bbox center
+                // bbox is [x, y, w, h] in PDF coordinates (y from bottom)
+                // We need to convert to anchor [xPercent, yPercent]
+                const screenRect = overlayRenderer.bboxToScreen(newBbox);
+                if (screenRect) {
+                    const centerX = screenRect.x + screenRect.width / 2;
+                    const centerY = screenRect.y + screenRect.height / 2;
+                    update.anchor = overlayRenderer.screenToAnchor(centerX, centerY);
+                }
+            }
+
+            updates.push(update);
+            fieldIds.push(stateField.id);
+
+            // Update template status
+            templateStore.setFieldStatus(tfId, TemplateFieldStatus.MAPPED);
+            templateStore.linkMappedField(tfId, stateField.id);
+        });
+
+        // Batch update all fields (single history entry)
+        if (updates.length > 0) {
+            state.batchUpdateFields(updates);
+        }
+
+        // Emit batch applied event
+        eventBus.emit(Events.BATCH_MAPPING_APPLIED, {
+            fieldIds: fieldIds,
+            bboxes: updates.map(u => u.bbox)  // V3.4: Fixed to match flat structure
+        });
+
+        this._showToast(`מופו ${updates.length} שדות נוספים`, 'success');
+
+        // Re-render overlay
+        overlayRenderer.renderAll();
+
+        // Update progress
+        const progress = templateStore.getMappingProgress();
+        eventBus.emit(Events.MAPPING_PROGRESS_CHANGED, progress);
+
+        // Advance to next unmapped
+        this._advanceToNextUnmapped();
+    }
+
+    /**
+     * Advance to the next unmapped template field
+     */
+    _advanceToNextUnmapped() {
+        if (!templateStore.isLoaded()) return;
+
+        const nextUnmapped = templateStore.getNextUnmapped();
+        if (nextUnmapped) {
+            const tfId = nextUnmapped.template_field_id || nextUnmapped.id;
+
+            // Set as active target
+            templateStore.setActiveTarget(tfId);
+
+            // Find corresponding StateManager field
+            const stateField = state.getFieldByTemplateId(tfId);
+            if (stateField) {
+                // Set as pending for next draw
+                this.pendingFieldId = stateField.id;
+
+                // Select appropriate tool based on field type
+                const fieldType = nextUnmapped.type || stateField.type || 'text';
+                const toolMap = {
+                    'text': Tools.DRAW_TEXT,
+                    'number': Tools.DRAW_TEXT,
+                    'date': Tools.DRAW_TEXT,
+                    'checkbox': Tools.DRAW_CHECKBOX,
+                    'radio': Tools.DRAW_RADIO,
+                    'signature': Tools.DRAW_TEXT
+                };
+                const tool = toolMap[fieldType] || Tools.DRAW_TEXT;
+                state.setTool(tool);
+
+                // Emit event for sidebar to highlight and scroll
+                eventBus.emit(Events.NEXT_UNMAPPED_ACTIVATED, {
+                    fieldId: stateField.id,
+                    templateFieldId: tfId,
+                    canonical: nextUnmapped.canonical || nextUnmapped.label_en
+                });
+
+                // Show toast with guidance
+                const fieldName = nextUnmapped.label_he || nextUnmapped.label_en || 'שדה';
+                this._showToast(`📍 ${fieldName}`, 'info');
+            }
+        } else {
+            // All fields mapped!
+            this._showToast('🎉 כל השדות מופו!', 'success');
+        }
     }
 
     /**

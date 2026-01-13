@@ -1,14 +1,30 @@
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║              AUTOBOXER - PIXEL-BASED PHYSICS ENGINE                        ║
- * ║                      VERSION 1.0.0 - STABLE                                ║
+ * ║                      VERSION 1.0.2 - STABLE                                ║
  * ╠═══════════════════════════════════════════════════════════════════════════╣
  * ║  WARNING: THIS MODULE IS PROTECTED - DO NOT MODIFY WITHOUT REVIEW!         ║
  * ║                                                                            ║
- * ║  Last stable update: 2026-01-04                                            ║
+ * ║  Last stable update: 2026-01-12                                            ║
  * ║  Tested with: Hebrew PDF forms (101, 106, mipuy)                           ║
  * ║  Dependencies: PDFEngine, TextExtractor, RefinerConfig                     ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
+ *
+ * CHANGELOG v1.0.2 (2026-01-12):
+ * - MAJOR: Existing fields now have ABSOLUTE priority over pixel-based walls
+ * - Added _isClickInsideExistingField() to block clicks inside existing fields
+ * - Fixed _isIsolatedVerticalLine() - isolated lines with no spatial difference are now noise
+ * - Fixed _findExistingFieldEdge() - now detects overlapping fields (not just separated)
+ * - Increased vertical overlap tolerance from 15px to 25px
+ * - Removed problematic 'continue' statement that skipped text check after finding lines
+ * - INK_THRESHOLD increased from 200 to 220 (detects gray borders)
+ *
+ * CHANGELOG v1.0.1 (2026-01-12):
+ * - Fixed race condition in _loadPixelData() with loading lock pattern
+ * - Added scale validation to prevent division by zero
+ * - Added null checks for textExtractor in _loadWordBboxes()
+ * - Removed dead code _isExistingFieldWall (replaced by _findExistingFieldEdge)
+ * - Converted commented _hasConnectedCeiling to feature flag USE_CEILING_CONNECTION
  *
  * ARCHITECTURE:
  * - Operates EXCLUSIVELY on rendered pixels (300 DPI canvas)
@@ -35,17 +51,23 @@
 
 import { pdfEngine } from './PDFEngine.js';
 import { textExtractor } from './TextExtractor.js';
-import { AUTOBOXER_CONFIG, REFINER_VERSION } from './RefinerConfig.js';
+import { AUTOBOXER_CONFIG, REFINER_VERSION, REFINER_FEATURES } from './RefinerConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MODULE VERSION - Must match RefinerConfig version
 // ═══════════════════════════════════════════════════════════════════════════
-const MODULE_VERSION = '1.0.0';
+const MODULE_VERSION = '1.0.2';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION - Imported from RefinerConfig.js (DO NOT MODIFY HERE!)
 // ═══════════════════════════════════════════════════════════════════════════
 const CONFIG = AUTOBOXER_CONFIG;
+
+// V3.9: Debug mode - disable verbose logging to prevent browser crash
+// Enable via console: window.AUTOBOXER_DEBUG = true
+const DEBUG = () => typeof window !== 'undefined' && window.AUTOBOXER_DEBUG;
+const log = (...args) => { if (DEBUG()) console.log(...args); };
+const warn = (...args) => { if (DEBUG()) console.warn(...args); };
 
 export class AutoBoxer {
     constructor() {
@@ -58,6 +80,57 @@ export class AutoBoxer {
         this._scale = 1;  // Scale from screen to canvas pixels
         this._wordBboxes = null;  // Cache of word bboxes in screen coordinates
         this._wordBboxPage = null;
+        this._neighborFields = [];  // V3.2: Existing fields to treat as walls
+        this._loadingPromise = null;  // V3.3: Prevent race condition in parallel calls
+    }
+
+    /**
+     * V3.2: Set neighbor fields (existing fields) that should be treated as walls
+     * @param {Array} fields - Array of {x, y, width, height} in screen coordinates
+     */
+    setNeighborFields(fields) {
+        this._neighborFields = fields || [];
+        log(`[AutoBoxer] Set ${this._neighborFields.length} neighbor fields as walls:`, this._neighborFields);
+    }
+
+    /**
+     * V3.2: Clear neighbor fields
+     */
+    clearNeighborFields() {
+        this._neighborFields = [];
+    }
+
+    /**
+     * V3.3: Check if click point is inside any existing field
+     * Used to prevent creating new fields on top of existing ones
+     * @param {number} clickX - Click X in screen pixels
+     * @param {number} clickY - Click Y in screen pixels
+     * @returns {boolean} True if click is inside an existing field
+     */
+    _isClickInsideExistingField(clickX, clickY) {
+        console.log(`[AutoBoxer] _isClickInsideExistingField: checking click (${clickX}, ${clickY}) against ${this._neighborFields?.length || 0} fields`);
+
+        if (!this._neighborFields || this._neighborFields.length === 0) {
+            console.log('[AutoBoxer] No neighbor fields to check');
+            return false;
+        }
+
+        const MARGIN = 2;  // Small margin to avoid edge cases
+
+        for (const field of this._neighborFields) {
+            const isInsideX = clickX >= field.x + MARGIN && clickX <= field.x + field.width - MARGIN;
+            const isInsideY = clickY >= field.y + MARGIN && clickY <= field.y + field.height - MARGIN;
+
+            console.log(`[AutoBoxer] Field check: field=(${field.x}, ${field.y}, ${field.width}x${field.height}), click=(${clickX}, ${clickY}), insideX=${isInsideX}, insideY=${isInsideY}`);
+
+            if (isInsideX && isInsideY) {
+                console.log(`[AutoBoxer] ✓ Click IS inside existing field!`);
+                return true;
+            }
+        }
+
+        console.log('[AutoBoxer] Click is NOT inside any existing field');
+        return false;
     }
 
     /**
@@ -69,12 +142,24 @@ export class AutoBoxer {
      * @returns {Promise<Object|null>} { x, y, width, height } in screen pixels, or null
      */
     async computeBbox(clickX, clickY) {
-        console.log(`[AutoBoxer] Computing bbox at click (${clickX}, ${clickY})`);
+        log(`[AutoBoxer] Computing bbox at click (${clickX}, ${clickY}), neighborFields: ${this._neighborFields?.length || 0}`);
 
         // Load pixel data for current page
         const loaded = await this._loadPixelData();
         if (!loaded) {
-            console.warn('[AutoBoxer] Failed to load pixel data');
+            warn('[AutoBoxer] Failed to load pixel data');
+            return null;
+        }
+
+        // V3.3: Safety check - ensure scale is valid before any division
+        if (!this._scale || this._scale <= 0 || !isFinite(this._scale)) {
+            warn('[AutoBoxer] Invalid scale, cannot compute bbox');
+            return null;
+        }
+
+        // V3.3: Block clicks inside existing fields (prevents overlap)
+        if (this._isClickInsideExistingField(clickX, clickY)) {
+            warn('[AutoBoxer] ❌ Click is inside existing field - blocking bbox creation');
             return null;
         }
 
@@ -85,58 +170,84 @@ export class AutoBoxer {
         const canvasX = Math.round(clickX * this._scale);
         const canvasY = Math.round(clickY * this._scale);
 
-        console.log(`[AutoBoxer] Canvas coords: (${canvasX}, ${canvasY}), scale: ${this._scale}`);
+        log(`[AutoBoxer] Canvas coords: (${canvasX}, ${canvasY}), scale: ${this._scale}`);
 
         // Step 1: Find floor (MANDATORY)
         const floor = this._findFloor(canvasX, canvasY);
         if (!floor) {
-            console.log('[AutoBoxer] ❌ No floor found - cannot create field');
+            log('[AutoBoxer] ❌ No floor found - cannot create field');
             return null;  // No floor = no field (mandatory rule)
         }
-        console.log(`[AutoBoxer] ✓ Floor found at Y=${floor.y}, length=${floor.length}`);
+        log(`[AutoBoxer] ✓ Floor found at Y=${floor.y}, length=${floor.length}, extent=[${floor.leftExtent}, ${floor.rightExtent}]`);
 
         const floorY = floor.y;
+        // V3.2: Floor bounds are ABSOLUTE limits - no wall can be beyond these
+        const floorLeftBound = floor.leftExtent;
+        const floorRightBound = floor.rightExtent;
 
         // Step 2: Find left wall (First-Hit on floor level)
         // Pass canvasX for dead zone check (no text walls within MIN_INNER_MARGIN of click)
         const leftWall = this._findLeftWall(canvasX, floorY, canvasX);
-        let leftX = leftWall ? leftWall.x : Math.max(0, canvasX - CONFIG.DEFAULT_WIDTH * this._scale / 2);
-        console.log(`[AutoBoxer] Left wall: ${leftWall ? `found at X=${leftWall.x}` : 'not found, using default'}`);
+        // V3.2: If wall found - use it (but not beyond floor). If no wall - use DEFAULT_WIDTH (but not beyond floor)
+        let leftX;
+        if (leftWall) {
+            leftX = Math.max(leftWall.x, floorLeftBound);
+        } else {
+            // No wall found - use default width, but respect floor bound
+            leftX = Math.max(canvasX - CONFIG.DEFAULT_WIDTH * this._scale / 2, floorLeftBound);
+        }
+        log(`[AutoBoxer] Left wall: ${leftWall ? `found at X=${leftWall.x}` : 'not found (using default)'}, using X=${leftX} (floor bound=${floorLeftBound})`);
 
         // Step 3: Find right wall (First-Hit on floor level)
         const rightWall = this._findRightWall(canvasX, floorY, canvasX);
-        let rightX = rightWall ? rightWall.x : Math.min(this._canvasWidth, canvasX + CONFIG.DEFAULT_WIDTH * this._scale / 2);
-        console.log(`[AutoBoxer] Right wall: ${rightWall ? `found at X=${rightWall.x}` : 'not found, using default'}`);
+        // V3.2: If wall found - use it (but not beyond floor). If no wall - use DEFAULT_WIDTH (but not beyond floor)
+        let rightX;
+        if (rightWall) {
+            rightX = Math.min(rightWall.x, floorRightBound);
+        } else {
+            // No wall found - use default width, but respect floor bound
+            rightX = Math.min(canvasX + CONFIG.DEFAULT_WIDTH * this._scale / 2, floorRightBound);
+        }
+        log(`[AutoBoxer] Right wall: ${rightWall ? `found at X=${rightWall.x}` : 'not found (using default)'}, using X=${rightX} (floor bound=${floorRightBound})`);
 
         // Step 3.5: Apply MAX_WIDTH constraint
-        // If walls are too far apart (like a long floor line), use DEFAULT_WIDTH
+        // If walls are too far apart (like a long floor line), use DEFAULT_WIDTH centered on click
+        // BUT still respect floor bounds
         const maxWidth = CONFIG.MAX_WIDTH * this._scale;
         let computedWidth = rightX - leftX;
 
         if (computedWidth > maxWidth) {
-            console.log(`[AutoBoxer] Width ${Math.round(computedWidth)} exceeds MAX_WIDTH ${Math.round(maxWidth)}, using default centered on click`);
-            leftX = canvasX - CONFIG.DEFAULT_WIDTH * this._scale / 2;
-            rightX = canvasX + CONFIG.DEFAULT_WIDTH * this._scale / 2;
+            log(`[AutoBoxer] Width ${Math.round(computedWidth)} exceeds MAX_WIDTH ${Math.round(maxWidth)}, centering on click`);
+            let newLeft = canvasX - CONFIG.DEFAULT_WIDTH * this._scale / 2;
+            let newRight = canvasX + CONFIG.DEFAULT_WIDTH * this._scale / 2;
+            // Still respect floor bounds!
+            leftX = Math.max(newLeft, floorLeftBound);
+            rightX = Math.min(newRight, floorRightBound);
             computedWidth = rightX - leftX;
         }
 
         // Step 4: Find ceiling (between walls, going up from floor)
         const ceiling = this._findCeiling(leftX, rightX, floorY);
         const topY = ceiling ? ceiling.y : Math.max(0, floorY - CONFIG.DEFAULT_HEIGHT * this._scale);
-        console.log(`[AutoBoxer] Ceiling: ${ceiling ? `found at Y=${ceiling.y}` : 'not found, using default'}`);
+        log(`[AutoBoxer] Ceiling: ${ceiling ? `found at Y=${ceiling.y}` : 'not found, using default'}`);
 
         // Calculate bbox in canvas coordinates
         let width = rightX - leftX;
         let height = floorY - topY;
 
         // Apply minimum constraints (in canvas pixels)
+        // V3.2: But still respect floor bounds!
         const minWidth = CONFIG.MIN_WIDTH * this._scale;
         const minHeight = CONFIG.MIN_HEIGHT * this._scale;
 
         if (width < minWidth) {
             const diff = minWidth - width;
-            leftX -= diff / 2;
-            width = minWidth;
+            // Try to expand equally, but respect floor bounds
+            let expandLeft = Math.min(diff / 2, leftX - floorLeftBound);
+            let expandRight = Math.min(diff / 2, floorRightBound - rightX);
+            leftX -= expandLeft;
+            rightX += expandRight;
+            width = rightX - leftX;
         }
         if (height < minHeight) {
             height = minHeight;
@@ -156,7 +267,7 @@ export class AutoBoxer {
         bbox.x = Math.max(0, Math.min(bbox.x, layerWidth - bbox.width));
         bbox.y = Math.max(0, Math.min(bbox.y, layerHeight - bbox.height));
 
-        console.log('[AutoBoxer] ✓ Computed bbox:', bbox);
+        log('[AutoBoxer] ✓ Computed bbox:', bbox);
         return bbox;
     }
 
@@ -165,6 +276,7 @@ export class AutoBoxer {
     /**
      * Load pixel data from the rendered PDF page
      * Creates a canvas and extracts ImageData for pixel scanning
+     * V3.3: Uses loading lock to prevent race condition in parallel calls
      */
     async _loadPixelData() {
         const currentPage = pdfEngine.currentPage;
@@ -174,10 +286,30 @@ export class AutoBoxer {
             return true;
         }
 
+        // V3.3: If already loading, wait for the existing promise (prevents race condition)
+        if (this._loadingPromise) {
+            return this._loadingPromise;
+        }
+
+        // V3.3: Create loading promise to prevent parallel loads
+        this._loadingPromise = this._doLoadPixelData(currentPage);
+
+        try {
+            return await this._loadingPromise;
+        } finally {
+            this._loadingPromise = null;
+        }
+    }
+
+    /**
+     * V3.3: Internal method that does the actual pixel data loading
+     * Separated to support the loading lock pattern
+     */
+    async _doLoadPixelData(currentPage) {
         // Get the rendered image element
         const imgElement = document.querySelector('#pdf-container img');
         if (!imgElement || !imgElement.complete) {
-            console.warn('[AutoBoxer] PDF image not ready');
+            warn('[AutoBoxer] PDF image not ready');
             return false;
         }
 
@@ -186,7 +318,7 @@ export class AutoBoxer {
         const displayHeight = imgElement.height || imgElement.naturalHeight;
 
         if (!displayWidth || !displayHeight) {
-            console.warn('[AutoBoxer] Invalid image dimensions');
+            warn('[AutoBoxer] Invalid image dimensions');
             return false;
         }
 
@@ -195,6 +327,12 @@ export class AutoBoxer {
         this._canvasWidth = imgElement.naturalWidth;
         this._canvasHeight = imgElement.naturalHeight;
         this._scale = this._canvasWidth / displayWidth;
+
+        // V3.3: Validate scale to prevent division by zero later
+        if (!this._scale || this._scale <= 0 || !isFinite(this._scale)) {
+            warn('[AutoBoxer] Invalid scale calculated:', this._scale);
+            this._scale = 1;  // Fallback to 1:1
+        }
 
         // Create canvas for pixel access
         if (!this._pixelCanvas) {
@@ -212,7 +350,7 @@ export class AutoBoxer {
         this._pixelData = this._pixelContext.getImageData(0, 0, this._canvasWidth, this._canvasHeight);
         this._currentPage = currentPage;
 
-        console.log(`[AutoBoxer] Loaded pixel data: ${this._canvasWidth}x${this._canvasHeight}, scale=${this._scale.toFixed(2)}`);
+        log(`[AutoBoxer] Loaded pixel data: ${this._canvasWidth}x${this._canvasHeight}, scale=${this._scale.toFixed(2)}`);
         return true;
     }
 
@@ -293,7 +431,13 @@ export class AutoBoxer {
             // Check for horizontal ink pattern at this Y
             const floorInfo = this._detectHorizontalLine(y, startX, minLength, gapTolerance);
             if (floorInfo) {
-                return { y, length: floorInfo.length };
+                // V3.2: Return floor bounds - these are HARD limits for wall detection
+                return {
+                    y,
+                    length: floorInfo.length,
+                    leftExtent: floorInfo.leftExtent,
+                    rightExtent: floorInfo.rightExtent
+                };
             }
         }
 
@@ -348,10 +492,8 @@ export class AutoBoxer {
     // ============ WALL DETECTION ============
 
     /**
-     * Find left wall using First-Hit Logic
-     * Scans leftward on floor level looking for:
-     * 1. Vertical line patterns (subject to Continuity Law)
-     * 2. Text obstacles (ALWAYS a wall, no continuity check)
+     * Find left wall - V3.2: Priority-based wall detection
+     * Priority: 1. Existing fields  2. Vertical lines  3. Text (only if no line exists)
      *
      * @param {number} startX - Start X in canvas coordinates
      * @param {number} floorY - Floor Y in canvas coordinates
@@ -362,44 +504,73 @@ export class AutoBoxer {
         const minHeight = CONFIG.MIN_WALL_HEIGHT * this._scale;
         const deadZone = CONFIG.MIN_INNER_MARGIN * this._scale;
 
-        // Scan leftward from start
+        // V3.2: Collect walls by type, then apply priority rules
+        let fieldWall = null;
+        let verticalLineWall = null;
+        let textWall = null;
+
+        // Check 1: Existing field edge (can be beyond MAX_SEARCH)
+        const existingField = this._findExistingFieldEdge(startX, floorY, 'left');
+        if (existingField) {
+            fieldWall = { x: existingField.x, distance: startX - existingField.x };
+        }
+
+        // Scan leftward for vertical lines and text
         for (let dx = 5; dx < maxSearch; dx++) {
             const x = Math.round(startX - dx);
             if (x < 0) break;
 
-            // Check for vertical LINE pattern at this X
-            if (this._isVerticalWall(x, floorY, minHeight)) {
-                // Apply Continuity Law: is this line isolated?
+            // Check 2: Vertical LINE pattern (first-hit)
+            if (!verticalLineWall && this._isVerticalWall(x, floorY, minHeight)) {
                 if (this._isIsolatedVerticalLine(x, floorY, minHeight)) {
-                    console.log(`[AutoBoxer] Left wall: isolated vertical line at X=${x}`);
-                    return { x };
+                    verticalLineWall = { x, distance: dx };
                 }
-                // Line is part of a sequence (like date separators) - skip it
-                continue;
+                // V3.3: Removed 'continue' - still check for text at this position
             }
 
-            // Check for TEXT obstacle (requires robust detection)
-            // Skip if within dead zone near click point
-            const distanceFromClick = Math.abs(x - clickX);
-            if (distanceFromClick < deadZone) {
-                continue;  // Too close to click - ignore small marks
+            // Check 3: TEXT obstacle (first-hit)
+            // V3.2: Skip text BELOW floor (= LABEL, not wall)
+            if (!textWall) {
+                const distanceFromClick = Math.abs(x - clickX);
+                if (distanceFromClick >= deadZone &&
+                    this._isTextObstacle(x, floorY) &&
+                    !this._isTextBelowFloor(x, floorY)) {
+                    textWall = { x, distance: dx };
+                }
             }
 
-            // Text is ALWAYS a wall - NO continuity check
-            if (this._isTextObstacle(x, floorY)) {
-                console.log(`[AutoBoxer] Left wall: text obstacle at X=${x} (dist=${Math.round(distanceFromClick)})`);
-                return { x };
-            }
+            // Stop if we found both
+            if (verticalLineWall && textWall) break;
+        }
+
+        // V3.3: Apply priority rules - EXISTING FIELDS ALWAYS WIN
+        // Priority: 1. Existing fields (ABSOLUTE)  2. Vertical lines  3. Text
+
+        // RULE 1: Existing field is ALWAYS the wall (prevents overlap)
+        // V3.3: Changed - existing fields have absolute priority over any pixel-based detection
+        if (fieldWall) {
+            log(`[AutoBoxer] Left wall: FIELD at X=${fieldWall.x} (absolute priority)`);
+            return { x: fieldWall.x };
+        }
+
+        // RULE 2: If no field, use vertical line
+        if (verticalLineWall) {
+            log(`[AutoBoxer] Left wall: vertical_line at X=${verticalLineWall.x}`);
+            return { x: verticalLineWall.x };
+        }
+
+        // RULE 3: If no line, use text
+        if (textWall) {
+            log(`[AutoBoxer] Left wall: text at X=${textWall.x}`);
+            return { x: textWall.x };
         }
 
         return null;
     }
 
     /**
-     * Find right wall using First-Hit Logic
-     * Scans rightward on floor level looking for:
-     * 1. Vertical line patterns (subject to Continuity Law)
-     * 2. Text obstacles (ALWAYS a wall, no continuity check)
+     * Find right wall - V3.2: Priority-based wall detection
+     * Priority: 1. Existing fields  2. Vertical lines  3. Text (only if no line exists)
      *
      * @param {number} startX - Start X in canvas coordinates
      * @param {number} floorY - Floor Y in canvas coordinates
@@ -410,37 +581,205 @@ export class AutoBoxer {
         const minHeight = CONFIG.MIN_WALL_HEIGHT * this._scale;
         const deadZone = CONFIG.MIN_INNER_MARGIN * this._scale;
 
-        // Scan rightward from start
+        // V3.2: Collect walls by type, then apply priority rules
+        let fieldWall = null;
+        let verticalLineWall = null;
+        let textWall = null;
+
+        // Check 1: Existing field edge (can be beyond MAX_SEARCH)
+        const existingField = this._findExistingFieldEdge(startX, floorY, 'right');
+        if (existingField) {
+            fieldWall = { x: existingField.x, distance: existingField.x - startX };
+        }
+
+        // Scan rightward for vertical lines and text
         for (let dx = 5; dx < maxSearch; dx++) {
             const x = Math.round(startX + dx);
             if (x >= this._canvasWidth) break;
 
-            // Check for vertical LINE pattern at this X
-            if (this._isVerticalWall(x, floorY, minHeight)) {
-                // Apply Continuity Law: is this line isolated?
+            // Check 2: Vertical LINE pattern (first-hit)
+            if (!verticalLineWall && this._isVerticalWall(x, floorY, minHeight)) {
                 if (this._isIsolatedVerticalLine(x, floorY, minHeight)) {
-                    console.log(`[AutoBoxer] Right wall: isolated vertical line at X=${x}`);
-                    return { x };
+                    verticalLineWall = { x, distance: dx };
                 }
-                // Line is part of a sequence - skip it
-                continue;
+                // V3.3: Removed 'continue' - still check for text at this position
             }
 
-            // Check for TEXT obstacle (requires robust detection)
-            // Skip if within dead zone near click point
-            const distanceFromClick = Math.abs(x - clickX);
-            if (distanceFromClick < deadZone) {
-                continue;  // Too close to click - ignore small marks
+            // Check 3: TEXT obstacle (first-hit)
+            // V3.2: Skip text BELOW floor (= LABEL, not wall)
+            if (!textWall) {
+                const distanceFromClick = Math.abs(x - clickX);
+                if (distanceFromClick >= deadZone &&
+                    this._isTextObstacle(x, floorY) &&
+                    !this._isTextBelowFloor(x, floorY)) {
+                    textWall = { x, distance: dx };
+                }
             }
 
-            // Text is ALWAYS a wall - NO continuity check
-            if (this._isTextObstacle(x, floorY)) {
-                console.log(`[AutoBoxer] Right wall: text obstacle at X=${x} (dist=${Math.round(distanceFromClick)})`);
-                return { x };
-            }
+            // Stop if we found both
+            if (verticalLineWall && textWall) break;
+        }
+
+        // V3.3: Apply priority rules - EXISTING FIELDS ALWAYS WIN
+        // Priority: 1. Existing fields (ABSOLUTE)  2. Vertical lines  3. Text
+
+        // RULE 1: Existing field is ALWAYS the wall (prevents overlap)
+        // V3.3: Changed - existing fields have absolute priority over any pixel-based detection
+        if (fieldWall) {
+            log(`[AutoBoxer] Right wall: FIELD at X=${fieldWall.x} (absolute priority)`);
+            return { x: fieldWall.x };
+        }
+
+        // RULE 2: If no field, use vertical line
+        if (verticalLineWall) {
+            log(`[AutoBoxer] Right wall: vertical_line at X=${verticalLineWall.x}`);
+            return { x: verticalLineWall.x };
+        }
+
+        // RULE 3: If no line, use text
+        if (textWall) {
+            log(`[AutoBoxer] Right wall: text at X=${textWall.x}`);
+            return { x: textWall.x };
         }
 
         return null;
+    }
+
+    /**
+     * V3.2: Find ALL walls in a direction, classified as hard/soft
+     * Used for wall cycling feature - returns all candidates sorted by distance
+     *
+     * @param {number} startX - Start X in screen coordinates
+     * @param {number} floorY - Floor Y in screen coordinates
+     * @param {string} direction - 'left' or 'right'
+     * @param {Object} floorBounds - { leftExtent, rightExtent } from floor detection
+     * @returns {Object} { walls: [...], hardLimit: number }
+     */
+    findAllWalls(startX, floorY, direction, floorBounds) {
+        const canvasStartX = Math.round(startX * this._scale);
+        const canvasFloorY = Math.round(floorY * this._scale);
+        const maxSearch = (direction === 'left' ? CONFIG.MAX_SEARCH_LEFT : CONFIG.MAX_SEARCH_RIGHT) * this._scale;
+        const minHeight = CONFIG.MIN_WALL_HEIGHT * this._scale;
+        const structuralThreshold = CONFIG.STRUCTURAL_WALL_HEIGHT * this._scale;
+
+        const walls = [];
+
+        // HARD WALL 1: Floor bounds (absolute limit)
+        const floorLimit = direction === 'left' ? floorBounds?.leftExtent : floorBounds?.rightExtent;
+        let hardLimit = floorLimit || (direction === 'left' ? 0 : this._canvasWidth / this._scale);
+
+        // HARD WALL 2: Existing fields
+        const fieldWall = this._findExistingFieldEdge(canvasStartX, canvasFloorY, direction);
+        if (fieldWall) {
+            const fieldX = fieldWall.x / this._scale;
+            walls.push({
+                x: fieldX,
+                type: 'EXISTING_FIELD',
+                isHard: true,
+                description: 'שדה קיים'
+            });
+            // Update hard limit to closest hard wall
+            if (direction === 'left') {
+                hardLimit = Math.max(hardLimit, fieldX);
+            } else {
+                hardLimit = Math.min(hardLimit, fieldX);
+            }
+        }
+
+        // Scan for all walls
+        let foundStructural = false;
+
+        for (let dx = 5; dx < maxSearch; dx++) {
+            const x = direction === 'left'
+                ? Math.round(canvasStartX - dx)
+                : Math.round(canvasStartX + dx);
+
+            if (x < 0 || x >= this._canvasWidth) break;
+
+            // Check for vertical line
+            if (this._isVerticalWall(x, canvasFloorY, minHeight)) {
+                const lineHeight = this._measureVerticalLineHeight(x, canvasFloorY);
+                const screenX = x / this._scale;
+
+                // HARD WALL 3: Structural wall (tall vertical line)
+                if (lineHeight >= structuralThreshold) {
+                    walls.push({
+                        x: screenX,
+                        type: 'STRUCTURAL_WALL',
+                        isHard: true,
+                        description: 'קיר מבני'
+                    });
+                    if (!foundStructural) {
+                        foundStructural = true;
+                        if (direction === 'left') {
+                            hardLimit = Math.max(hardLimit, screenX);
+                        } else {
+                            hardLimit = Math.min(hardLimit, screenX);
+                        }
+                    }
+                }
+                // SOFT WALL: Small/medium vertical line
+                else if (this._isIsolatedVerticalLine(x, canvasFloorY, minHeight)) {
+                    walls.push({
+                        x: screenX,
+                        type: 'VERTICAL_LINE',
+                        isHard: false,
+                        description: 'קו אנכי'
+                    });
+                }
+            }
+
+            // SOFT WALL: Text obstacle
+            // V3.2: Skip text that is BELOW the floor (= LABEL for this field, not wall)
+            if (this._isTextObstacle(x, canvasFloorY) && !this._isTextBelowFloor(x, canvasFloorY)) {
+                const screenX = x / this._scale;
+                // Check if we already have a wall at similar position
+                const exists = walls.some(w => Math.abs(w.x - screenX) < 5);
+                if (!exists) {
+                    walls.push({
+                        x: screenX,
+                        type: 'TEXT',
+                        isHard: false,
+                        description: 'טקסט'
+                    });
+                }
+            }
+        }
+
+        // Sort by distance from start
+        walls.sort((a, b) => {
+            const distA = direction === 'left' ? startX - a.x : a.x - startX;
+            const distB = direction === 'left' ? startX - b.x : b.x - startX;
+            return distA - distB;
+        });
+
+        // Add floor bound as final hard limit
+        walls.push({
+            x: hardLimit,
+            type: 'FLOOR_BOUND',
+            isHard: true,
+            description: 'גבול ריצפה'
+        });
+
+        log(`[AutoBoxer] findAllWalls ${direction}: ${walls.length} walls, hardLimit=${Math.round(hardLimit)}`);
+
+        return { walls, hardLimit };
+    }
+
+    /**
+     * Measure the height of a vertical line at X
+     */
+    _measureVerticalLineHeight(x, floorY) {
+        let height = 0;
+        // Scan upward
+        for (let dy = 0; dy < 500; dy++) {
+            if (this._isInk(x, floorY - dy)) {
+                height++;
+            } else if (dy > 10 && height > 0) {
+                break; // Gap found after some ink
+            }
+        }
+        return height;
     }
 
     /**
@@ -484,8 +823,14 @@ export class AutoBoxer {
         const structuralThreshold = minHeight * 3;  // Structural lines are 3x+ taller
 
         if (lineHeight > structuralThreshold) {
-            console.log(`[AutoBoxer] STRUCTURAL WALL at X=${x} (height=${lineHeight.toFixed(0)} > ${structuralThreshold.toFixed(0)}) → WALL`);
             return true;  // Tall structural line = always a wall, regardless of neighbors
+        }
+
+        // ============ CHECK 0.5: CEILING CONNECTION ============
+        // V3.3: Controlled by feature flag USE_CEILING_CONNECTION (default: false)
+        // May cause precision issues in some forms - enable with caution
+        if (REFINER_FEATURES.USE_CEILING_CONNECTION && this._hasConnectedCeiling(x, floorY, minHeight)) {
+            return true;  // Connected to ceiling = structural boundary
         }
 
         // ============ CHECK 1: FIND SIMILAR LINES ============
@@ -493,7 +838,8 @@ export class AutoBoxer {
         // CRITICAL: Use a REDUCED height threshold for neighbor detection!
         // Kakakim (digit separators) are often shorter than full walls
         // We want to detect them as neighbors even if they're too short to be standalone walls
-        const kakakMinHeight = Math.max(6 * this._scale, minHeight * 0.4);  // Kakakim can be shorter
+        // V3.2: Lowered threshold - kakakim can be very short (4px base instead of 6px)
+        const kakakMinHeight = Math.max(4 * this._scale, minHeight * 0.3);  // Kakakim can be very short
 
         let leftSimilarCount = 0;
         let rightSimilarCount = 0;
@@ -524,7 +870,8 @@ export class AutoBoxer {
         const isPartOfSequence = hasLeftNeighbor || hasRightNeighbor;
         const totalNeighbors = leftSimilarCount + rightSimilarCount;
 
-        console.log(`[AutoBoxer] Line X=${x}: kakakMinHeight=${kakakMinHeight.toFixed(0)}, neighbors L=${leftSimilarCount} R=${rightSimilarCount}`);
+        // Debug log disabled - too verbose
+        // log(`[AutoBoxer] Line X=${x}: neighbors L=${leftSimilarCount} R=${rightSimilarCount}`);
 
         // ============ CHECK 2: SPATIAL PROPERTIES ============
         // Measure free run (white space) on each side
@@ -556,12 +903,10 @@ export class AutoBoxer {
                                      (rightSimilarCount >= 3 && leftSimilarCount === 0);
 
             if (isVeryStrongAsymmetry && isAtEdgeOfField) {
-                console.log(`[AutoBoxer] TRUE WALL at X=${x} (edge of field, strong asymmetry) → WALL`);
                 return true;
             }
 
             // Otherwise: has kakakim nearby = part of field area = SKIP
-            console.log(`[AutoBoxer] Continuity: Line at X=${x} near kakakim (L=${leftSimilarCount}, R=${rightSimilarCount}) → SKIP`);
             return false;
         }
 
@@ -570,13 +915,14 @@ export class AutoBoxer {
         const hasModerateAsymmetry = freeRunRatio > 3.0 || ceilingDiff > 20 * this._scale;
 
         if (hasModerateAsymmetry) {
-            console.log(`[AutoBoxer] Isolated line at X=${x} with spatial break → WALL`);
             return true;
         }
 
-        // Isolated but no spatial difference - still a wall (standalone vertical line)
-        console.log(`[AutoBoxer] Isolated line at X=${x} → WALL`);
-        return true;
+        // V3.3: Isolated line with NO spatial difference = probably noise, NOT a wall
+        // Changed from "return true" to "return false" to reduce false positives
+        // Real table borders have clear spatial asymmetry (different ceiling/free run on each side)
+        log(`[AutoBoxer] Line X=${x}: isolated but no spatial difference - treating as noise`);
+        return false;
     }
 
     /**
@@ -622,6 +968,87 @@ export class AutoBoxer {
         }
 
         return bottomExtent - topExtent;
+    }
+
+    /**
+     * Check if a vertical line connects to a horizontal ceiling at its top
+     * This forms an "L" or "T" shape that indicates a structural field boundary
+     *
+     * @param {number} x - X position of the vertical line
+     * @param {number} floorY - Floor Y level
+     * @param {number} minHeight - Minimum wall height
+     * @returns {boolean} True if ceiling is connected at top
+     */
+    _hasConnectedCeiling(x, floorY, minHeight) {
+        // First, find the top of this vertical line
+        let topY = floorY;
+        const maxSearch = 150 * this._scale;
+
+        for (let dy = 1; dy < maxSearch; dy++) {
+            const y = floorY - dy;
+            if (y < 0) break;
+
+            if (this._isInk(x, y)) {
+                topY = y;
+            } else {
+                // Allow small gaps (1-2 pixels)
+                if (!this._isInk(x, y - 1) && !this._isInk(x, y - 2)) {
+                    break;
+                }
+            }
+        }
+
+        // Check if the line is tall enough to be meaningful
+        const lineHeight = floorY - topY;
+        if (lineHeight < minHeight * 0.7) {
+            return false;  // Too short to check for ceiling
+        }
+
+        // Now check for horizontal ink (ceiling) at the top of this line
+        // Check both left and right directions from the top point
+        const ceilingCheckWidth = 20 * this._scale;  // Check 20px in each direction
+        const ceilingCheckY = topY;
+
+        let leftInkCount = 0;
+        let rightInkCount = 0;
+
+        // Check left for horizontal ink
+        for (let dx = 2; dx < ceilingCheckWidth; dx++) {
+            const checkX = x - dx;
+            if (checkX < 0) break;
+
+            // Check a vertical band (ceiling might be a few pixels thick)
+            for (let bandY = -2; bandY <= 2; bandY++) {
+                if (this._isInk(checkX, ceilingCheckY + bandY)) {
+                    leftInkCount++;
+                    break;  // Found ink in this column, move to next
+                }
+            }
+        }
+
+        // Check right for horizontal ink
+        for (let dx = 2; dx < ceilingCheckWidth; dx++) {
+            const checkX = x + dx;
+            if (checkX >= this._canvasWidth) break;
+
+            for (let bandY = -2; bandY <= 2; bandY++) {
+                if (this._isInk(checkX, ceilingCheckY + bandY)) {
+                    rightInkCount++;
+                    break;
+                }
+            }
+        }
+
+        // A ceiling is present if there's continuous ink in either direction
+        // Require at least 10 pixels of horizontal ink to be a ceiling
+        const minCeilingLength = 10 * this._scale;
+        const hasCeiling = leftInkCount >= minCeilingLength || rightInkCount >= minCeilingLength;
+
+        if (hasCeiling) {
+            log(`[AutoBoxer] Line X=${Math.round(x)} has ceiling (L=${leftInkCount}, R=${rightInkCount}) -> STRUCTURAL`);
+        }
+
+        return hasCeiling;
     }
 
     /**
@@ -703,17 +1130,27 @@ export class AutoBoxer {
             for (const word of this._wordBboxes) {
                 // Check horizontal: does this word's X range include our scan position?
                 if (screenX >= word.x - padding && screenX <= word.right + padding) {
-                    // Check vertical: is this word at INPUT level (same row), not LABEL level (above)?
-                    // Word baseline (bottom) should be close to floor baseline
-                    const distFromFloor = screenFloorY - word.bottom;
+                    // V3.2: No minimum width - text is only considered if no vertical line exists
+                    // (Priority rule in _findLeftWall/_findRightWall handles this)
 
-                    // distFromFloor > 0 means word is above floor (normal)
-                    // distFromFloor < 0 means word is below floor (unlikely)
-                    // We want words where: -padding <= distFromFloor <= maxDistanceFromFloor
-                    if (distFromFloor >= -padding && distFromFloor <= maxDistanceFromFloor) {
+                    // Check vertical: is this word at INPUT level (same row)?
+                    // V3.2: Hebrew forms often have labels BELOW the line, so check both above AND below
+                    // distFromFloor > 0 means word bottom is above floor
+                    // distFromFloor < 0 means word bottom is below floor
+                    const distFromFloor = screenFloorY - word.bottom;
+                    const distFromTop = screenFloorY - word.y;  // Check word top too
+
+                    // Word is at input level if:
+                    // 1. Its bottom is near floor (above or below): |distFromFloor| <= threshold
+                    // 2. OR its top is near floor (for text below line)
+                    const maxDistAbove = maxDistanceFromFloor;  // 20px above floor
+                    const maxDistBelow = 30;  // 30px below floor (for labels under line)
+
+                    if ((distFromFloor >= -maxDistBelow && distFromFloor <= maxDistAbove) ||
+                        (distFromTop >= -maxDistBelow && distFromTop <= maxDistAbove)) {
                         return true;  // Text at input level = wall
                     }
-                    // Else: word is a label above the field, not a wall
+                    // Else: word is a header/title far above the field
                 }
             }
             return false;  // No word bbox at input level
@@ -722,6 +1159,110 @@ export class AutoBoxer {
         // METHOD 2: Pixel-based blob detection (fallback)
         // Requires minimum ink density in a sample area, not just single pixels
         return this._hasInkBlob(x, floorY);
+    }
+
+    /**
+     * V3.2: Check if text at position X is BELOW the floor line (= LABEL, not wall)
+     * Labels below floor belong to THIS field, not a wall for adjacent fields
+     *
+     * @param {number} x - Canvas X coordinate
+     * @param {number} floorY - Floor Y in canvas coordinates
+     * @returns {boolean} True if text is below floor (is a label)
+     */
+    _isTextBelowFloor(x, floorY) {
+        const screenX = x / this._scale;
+        const screenFloorY = floorY / this._scale;
+
+        if (!this._wordBboxes || this._wordBboxes.length === 0) {
+            return false;
+        }
+
+        const padding = CONFIG.TEXT_PADDING;
+
+        for (const word of this._wordBboxes) {
+            // Check horizontal: does this word's X range include our scan position?
+            if (screenX >= word.x - padding && screenX <= word.right + padding) {
+                // Check if word TOP is below floor line
+                // word.y is the TOP of the word bbox
+                // If word.y > screenFloorY, the word starts BELOW the floor
+                if (word.y > screenFloorY) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * V3.2: Find gaps between labels below the floor line and return as virtual walls
+     * Labels below floor indicate field sections - gaps between them are field boundaries
+     *
+     * @param {number} floorY - Floor Y in canvas coordinates
+     * @param {number} searchLeft - Left boundary of search (canvas coords)
+     * @param {number} searchRight - Right boundary of search (canvas coords)
+     * @returns {Array} Array of { x: screenX, type: 'LABEL_GAP' } for each gap midpoint
+     */
+    _findLabelGapsAsWalls(floorY, searchLeft, searchRight) {
+        const screenFloorY = floorY / this._scale;
+        const screenSearchLeft = searchLeft / this._scale;
+        const screenSearchRight = searchRight / this._scale;
+
+        if (!this._wordBboxes || this._wordBboxes.length === 0) {
+            return [];
+        }
+
+        // Find all labels below the floor line within search range
+        const labelsBelow = [];
+        const maxDistBelow = 40;  // Labels up to 40px below floor
+
+        for (const word of this._wordBboxes) {
+            // Check if word is below floor
+            if (word.y > screenFloorY && word.y < screenFloorY + maxDistBelow) {
+                // Check if word is within horizontal search range
+                if (word.right >= screenSearchLeft && word.x <= screenSearchRight) {
+                    labelsBelow.push({
+                        text: word.text || '',
+                        x: word.x,
+                        right: word.right,
+                        center: (word.x + word.right) / 2
+                    });
+                }
+            }
+        }
+
+        if (labelsBelow.length < 2) {
+            // Need at least 2 labels to have a gap
+            return [];
+        }
+
+        // Sort labels by X position (right to left for Hebrew)
+        labelsBelow.sort((a, b) => a.x - b.x);
+
+        // Calculate gaps between labels
+        const virtualWalls = [];
+        const minGap = 15;  // Minimum gap to be considered a boundary
+
+        for (let i = 0; i < labelsBelow.length - 1; i++) {
+            const currentLabel = labelsBelow[i];
+            const nextLabel = labelsBelow[i + 1];
+
+            const gapStart = currentLabel.right;
+            const gapEnd = nextLabel.x;
+            const gapSize = gapEnd - gapStart;
+
+            if (gapSize >= minGap) {
+                const gapMidpoint = (gapStart + gapEnd) / 2;
+                virtualWalls.push({
+                    x: gapMidpoint,
+                    type: 'LABEL_GAP',
+                    isHard: false,
+                    description: 'גבול בין שדות'
+                });
+            }
+        }
+
+        return virtualWalls;
     }
 
     /**
@@ -760,8 +1301,79 @@ export class AutoBoxer {
     }
 
     /**
+     * V3.2: Find the closest existing field edge in the given direction
+     * Called ONCE at start of wall search (not per-pixel)
+     *
+     * @param {number} startX - Start X in canvas coordinates
+     * @param {number} floorY - Floor Y in canvas coordinates
+     * @param {string} direction - 'left' or 'right'
+     * @returns {Object|null} { x: wallX in canvas coords } or null
+     */
+    _findExistingFieldEdge(startX, floorY, direction) {
+        if (!this._neighborFields || this._neighborFields.length === 0) {
+            return null;
+        }
+
+        const screenStartX = startX / this._scale;
+        const screenFloorY = floorY / this._scale;
+        const PADDING = 4;  // Gap between fields
+
+        let closestWall = null;
+        let closestDistance = Infinity;
+
+        for (const field of this._neighborFields) {
+            const fieldTop = field.y;
+            const fieldBottom = field.y + field.height;
+            const fieldLeft = field.x;
+            const fieldRight = field.x + field.width;
+
+            // V3.3: Check vertical overlap with larger tolerance (field must be on same horizontal band)
+            // Increased from 15px to 25px to catch more cases
+            const verticalOverlap = screenFloorY >= fieldTop - 25 && screenFloorY <= fieldBottom + 25;
+            if (!verticalOverlap) continue;
+
+            if (direction === 'left') {
+                // V3.3: Looking for fields to our LEFT or overlapping from the left
+                // Changed from fieldRight < screenStartX to fieldRight <= screenStartX + tolerance
+                // This catches fields that are partially overlapping
+                const OVERLAP_TOLERANCE = 10;  // Allow 10px overlap detection
+                if (fieldRight <= screenStartX + OVERLAP_TOLERANCE && fieldRight > 0) {
+                    const wallScreenX = fieldRight + PADDING;
+                    const distance = Math.max(0, screenStartX - wallScreenX);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestWall = { x: Math.round(wallScreenX * this._scale) };
+                    }
+                }
+            } else {
+                // V3.3: Looking for fields to our RIGHT or overlapping from the right
+                // Changed from fieldLeft > screenStartX to fieldLeft >= screenStartX - tolerance
+                const OVERLAP_TOLERANCE = 10;
+                if (fieldLeft >= screenStartX - OVERLAP_TOLERANCE) {
+                    const wallScreenX = fieldLeft - PADDING;
+                    const distance = Math.max(0, wallScreenX - screenStartX);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestWall = { x: Math.round(wallScreenX * this._scale) };
+                    }
+                }
+            }
+        }
+
+        if (closestWall) {
+            log(`[AutoBoxer] Found existing field as ${direction} wall at X=${closestWall.x}`);
+        }
+
+        return closestWall;
+    }
+
+    // V3.3: Removed dead code _isExistingFieldWall (LEGACY function that was never called)
+    // Functionality replaced by _findExistingFieldEdge
+
+    /**
      * Load word bounding boxes from TextExtractor cache
      * Converts PDF coordinates to screen coordinates
+     * V3.3: Added null checks for textExtractor
      */
     async _loadWordBboxes() {
         const currentPage = pdfEngine.currentPage;
@@ -775,30 +1387,35 @@ export class AutoBoxer {
         this._wordBboxPage = currentPage;
 
         try {
+            // V3.3: Check if textExtractor exists before accessing it
+            if (!textExtractor) {
+                log('[AutoBoxer] TextExtractor not available, loading directly from PDF');
+            }
+
             // Try to get text content from cache first, or load directly from PDF
-            let textContent = textExtractor.pageTextCache?.get(currentPage);
+            let textContent = textExtractor?.pageTextCache?.get(currentPage);
 
             if (!textContent || !textContent.items) {
                 // Load text content directly from PDF
                 const pdfDoc = pdfEngine.pdfDocument;
                 if (!pdfDoc) {
-                    console.log('[AutoBoxer] No PDF document available');
+                    log('[AutoBoxer] No PDF document available');
                     return;
                 }
 
                 const page = await pdfDoc.getPage(currentPage);
                 textContent = await page.getTextContent();
 
-                // Cache it for future use
-                if (textExtractor.pageTextCache) {
+                // Cache it for future use (V3.3: added optional chaining)
+                if (textExtractor?.pageTextCache) {
                     textExtractor.pageTextCache.set(currentPage, textContent);
                 }
 
-                console.log(`[AutoBoxer] Loaded text content directly: ${textContent.items?.length || 0} items`);
+                log(`[AutoBoxer] Loaded text content directly: ${textContent.items?.length || 0} items`);
             }
 
             if (!textContent || !textContent.items) {
-                console.log('[AutoBoxer] No text content available');
+                log('[AutoBoxer] No text content available');
                 return;
             }
 
@@ -844,9 +1461,9 @@ export class AutoBoxer {
                 });
             }
 
-            console.log(`[AutoBoxer] Loaded ${this._wordBboxes.length} word bboxes for text obstacle detection`);
+            log(`[AutoBoxer] Loaded ${this._wordBboxes.length} word bboxes for text obstacle detection`);
         } catch (error) {
-            console.warn('[AutoBoxer] Failed to load word bboxes:', error);
+            warn('[AutoBoxer] Failed to load word bboxes:', error);
             this._wordBboxes = [];
         }
     }
@@ -891,7 +1508,7 @@ export class AutoBoxer {
             // Text is impenetrable - if we hit text, STOP immediately
             // But only if the text is ABOVE the field area, not at floor level
             if (this._isTextCeiling(screenLeftX, screenRightX, screenY, screenFloorY)) {
-                console.log(`[AutoBoxer] Ceiling: TEXT collision at Y=${y} (screen=${screenY.toFixed(0)})`);
+                log(`[AutoBoxer] Ceiling: TEXT collision at Y=${y} (screen=${screenY.toFixed(0)})`);
                 return { y: y + 5 };  // Add small margin below text
             }
 
@@ -908,7 +1525,7 @@ export class AutoBoxer {
 
             // If significant ink across the width, this is ceiling
             if (inkCount >= samples * 0.5) {
-                console.log(`[AutoBoxer] Ceiling: INK pattern at Y=${y}`);
+                log(`[AutoBoxer] Ceiling: INK pattern at Y=${y}`);
                 return { y };
             }
         }
@@ -981,13 +1598,16 @@ export class AutoBoxer {
 
     /**
      * Clear pixel cache (call on page change)
+     * V3.3: Also clears loading promise
      */
     clearCache() {
         this._pixelData = null;
         this._currentPage = null;
         this._wordBboxes = null;
         this._wordBboxPage = null;
-        console.log('[AutoBoxer] Cache cleared');
+        this._neighborFields = [];  // V3.2: Also clear neighbor fields
+        this._loadingPromise = null;  // V3.3: Clear loading lock
+        log('[AutoBoxer] Cache cleared');
     }
 
     // ============ PUBLIC API FOR BBOXREFINER ============
@@ -1110,10 +1730,10 @@ export class AutoBoxer {
     async findTextBoundaryX(fromX, toX, floorY, direction) {
         await this._loadWordBboxes();
 
-        console.log(`[AutoBoxer] findTextBoundaryX: from=${fromX}, to=${toX}, floorY=${floorY}, dir=${direction}, words=${this._wordBboxes?.length || 0}`);
+        log(`[AutoBoxer] findTextBoundaryX: from=${fromX}, to=${toX}, floorY=${floorY}, dir=${direction}, words=${this._wordBboxes?.length || 0}`);
 
         if (!this._wordBboxes || this._wordBboxes.length === 0) {
-            console.log('[AutoBoxer] No word bboxes loaded!');
+            log('[AutoBoxer] No word bboxes loaded!');
             return null;  // No text, expansion is clear
         }
 
@@ -1125,7 +1745,7 @@ export class AutoBoxer {
         const minX = Math.min(fromX, toX);
         const maxX = Math.max(fromX, toX);
 
-        console.log(`[AutoBoxer] Search range X: ${minX}-${maxX}, Y: ${fieldTop}-${floorY}`);
+        log(`[AutoBoxer] Search range X: ${minX}-${maxX}, Y: ${fieldTop}-${floorY}`);
 
         for (const word of this._wordBboxes) {
             // Check if text is at field level (vertically overlapping)
@@ -1144,7 +1764,6 @@ export class AutoBoxer {
                 if (boundary >= toX && boundary < fromX) {
                     if (closestTextBoundary === null || boundary > closestTextBoundary) {
                         closestTextBoundary = boundary;
-                        console.log(`[AutoBoxer] Text "${word.text}" blocks LEFT at ${boundary}`);
                     }
                 }
             } else {
@@ -1154,7 +1773,6 @@ export class AutoBoxer {
                 if (boundary > fromX && boundary <= toX) {
                     if (closestTextBoundary === null || boundary < closestTextBoundary) {
                         closestTextBoundary = boundary;
-                        console.log(`[AutoBoxer] Text "${word.text}" blocks RIGHT at ${boundary}`);
                     }
                 }
             }
@@ -1202,7 +1820,6 @@ export class AutoBoxer {
                 if (boundary >= toY && boundary < fromY) {
                     if (closestTextBoundary === null || boundary > closestTextBoundary) {
                         closestTextBoundary = boundary;
-                        console.log(`[AutoBoxer] Text "${word.text}" blocks UP at ${boundary}`);
                     }
                 }
             } else {
@@ -1211,7 +1828,6 @@ export class AutoBoxer {
                 if (boundary > fromY && boundary <= toY) {
                     if (closestTextBoundary === null || boundary < closestTextBoundary) {
                         closestTextBoundary = boundary;
-                        console.log(`[AutoBoxer] Text "${word.text}" blocks DOWN at ${boundary}`);
                     }
                 }
             }
