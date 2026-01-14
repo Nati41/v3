@@ -262,7 +262,16 @@
         const isNumeric = /^[0-9]+$/.test(text);
 
         if (isNumeric) {
-            renderNumericField(container, text, fieldPt, scale, style);
+            // V3.10: Smart spacing - short numbers (1-3 digits) render as regular text
+            // Long numbers (4+) get spaced digits for ID/phone number fields
+            const MIN_DIGITS_FOR_SPACING = 4;
+
+            if (text.length >= MIN_DIGITS_FOR_SPACING) {
+                renderNumericField(container, text, fieldPt, scale, style);
+            } else {
+                // Short number (1-3 digits) - render centered, no spacing
+                renderTextField(container, text, fieldPt, scale, { ...style, alignment: 'center' });
+            }
         } else {
             renderTextField(container, text, fieldPt, scale, style);
         }

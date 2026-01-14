@@ -4418,6 +4418,16 @@ input, textarea {
     pointer-events: none;
 }
 
+/* V3.10: Signature resize handle */
+.quick-fill-signature .resize-handle {
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.quick-fill-signature:hover .resize-handle {
+    opacity: 1;
+}
+
 /* ============ QuickFill Toolbar Integration ============ */
 /* QuickFill buttons - same style as existing toolbar buttons */
 
@@ -4677,6 +4687,42 @@ body.quickfill-public-mode #mapper-container {
 body.quickfill-public-mode .toolbar {
     display: flex !important;
 }
+
+/* ============ V3.10: Typing Mode - Rectangle Disappears When Typing ============ */
+/* When user starts typing, the box becomes transparent - text floats on document */
+body.quickfill-public-mode .quick-fill-box.has-text {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Subtle hover hint for boxes with text */
+body.quickfill-public-mode .quick-fill-box.has-text:hover {
+    background: rgba(37, 99, 235, 0.03) !important;
+}
+
+/* When focused and typing, keep transparent */
+body.quickfill-public-mode .quick-fill-box.has-text:focus-within {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Checkbox/Radio - when checked, rectangle disappears */
+body.quickfill-public-mode .quick-fill-box.quick-fill-checkbox[data-checked="true"],
+body.quickfill-public-mode .quick-fill-box.quick-fill-radio[data-checked="true"],
+body.quickfill-public-mode .quick-fill-box.quick-fill-cell[data-checked="true"] {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Subtle hover hint for checked boxes */
+body.quickfill-public-mode .quick-fill-box.quick-fill-checkbox[data-checked="true"]:hover,
+body.quickfill-public-mode .quick-fill-box.quick-fill-radio[data-checked="true"]:hover,
+body.quickfill-public-mode .quick-fill-box.quick-fill-cell[data-checked="true"]:hover {
+    background: rgba(37, 99, 235, 0.03) !important;
+}
+
 
 /* ============ V3.10: Table Region Dialog ============ */
 .table-region-confirm-dialog {
@@ -5145,4 +5191,139 @@ body.quickfill-public-mode .toolbar {
     color: var(--text-secondary);
     margin: 8px 0 12px 0;
     font-style: italic;
+}
+
+/* ============================================
+   MOBILE RESPONSIVE STYLES
+   ============================================ */
+
+@media screen and (max-width: 768px) {
+    /* Hide sidebar on mobile */
+    .sidebar {
+        display: none !important;
+    }
+
+    /* Full width canvas area */
+    .main-area {
+        width: 100vw !important;
+        margin: 0 !important;
+    }
+
+    /* Adjust toolbar for mobile */
+    .main-toolbar {
+        padding: 8px 12px !important;
+        gap: 6px !important;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .toolbar-group {
+        gap: 4px !important;
+    }
+
+    .toolbar-btn {
+        padding: 8px 10px !important;
+        font-size: 12px !important;
+        min-width: auto !important;
+    }
+
+    .toolbar-btn .btn-text {
+        display: none !important;
+    }
+
+    .toolbar-btn .btn-icon {
+        margin: 0 !important;
+    }
+
+    /* Canvas viewport - allow pinch zoom and scroll */
+    .canvas-viewport {
+        touch-action: pan-x pan-y pinch-zoom !important;
+        overflow: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .canvas-container {
+        min-width: min-content;
+    }
+
+    /* Hide mode indicators on mobile */
+    .mode-indicator,
+    .zoom-controls {
+        display: none !important;
+    }
+
+    /* Dialogs - full width on mobile */
+    .dialog-overlay .dialog,
+    .quickfill-overlay,
+    [class*="-dialog"] {
+        max-width: 95vw !important;
+        width: 95vw !important;
+        margin: 10px auto !important;
+    }
+
+    /* QuickFill specific mobile */
+    .quickfill-sidebar {
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+
+    .quickfill-field-item {
+        padding: 12px !important;
+    }
+
+    .quickfill-field-input {
+        font-size: 16px !important; /* Prevents iOS zoom on focus */
+    }
+
+    /* Welcome screen mobile */
+    .welcome-container {
+        padding: 16px !important;
+    }
+
+    .welcome-box {
+        padding: 24px 16px !important;
+        max-width: 100% !important;
+    }
+
+    .welcome-title {
+        font-size: 1.5rem !important;
+    }
+
+    /* Field loader mobile */
+    .field-loader-content {
+        padding: 16px !important;
+    }
+
+    /* Toast on mobile */
+    .toast-container {
+        left: 10px !important;
+        right: 10px !important;
+        bottom: 20px !important;
+        top: auto !important;
+    }
+}
+
+/* Extra small screens (phones) */
+@media screen and (max-width: 480px) {
+    .main-toolbar {
+        padding: 6px 8px !important;
+    }
+
+    .toolbar-btn {
+        padding: 6px 8px !important;
+        font-size: 11px !important;
+    }
+
+    .toolbar-group {
+        gap: 2px !important;
+    }
+
+    .dialog-overlay .dialog {
+        border-radius: 12px !important;
+    }
+
+    /* Ensure inputs don't zoom on iOS */
+    input, textarea, select {
+        font-size: 16px !important;
+    }
 }

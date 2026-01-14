@@ -589,8 +589,11 @@ window.ExportEngine = {
 
                 // -----------------------------
                 // ✔ DIGITS — כל ספרה בתיבה
+                // V3.10: Smart spacing - only for long numbers or narrow cells
                 // -----------------------------
-                if (isNumeric) {
+                // V3.10: Short numbers (1-3 digits) render as regular text, centered
+                // Long numbers (4+) get spaced digits for ID/phone fields
+                if (isNumeric && rawValue.length >= 4) {
                     drawNumericInBoxes(
                         page,
                         rawValue,
@@ -604,6 +607,9 @@ window.ExportEngine = {
                     );
                     continue;
                 }
+
+                // V3.10: Short numbers (1-3 digits) should be centered
+                const effectiveAlign = (isNumeric && rawValue.length < 4) ? "center" : align;
 
                 // -----------------------------
                 // ✔ TEXT רגיל (flow text - bottom anchored)
@@ -619,9 +625,9 @@ window.ExportEngine = {
                 }
 
                 let tx = xPDF;
-                if (align === "center") {
+                if (effectiveAlign === "center") {
                     tx = xPDF + (wPDF - textWidth) / 2;
-                } else if (align === "right") {
+                } else if (effectiveAlign === "right") {
                     tx = xPDF + (wPDF - textWidth);
                 }
 
@@ -703,7 +709,9 @@ window.ExportEngine = {
                                 const isNumeric = /^[0-9]+$/.test(textValue);
                                 let fontSize = 14;
 
-                                if (isNumeric) {
+                                // V3.10: Short numbers (1-3 digits) render as regular text
+                                // Long numbers (4+) get spaced digits
+                                if (isNumeric && textValue.length >= 4) {
                                     // Numbers: use drawNumericInBoxes (same as regular fields)
                                     drawNumericInBoxes(
                                         page,
@@ -717,7 +725,7 @@ window.ExportEngine = {
                                         PDFLib.rgb(0, 0, 0)
                                     );
                                 } else {
-                                    // Text: same logic as regular fields (RTL, right-align, bottom-anchored)
+                                    // Text: same logic as regular fields (bottom-anchored)
                                     const cellPadding = 4;
                                     const cellAvailableWidth = cellW - cellPadding;
 
@@ -728,7 +736,14 @@ window.ExportEngine = {
                                         textWidth = hebrewFont.widthOfTextAtSize(textValue, fontSize);
                                     }
 
-                                    const tx = cellX + (cellW - textWidth);
+                                    // V3.10: Short numbers (1-3 digits) centered, others right-aligned
+                                    let tx;
+                                    if (isNumeric && textValue.length < 4) {
+                                        tx = cellX + (cellW - textWidth) / 2; // Center
+                                    } else {
+                                        tx = cellX + (cellW - textWidth); // Right-align
+                                    }
+
                                     // Bottom anchor: 15% padding from bottom or at least 2pt
                                     const cellBottomPadding = Math.max(2, pdfCellH * 0.15);
                                     const ty = pdfCellY + cellBottomPadding;

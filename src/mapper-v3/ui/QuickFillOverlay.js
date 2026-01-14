@@ -515,6 +515,13 @@ class QuickFillOverlay {
             const newValue = e.target.value;
             box.text = newValue;
 
+            // V3.10: Add/remove has-text class for transparent mode
+            if (newValue && newValue.length > 0) {
+                boxEl.classList.add('has-text');
+            } else {
+                boxEl.classList.remove('has-text');
+            }
+
             // Render with PreviewTextRenderer (same as LiveFill)
             this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale);
 
@@ -796,6 +803,118 @@ class QuickFillOverlay {
         boxEl.style.cursor = 'grab';
     }
 
+    /**
+     * V3.10: Make element resizable (for signatures only)
+     * @param {HTMLElement} boxEl - Box element
+     * @param {Object} box - Box data object
+     */
+    _makeResizable(boxEl, box) {
+        // Create resize handle (bottom-right corner)
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        handle.style.cssText = `
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 14px;
+            height: 14px;
+            background: linear-gradient(135deg, transparent 50%, #2563eb 50%);
+            cursor: se-resize;
+            z-index: 10;
+            border-radius: 0 0 4px 0;
+        `;
+        boxEl.appendChild(handle);
+
+        let isResizing = false;
+        let startX, startY;
+        let startWidth, startHeight;
+
+        const onMouseDown = (e) => {
+            e.stopPropagation(); // Don't trigger drag
+            e.preventDefault();
+
+            isResizing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = box.screenRect.width;
+            startHeight = box.screenRect.height;
+
+            handle.style.background = 'linear-gradient(135deg, transparent 50%, #1d4ed8 50%)';
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            // Calculate new size (minimum 40x20)
+            const newWidth = Math.max(40, startWidth + deltaX);
+            const newHeight = Math.max(20, startHeight + deltaY);
+
+            // Update DOM
+            boxEl.style.width = `${newWidth}px`;
+            boxEl.style.height = `${newHeight}px`;
+        };
+
+        const onMouseUp = (e) => {
+            if (!isResizing) return;
+
+            isResizing = false;
+            handle.style.background = 'linear-gradient(135deg, transparent 50%, #2563eb 50%)';
+
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            // Only update if actually resized
+            if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+                const newWidth = Math.max(40, startWidth + deltaX);
+                const newHeight = Math.max(20, startHeight + deltaY);
+
+                // Save old values for undo
+                const oldScreenRect = { ...box.screenRect };
+                const oldBbox = [...box.bbox];
+
+                // Update screenRect
+                box.screenRect.width = newWidth;
+                box.screenRect.height = newHeight;
+
+                // Update bbox
+                const newBbox = overlayRenderer.screenToBbox({
+                    x: box.screenRect.x,
+                    y: box.screenRect.y,
+                    width: newWidth,
+                    height: newHeight
+                });
+                box.bbox = newBbox;
+
+                // Push to undo stack
+                this._pushUndo('resize', {
+                    boxId: box.id,
+                    oldScreenRect,
+                    oldBbox
+                });
+
+                console.log('[QuickFillOverlay] Signature resized:', box.id, 'to', newWidth, 'x', newHeight);
+
+                // Emit update event
+                eventBus.emit(Events.QUICK_FILL_BOX_UPDATED, {
+                    boxId: box.id,
+                    bbox: box.bbox,
+                    page: box.page
+                });
+            }
+        };
+
+        handle.addEventListener('mousedown', onMouseDown);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // V3.10: SIGNATURE FUNCTIONALITY
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1026,16 +1145,30 @@ class QuickFillOverlay {
     _addSignatureToDocument(data, mode, font = 'cursive1') {
         let screenRect, bbox, page;
 
+        // V3.10: Standard max size for signatures (user can still resize)
+        const MAX_SIG_WIDTH = 150;
+        const MAX_SIG_HEIGHT = 40;
+
         // Use pending signature box from drawn rectangle if available
         if (this._pendingSignatureBox) {
-            screenRect = this._pendingSignatureBox.screenRect;
-            bbox = this._pendingSignatureBox.bbox;
+            screenRect = { ...this._pendingSignatureBox.screenRect };
             page = this._pendingSignatureBox.page;
+
+            // V3.10: Cap signature size to standard max, keep position
+            if (screenRect.width > MAX_SIG_WIDTH) {
+                screenRect.width = MAX_SIG_WIDTH;
+            }
+            if (screenRect.height > MAX_SIG_HEIGHT) {
+                screenRect.height = MAX_SIG_HEIGHT;
+            }
+
+            // Recalculate bbox with new size
+            bbox = overlayRenderer.screenToBbox(screenRect);
             this._pendingSignatureBox = null; // Clear pending data
         } else {
             // Fallback: place in center (shouldn't happen with new flow)
-            const sigWidth = 150;
-            const sigHeight = 50;
+            const sigWidth = MAX_SIG_WIDTH;
+            const sigHeight = MAX_SIG_HEIGHT;
             const overlayLayer = document.getElementById('overlay-layer');
             const centerX = (overlayLayer?.offsetWidth || 600) / 2 - sigWidth / 2;
             const centerY = (overlayLayer?.offsetHeight || 800) / 2 - sigHeight / 2;
@@ -1118,6 +1251,9 @@ class QuickFillOverlay {
 
         // Make draggable
         this._makeDraggable(boxEl, box);
+
+        // V3.10: Make resizable (signatures only)
+        this._makeResizable(boxEl, box);
 
         // Add to container
         this._overlayContainer.appendChild(boxEl);

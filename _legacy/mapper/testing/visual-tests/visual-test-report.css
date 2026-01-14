@@ -1,0 +1,349 @@
+/**
+ * Visual Test Report Styles
+ * Floating panel UI for test results display
+ */
+
+/* Container */
+.visual-test-report {
+    position: fixed;
+    z-index: 99999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px;
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    min-width: 200px;
+    max-width: 400px;
+    color: #e0e0e0;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.visual-test-report.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.9);
+}
+
+/* Position variants */
+.visual-test-report.pos-bottom-right {
+    bottom: 20px;
+    right: 20px;
+}
+
+.visual-test-report.pos-bottom-left {
+    bottom: 20px;
+    left: 20px;
+}
+
+.visual-test-report.pos-top-right {
+    top: 20px;
+    right: 20px;
+}
+
+.visual-test-report.pos-top-left {
+    top: 20px;
+    left: 20px;
+}
+
+/* Status indicators */
+.visual-test-report.status-clean {
+    border-color: #2d5a3d;
+}
+
+.visual-test-report.status-warn {
+    border-color: #8b6914;
+}
+
+.visual-test-report.status-error {
+    border-color: #8b1414;
+}
+
+/* Header */
+.vtr-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #252540;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #333;
+}
+
+.vtr-header:hover {
+    background: #2a2a4a;
+}
+
+.vtr-icon {
+    font-size: 14px;
+}
+
+.vtr-title {
+    font-weight: 600;
+    flex: 1;
+}
+
+.vtr-status {
+    font-size: 12px;
+}
+
+.vtr-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 0;
+    font-size: 10px;
+    transition: transform 0.2s;
+}
+
+.visual-test-report.expanded .vtr-toggle {
+    transform: rotate(180deg);
+}
+
+/* Summary */
+.vtr-summary {
+    padding: 10px 12px;
+    border-bottom: 1px solid #333;
+}
+
+.vtr-counts {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 6px;
+}
+
+.vtr-count {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vtr-count .count {
+    font-weight: 600;
+    min-width: 16px;
+}
+
+.vtr-passed {
+    color: #4ade80;
+}
+
+.vtr-warnings {
+    color: #fbbf24;
+}
+
+.vtr-errors {
+    color: #f87171;
+}
+
+.vtr-timing {
+    display: flex;
+    gap: 12px;
+    color: #888;
+    font-size: 11px;
+}
+
+.vtr-runtime {
+    font-family: monospace;
+}
+
+.vtr-trigger {
+    font-style: italic;
+}
+
+/* Details (hidden when collapsed) */
+.vtr-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.visual-test-report.expanded .vtr-details {
+    max-height: 300px;
+}
+
+.vtr-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #1e1e32;
+    border-bottom: 1px solid #333;
+    font-weight: 500;
+}
+
+.vtr-clear {
+    background: #333;
+    border: none;
+    color: #888;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+.vtr-clear:hover {
+    background: #444;
+    color: #fff;
+}
+
+.vtr-details-list {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.vtr-detail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 6px 12px;
+    border-bottom: 1px solid #2a2a40;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.vtr-detail-item:last-child {
+    border-bottom: none;
+}
+
+.vtr-detail-icon {
+    flex-shrink: 0;
+}
+
+.vtr-detail-category {
+    color: #888;
+    flex-shrink: 0;
+    font-family: monospace;
+    font-size: 10px;
+}
+
+.vtr-detail-message {
+    flex: 1;
+    word-break: break-word;
+}
+
+.vtr-detail-element {
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.vtr-detail-element:hover {
+    opacity: 1;
+}
+
+.vtr-severity-critical .vtr-detail-message,
+.vtr-severity-error .vtr-detail-message {
+    color: #f87171;
+}
+
+.vtr-severity-warn .vtr-detail-message,
+.vtr-severity-warning .vtr-detail-message {
+    color: #fbbf24;
+}
+
+.vtr-detail-empty {
+    padding: 12px;
+    text-align: center;
+    color: #666;
+    font-style: italic;
+}
+
+.vtr-detail-more {
+    padding: 6px 12px;
+    text-align: center;
+    color: #666;
+    font-size: 10px;
+}
+
+/* Actions (hidden when collapsed) */
+.vtr-actions {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    display: flex;
+    gap: 8px;
+    padding: 0 12px;
+}
+
+.visual-test-report.expanded .vtr-actions {
+    max-height: 50px;
+    padding: 10px 12px;
+    border-top: 1px solid #333;
+}
+
+.vtr-run-now,
+.vtr-export {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #252540;
+    color: #e0e0e0;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s;
+}
+
+.vtr-run-now:hover,
+.vtr-export:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.vtr-run-now:active,
+.vtr-export:active {
+    transform: scale(0.98);
+}
+
+/* Scrollbar styling */
+.vtr-details-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.vtr-details-list::-webkit-scrollbar-track {
+    background: #1a1a2e;
+}
+
+.vtr-details-list::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+
+.vtr-details-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Debug highlight animations */
+@keyframes vtr-highlight-pulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 200, 0, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(255, 200, 0, 0.8); }
+}
+
+.vtr-highlight-warn {
+    animation: vtr-highlight-pulse 1s ease-in-out 3;
+}
+
+.vtr-highlight-error {
+    outline: 3px solid rgba(255, 100, 100, 0.7) !important;
+    box-shadow: 0 0 15px rgba(255, 100, 100, 0.5) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .visual-test-report {
+        min-width: 180px;
+        max-width: 280px;
+        font-size: 11px;
+    }
+
+    .vtr-counts {
+        gap: 10px;
+    }
+
+    .vtr-details-list {
+        max-height: 150px;
+    }
+}
