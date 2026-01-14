@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="צור קשר עם טופס PDF - שאלות, הצעות, או משוב">
+
+    <title>צור קשר - טופס PDF</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-deep: #1a365d;
+            --primary-blue: #2c5282;
+            --primary-light: #3182ce;
+            --accent-teal: #0d9488;
+            --accent-teal-dark: #0f766e;
+            --gray-50: #f7fafc;
+            --gray-100: #edf2f7;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e0;
+            --gray-400: #a0aec0;
+            --gray-500: #718096;
+            --gray-600: #4a5568;
+            --gray-700: #2d3748;
+            --gray-800: #1a202c;
+            --white: #ffffff;
+            --success-green: #059669;
+            --error-red: #dc2626;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            line-height: 1.7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navigation */
+        .nav {
+            background: var(--white);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 16px 0;
+        }
+
+        .nav-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary-deep);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-deep) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: white;
+        }
+
+        .nav-link {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            color: var(--primary-blue);
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 48px 24px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .page-header h1 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            color: var(--primary-deep);
+            margin-bottom: 12px;
+        }
+
+        .page-header p {
+            color: var(--gray-600);
+            font-size: 1.1rem;
+        }
+
+        /* Contact Options */
+        .contact-options {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 48px;
+        }
+
+        .contact-option {
+            background: var(--white);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+        }
+
+        .contact-option:hover {
+            border-color: var(--accent-teal);
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .contact-option-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-teal-dark) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .contact-option-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
+        }
+
+        .contact-option h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 8px;
+        }
+
+        .contact-option p {
+            font-size: 0.9rem;
+            color: var(--gray-600);
+        }
+
+        @media (max-width: 500px) {
+            .contact-options {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Contact Form */
+        .form-card {
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 32px;
+        }
+
+        .form-card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--primary-deep);
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            color: var(--gray-700);
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+
+        .form-group label .required {
+            color: var(--error-red);
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+            background: var(--white);
+            transition: all 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-teal);
+            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .form-group input::placeholder,
+        .form-group textarea::placeholder {
+            color: var(--gray-400);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-teal-dark) 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .form-note {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 0.85rem;
+            color: var(--gray-500);
+        }
+
+        /* Success Message */
+        .success-message {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .success-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--success-green) 0%, #047857 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+
+        .success-icon svg {
+            width: 32px;
+            height: 32px;
+            fill: white;
+        }
+
+        .success-message h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 12px;
+        }
+
+        .success-message p {
+            color: var(--gray-600);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--gray-800);
+            color: var(--gray-100);
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .footer a {
+            color: var(--gray-100);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .footer-copyright {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M14 2H6C4.9 2 4 2.9 4 4v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-5 4h8v2H7v-2zm0 4h5v2H7v-2z"/>
+                    </svg>
+                </div>
+                טופס PDF
+            </a>
+            <a href="/" class="nav-link">חזרה לדף הבית</a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <header class="page-header">
+                <h1>צור קשר</h1>
+                <p>יש לך שאלה, הצעה, או משוב? נשמח לשמוע ממך!</p>
+            </header>
+
+            <!-- Contact Options -->
+            <div class="contact-options">
+                <a href="mailto:support@tofespdf.co.il" class="contact-option">
+                    <div class="contact-option-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+                        </svg>
+                    </div>
+                    <h3>אימייל</h3>
+                    <p>support@tofespdf.co.il</p>
+                </a>
+
+                <a href="#form" class="contact-option">
+                    <div class="contact-option-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                        </svg>
+                    </div>
+                    <h3>טופס יצירת קשר</h3>
+                    <p>מלא את הטופס למטה</p>
+                </a>
+            </div>
+
+            <!-- Contact Form -->
+            <div class="form-card" id="form">
+                <h2>שלח לנו הודעה</h2>
+
+                <form id="contact-form">
+                    <div class="form-group">
+                        <label for="name">שם מלא <span class="required">*</span></label>
+                        <input type="text" id="name" name="name" placeholder="השם שלך" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="email">כתובת אימייל <span class="required">*</span></label>
+                        <input type="email" id="email" name="email" placeholder="example@email.com" required dir="ltr">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="subject">נושא</label>
+                        <select id="subject" name="subject">
+                            <option value="general">שאלה כללית</option>
+                            <option value="bug">דיווח על באג</option>
+                            <option value="feature">בקשת תכונה חדשה</option>
+                            <option value="business">שיתוף פעולה עסקי</option>
+                            <option value="other">אחר</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="message">ההודעה שלך <span class="required">*</span></label>
+                        <textarea id="message" name="message" placeholder="כתוב את ההודעה שלך כאן..." required></textarea>
+                    </div>
+
+                    <button type="submit" class="submit-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                        שלח הודעה
+                    </button>
+
+                    <p class="form-note">
+                        * שדות חובה. נשתדל להשיב תוך 1-2 ימי עסקים.
+                    </p>
+                </form>
+
+                <!-- Success Message -->
+                <div class="success-message" id="success-message">
+                    <div class="success-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
+                        </svg>
+                    </div>
+                    <h3>ההודעה נשלחה בהצלחה!</h3>
+                    <p>תודה שפנית אלינו. נחזור אליך בהקדם האפשרי.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="/">דף הבית</a>
+            <a href="/fill/">מילוי טופס</a>
+            <a href="/legal/privacy.html">מדיניות פרטיות</a>
+            <a href="/legal/terms.html">תנאי שימוש</a>
+        </div>
+        <p class="footer-copyright">&copy; 2025 TofesPDF. כל הזכויות שמורות.</p>
+    </footer>
+
+    <script>
+        // Contact Form Handler
+        const form = document.getElementById('contact-form');
+        const successMessage = document.getElementById('success-message');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Get form data
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            // In a real implementation, you would send this to a backend
+            // For now, we'll just show the success message
+            console.log('Form submitted:', data);
+
+            // Create mailto link as fallback
+            const subject = encodeURIComponent(`[טופס PDF] ${data.subject} - ${data.name}`);
+            const body = encodeURIComponent(
+                `שם: ${data.name}\n` +
+                `אימייל: ${data.email}\n` +
+                `נושא: ${data.subject}\n\n` +
+                `הודעה:\n${data.message}`
+            );
+
+            // Open email client
+            window.location.href = `mailto:support@tofespdf.co.il?subject=${subject}&body=${body}`;
+
+            // Show success message
+            form.style.display = 'none';
+            successMessage.classList.add('show');
+
+            // Reset after 5 seconds
+            setTimeout(() => {
+                form.style.display = 'block';
+                form.reset();
+                successMessage.classList.remove('show');
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
