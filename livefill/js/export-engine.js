@@ -139,15 +139,35 @@ window.ExportEngine = {
                 if (customFontBytes) {
                     hebrewFont = await pdfDoc.embedFont(customFontBytes, { subset: true });
                 } else {
-                    // Load Hebrew font (DavidLibre-Regular.ttf)
-                    try {
-                        const hebrewFontBytes = await fetch("./fonts/DavidLibre-Regular.ttf").then(r => r.arrayBuffer());
-                        hebrewFont = await pdfDoc.embedFont(hebrewFontBytes);
-                    } catch (fontError) {
-                        console.error("❌ Failed to load Hebrew font:", fontError);
+                    // Load Hebrew font (DavidLibre-Regular.ttf) from public assets
+                    const fontPaths = [
+                        '/assets/fonts/DavidLibre/DavidLibre-Regular.ttf',
+                        '/assets/fonts/DavidLibre-Regular.ttf',
+                        '../assets/fonts/DavidLibre/DavidLibre-Regular.ttf',
+                        './fonts/DavidLibre-Regular.ttf'
+                    ];
+
+                    let hebrewFontBytes = null;
+                    for (const fontPath of fontPaths) {
+                        try {
+                            const response = await fetch(fontPath);
+                            if (response.ok) {
+                                hebrewFontBytes = await response.arrayBuffer();
+                                console.log(`✅ Hebrew font loaded from: ${fontPath}`);
+                                break;
+                            }
+                        } catch (e) {
+                            // Try next path
+                        }
+                    }
+
+                    if (!hebrewFontBytes) {
+                        console.error("❌ Failed to load Hebrew font from all paths");
                         if (typeof showToast !== 'undefined') showToast("שגיאה בטעינת פונט עברי", "error");
                         throw new Error("Hebrew font loading failed - cannot continue export");
                     }
+
+                    hebrewFont = await pdfDoc.embedFont(hebrewFontBytes);
                 }
             } catch (e) {
                 console.error("❌ Font embedding error:", e);

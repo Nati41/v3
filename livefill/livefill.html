@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LiveFill - מילוי PDF חי</title>
 
-    <!-- David Libre Font - same as Export -->
+    <!-- David Libre Font - same as Export (using public assets path) -->
     <style>
         @font-face {
             font-family: 'David Libre';
-            src: url('./fonts/DavidLibre-Regular.ttf') format('truetype');
+            src: url('/assets/fonts/DavidLibre/DavidLibre-Regular.ttf') format('truetype'),
+                 url('./fonts/DavidLibre-Regular.ttf') format('truetype');
             font-weight: normal;
             font-style: normal;
             font-display: swap;

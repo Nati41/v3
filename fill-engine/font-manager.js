@@ -13,9 +13,9 @@
     // ============ CONFIGURATION ============
 
     const FONT_CONFIG = {
-        // Font paths (relative to application root)
-        HEBREW_FONT_PATH: '/fonts/DavidLibre-Regular.ttf',
-        HEBREW_FONT_BOLD_PATH: '/fonts/DavidLibre-Bold.ttf',
+        // Font paths (public/static paths for production)
+        HEBREW_FONT_PATH: '/assets/fonts/DavidLibre/DavidLibre-Regular.ttf',
+        HEBREW_FONT_BOLD_PATH: '/assets/fonts/DavidLibre/DavidLibre-Bold.ttf',
 
         // Base64 font data URLs (for bundled fonts)
         HEBREW_FONT_BASE64: null, // Will be set if font is bundled
@@ -107,12 +107,12 @@
         const fontData = await loadFontFromUrl(FONT_CONFIG.HEBREW_FONT_PATH);
         if (fontData) return fontData;
 
-        // Try alternate paths
+        // Try alternate paths (production and development fallbacks)
         const alternatePaths = [
+            '/assets/fonts/DavidLibre/DavidLibre-Regular.ttf',
             '/assets/fonts/DavidLibre-Regular.ttf',
-            './fonts/DavidLibre-Regular.ttf',
-            '../fonts/DavidLibre-Regular.ttf',
-            '/src/mapper/fonts/DavidLibre-Regular.ttf'
+            '../assets/fonts/DavidLibre/DavidLibre-Regular.ttf',
+            './fonts/DavidLibre-Regular.ttf'
         ];
 
         for (const path of alternatePaths) {
