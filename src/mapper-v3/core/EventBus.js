@@ -118,7 +118,16 @@ export class EventBus {
         }
 
         this._eventCounts[event] = (this._eventCounts[event] || 0) + 1;
-        if (this._eventCounts[event] > 100) {
+
+        // V3.10: Events allowed to exceed rate limit (for bulk operations like JSON loading)
+        const highVolumeAllowed = [
+            'quickFill:boxCreated',
+            'quickFill:boxUpdated',
+            'field:created',
+            'field:updated'
+        ];
+
+        if (this._eventCounts[event] > 100 && !highVolumeAllowed.includes(event)) {
             console.error(`[EventBus] CRITICAL: Event ${event} fired ${this._eventCounts[event]} times/sec!`);
             this._emitDepth--;
             return; // Rate limit exceeded

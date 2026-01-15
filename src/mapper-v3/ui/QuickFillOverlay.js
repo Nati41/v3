@@ -264,6 +264,34 @@ class QuickFillOverlay {
         };
         window.addEventListener('resize', this._resizeHandler);
         console.log('[QuickFillOverlay] Resize listener attached');
+
+        // V3.10: Listen for UI profile changes (public/advanced mode switch)
+        // When sidebar shows/hides, overlay layer size changes - need to recalculate positions
+        eventBus.on('UI_PROFILE_CHANGED', ({ mode }) => {
+            console.log('[QuickFillOverlay] UI profile changed to:', mode);
+            // Delay to allow layout to settle after sidebar visibility change
+            setTimeout(() => {
+                this._updateAllBoxPositions();
+            }, 250);
+        });
+
+        // V3.10: Listen for PDF load - layer size may change after PDF finishes rendering
+        // This catches the second size change that happens after UI profile change
+        eventBus.on(Events.PDF_LOADED, () => {
+            console.log('[QuickFillOverlay] PDF loaded - updating box positions');
+            setTimeout(() => {
+                this._updateAllBoxPositions();
+            }, 200);
+        });
+
+        // V3.10: Listen for mapping loaded from JSON - recalculate all positions
+        // Boxes might have been created with incorrect layer dimensions
+        eventBus.on('MAPPING_LOADED', ({ count }) => {
+            console.log(`[QuickFillOverlay] Mapping loaded (${count} fields) - updating box positions`);
+            setTimeout(() => {
+                this._updateAllBoxPositions();
+            }, 100);
+        });
     }
 
     /**
@@ -484,12 +512,14 @@ class QuickFillOverlay {
             boxEl.classList.add('hidden');
         }
 
-        // Create hidden input (same pattern as LiveFill)
+        // Create single-line input (one field = one line)
         const hiddenInput = document.createElement('input');
         hiddenInput.type = 'text';
         hiddenInput.className = 'quick-fill-hidden-input';
         hiddenInput.value = box.text || '';
         hiddenInput.dir = 'rtl';
+
+        // Hidden input with preview rendering
         hiddenInput.style.cssText = `
             position: absolute;
             opacity: 0;
@@ -510,7 +540,7 @@ class QuickFillOverlay {
             originalTextValue = box.text || '';
         });
 
-        // Handle input changes - render with PreviewTextRenderer
+        // Handle input changes
         hiddenInput.addEventListener('input', (e) => {
             const newValue = e.target.value;
             box.text = newValue;
@@ -550,9 +580,10 @@ class QuickFillOverlay {
             }
         });
 
-        // Handle Enter key - move to next box
+        // Handle keyboard shortcuts
         hiddenInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
+                // Enter moves to next box (one field = one line)
                 e.preventDefault();
                 this._focusNextBox(box.id);
             } else if (e.key === 'Escape') {
@@ -694,7 +725,7 @@ class QuickFillOverlay {
             return;
         }
 
-        // Use the Export-matching renderer from LiveFill
+        // Use standard PreviewTextRenderer (single-line, bottom-anchored)
         window.PreviewTextRenderer.render(container, value, {
             fieldPt,
             scale,
@@ -1409,6 +1440,9 @@ class QuickFillOverlay {
      * @param {HTMLElement} boxEl - Box DOM element
      */
     _updateBoxTextRendering(box, boxEl) {
+        // V3.10: Preserve hidden input before re-rendering (renderPreviewText clears innerHTML)
+        const hiddenInput = boxEl.querySelector('.quick-fill-hidden-input');
+
         // Get current PDF dimensions
         const pdfDims = state.get('pdfDimensions') || { width: 595, height: 842, scale: 1 };
         const pdfScale = pdfDims.scale || 1;
@@ -1423,6 +1457,11 @@ class QuickFillOverlay {
 
         // Re-render text with new scale
         this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale);
+
+        // V3.10: Re-add hidden input after rendering
+        if (hiddenInput) {
+            boxEl.appendChild(hiddenInput);
+        }
     }
 
     /**

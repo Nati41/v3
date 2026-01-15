@@ -130,6 +130,24 @@ class MappingLoader {
                 if (result.skipped > 0) {
                     console.warn('[MappingLoader] Skipped fields:', result.warnings);
                 }
+
+                // V3.10: Show toast with load result
+                const currentPage = state.get('document.currentPage') || 1;
+                const pagesWithFields = [...new Set(json.fields.filter(f => f.isMapped !== false).map(f => f.page))];
+                const fieldsOnCurrentPage = json.fields.filter(f => f.isMapped !== false && f.page === currentPage).length;
+
+                let message = `נטענו ${result.loaded} שדות`;
+                if (fieldsOnCurrentPage < result.loaded) {
+                    message += ` (${fieldsOnCurrentPage} בעמוד הנוכחי)`;
+                }
+
+                eventBus.emit('toast:show', {
+                    message: message,
+                    type: 'success',
+                    duration: 4000
+                });
+
+                console.log(`[MappingLoader] Pages with fields: ${pagesWithFields.join(', ')}. Current page: ${currentPage}. Fields on current page: ${fieldsOnCurrentPage}`);
             }
 
             // Restore button
@@ -214,6 +232,20 @@ class MappingLoader {
 
         result.success = result.loaded > 0;
         console.log(`[MappingLoader] Load complete: ${result.loaded} loaded, ${result.skipped} skipped`);
+
+        // V3.10: Log warnings if any fields were skipped
+        if (result.warnings.length > 0) {
+            console.warn('[MappingLoader] Skipped field reasons:', result.warnings);
+        }
+
+        // V3.10: Trigger position update after all fields are loaded
+        // The screenRect values might have been calculated with incorrect layer dimensions
+        if (result.loaded > 0) {
+            // Give the DOM time to settle, then update positions
+            setTimeout(() => {
+                eventBus.emit('MAPPING_LOADED', { count: result.loaded });
+            }, 100);
+        }
 
         return result;
     }

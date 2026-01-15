@@ -70,6 +70,8 @@ export class OverlayRenderer {
             this._updateLayerSize();
             // Process any pending fields
             this._processPendingFields();
+            // V3.10: Also re-render all fields to fix positioning after PDF load
+            this.renderAll();
         });
 
         // CRITICAL: Re-render tables on window resize (debounced)
@@ -164,6 +166,16 @@ export class OverlayRenderer {
         eventBus.on(Events.ZOOM_CHANGED, () => {
             this._updateLayerSize();
             this.renderAll();
+        });
+
+        // V3.10: Update layer size when UI profile changes (sidebar visibility)
+        eventBus.on('UI_PROFILE_CHANGED', ({ mode }) => {
+            console.log('[OverlayRenderer] UI profile changed to:', mode);
+            // Delay to allow layout to settle after sidebar visibility change
+            setTimeout(() => {
+                this._updateLayerSize();
+                this.renderAll();
+            }, 200);
         });
 
         // ============ TABLE FLOW COLUMN EVENTS ============
@@ -331,7 +343,10 @@ export class OverlayRenderer {
     renderTableRegions() {
         if (!window.tableRegionManager) return;
 
-        const regions = window.tableRegionManager.getAllRegions();
+        const currentPage = state.get('document.currentPage');
+        const allRegions = window.tableRegionManager.getAllRegions();
+        // Filter regions by current page
+        const regions = allRegions.filter(r => r.page === currentPage);
         if (regions.length === 0) return;
 
         const layerWidth = this.overlayLayer.offsetWidth;

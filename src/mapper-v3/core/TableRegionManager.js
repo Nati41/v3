@@ -21,9 +21,10 @@ import { state } from './StateManager.js';
  * TableRegion entity structure
  */
 export class TableRegion {
-    constructor(id, bbox) {
+    constructor(id, bbox, page = 1) {
         this.id = id;
         this.bbox = bbox;              // [x, y, w, h] normalized coords
+        this.page = page;              // Page number this region belongs to
         this.columns = [];             // { fieldId, name_he, name_en, type, x }
         this.rowStep = null;           // Calculated from first mapped field
         this.rowCount = null;          // User-specified
@@ -37,6 +38,7 @@ export class TableRegion {
         return {
             id: this.id,
             bbox: this.bbox,
+            page: this.page,
             columns: this.columns,
             rowStep: this.rowStep,
             rowCount: this.rowCount,
@@ -47,7 +49,7 @@ export class TableRegion {
     }
 
     static fromJSON(json) {
-        const region = new TableRegion(json.id, json.bbox);
+        const region = new TableRegion(json.id, json.bbox, json.page || 1);
         region.columns = json.columns || [];
         region.rowStep = json.rowStep;
         region.rowCount = json.rowCount;
@@ -299,7 +301,8 @@ class TableRegionManager {
      */
     createRegion(bbox) {
         const id = `table_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-        const region = new TableRegion(id, bbox);
+        const currentPage = state.get('document.currentPage') || 1;
+        const region = new TableRegion(id, bbox, currentPage);
 
         // Detect fields inside the region
         const detectedFields = this._detectFieldsInRegion(bbox);
@@ -308,7 +311,7 @@ class TableRegionManager {
         this._regions.set(id, region);
         this._activeRegionId = id;
 
-        console.log(`[TableRegionManager] Created region ${id} with ${detectedFields.length} columns`);
+        console.log(`[TableRegionManager] Created region ${id} on page ${currentPage} with ${detectedFields.length} columns`);
 
         eventBus.emit(Events.TABLE_REGION_CREATED, { region });
         return region;
