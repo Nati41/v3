@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>מילוי טופס - טופס PDF</title>
+    <script>
+        if (localStorage.getItem("tofesly_access") !== "true") {
+            window.location.href = "/gate.html";
+        }
+    </script>
     <meta http-equiv="refresh" content="0;url=../src/mapper-v3/mapper-v3.html?mode=quickfill">
     <script>
         window.location.href = '../src/mapper-v3/mapper-v3.html?mode=quickfill';

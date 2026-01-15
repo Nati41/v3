@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>גישה לכלי - טופס PDF</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .gate-container {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            padding: 48px 40px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .gate-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+
+        .gate-subtitle {
+            font-size: 0.95rem;
+            color: #64748b;
+            margin-bottom: 32px;
+        }
+
+        .gate-input {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            text-align: center;
+            transition: border-color 0.2s;
+            margin-bottom: 16px;
+        }
+
+        .gate-input:focus {
+            outline: none;
+            border-color: #0d9488;
+        }
+
+        .gate-button {
+            width: 100%;
+            padding: 14px 24px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            font-family: inherit;
+            background: #0f172a;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .gate-button:hover {
+            background: #1e293b;
+        }
+
+        .gate-error {
+            color: #dc2626;
+            font-size: 0.9rem;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .gate-error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="gate-container">
+        <h1 class="gate-title">גישה לכלי</h1>
+        <p class="gate-subtitle">הזן את קוד הגישה כדי להמשיך</p>
+        <input type="text" id="codeInput" class="gate-input" placeholder="קוד גישה" autocomplete="off">
+        <button id="submitBtn" class="gate-button">כניסה</button>
+        <p id="errorMsg" class="gate-error">קוד שגוי</p>
+    </div>
+
+    <script>
+        const ACCESS_CODE = "נתנאל3028";
+
+        const codeInput = document.getElementById('codeInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const errorMsg = document.getElementById('errorMsg');
+
+        function checkCode() {
+            const enteredCode = codeInput.value;
+            if (enteredCode === ACCESS_CODE) {
+                localStorage.setItem("tofesly_access", "true");
+                window.location.href = "/fill/";
+            } else {
+                errorMsg.classList.add('show');
+                codeInput.focus();
+            }
+        }
+
+        submitBtn.addEventListener('click', checkCode);
+
+        codeInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                checkCode();
+            }
+        });
+
+        codeInput.addEventListener('input', function() {
+            errorMsg.classList.remove('show');
+        });
+    </script>
+</body>
+</html>
