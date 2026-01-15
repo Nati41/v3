@@ -15,6 +15,7 @@ import { eventBus, Events } from '../core/EventBus.js';
 import { state, FlowModes, Tools } from '../core/StateManager.js';
 import { pdfEngine } from '../engines/PDFEngine.js';
 import { overlayRenderer } from '../engines/OverlayRenderer.js';
+import { textExtractor } from '../engines/TextExtractor.js';
 
 class QuickFillOverlay {
     constructor() {
@@ -439,10 +440,16 @@ class QuickFillOverlay {
             tool: tool,
             type: boxType,          // 'text', 'checkbox', or 'radio'
             checked: false,         // For checkbox/radio
+            hasSlashes: false,      // V3.11: True if area contains "/" (for date fields)
             createdAt: Date.now()
         };
 
         this._boxes.push(box);
+
+        // V3.11: Detect slashes in the box area (async, updates box.hasSlashes)
+        if (boxType === 'text') {
+            this._detectSlashes(box);
+        }
 
         // V3.10: Push to undo stack (for undo of create = delete)
         this._pushUndo('create', { boxId: box.id, box: { ...box } });
@@ -553,7 +560,7 @@ class QuickFillOverlay {
             }
 
             // Render with PreviewTextRenderer (same as LiveFill)
-            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale);
+            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, { hasSlashes: box.hasSlashes });
 
             // Re-add hidden input (renderPreviewText clears innerHTML)
             boxEl.appendChild(hiddenInput);
@@ -564,7 +571,8 @@ class QuickFillOverlay {
                 boxId: box.id,
                 text: newValue,
                 bbox: box.bbox,
-                page: box.page
+                page: box.page,
+                hasSlashes: box.hasSlashes  // V3.11: Include slash info
             });
         });
 
@@ -717,8 +725,9 @@ class QuickFillOverlay {
      * @param {string} value - Text value
      * @param {Object} fieldPt - Field dimensions in PDF points
      * @param {number} scale - pt to px scale factor
+     * @param {Object} options - Additional options (hasSlashes, etc.)
      */
-    _renderPreviewText(container, value, fieldPt, scale) {
+    _renderPreviewText(container, value, fieldPt, scale, options = {}) {
         if (!window.PreviewTextRenderer) {
             console.warn('[QuickFillOverlay] PreviewTextRenderer not loaded');
             container.textContent = value || '';
@@ -729,7 +738,8 @@ class QuickFillOverlay {
         window.PreviewTextRenderer.render(container, value, {
             fieldPt,
             scale,
-            style: {}
+            style: {},
+            hasSlashes: options.hasSlashes || false  // V3.11: Pass slash info for date spacing
         });
     }
 
@@ -1456,7 +1466,7 @@ class QuickFillOverlay {
         const ptToPxScale = box.screenRect.width / fieldPt.width;
 
         // Re-render text with new scale
-        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale);
+        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, { hasSlashes: box.hasSlashes });
 
         // V3.10: Re-add hidden input after rendering
         if (hiddenInput) {
@@ -1473,6 +1483,25 @@ class QuickFillOverlay {
             if (countEl) {
                 countEl.textContent = `${this._boxes.length} שדות`;
             }
+        }
+    }
+
+    /**
+     * V3.11: Detect if box area contains slash characters (for date fields)
+     * Updates box.hasSlashes asynchronously
+     * @param {Object} box - Box object to check
+     */
+    async _detectSlashes(box) {
+        try {
+            const { x, y, width, height } = box.screenRect;
+            const result = await textExtractor.getTextAtPosition(x, y, width, height);
+
+            if (result.text && result.text.includes('/')) {
+                box.hasSlashes = true;
+                console.log(`[QuickFillOverlay] Box ${box.id} has slashes detected`);
+            }
+        } catch (error) {
+            console.warn('[QuickFillOverlay] Slash detection failed:', error);
         }
     }
 
@@ -1725,13 +1754,16 @@ class QuickFillOverlay {
                     pdfX: pdfX,
                     pdfY: pdfY,
                     pdfWidth: pdfWidth,
-                    pdfHeight: pdfHeight
+                    pdfHeight: pdfHeight,
+                    // V3.11: Slash detection for date field spacing
+                    hasSlashes: box.hasSlashes || false
                 });
 
                 // LiveFill format: { value: "...", checked: false }
                 liveFillData[box.id] = {
                     value: box.text || '',
-                    checked: false
+                    checked: false,
+                    hasSlashes: box.hasSlashes || false  // V3.11: Include in liveFillData too
                 };
                 console.log('[QuickFillOverlay] Added text field:', box.id,
                     'V2:', { pdfX: pdfX.toFixed(1), pdfY: pdfY.toFixed(1), w: pdfWidth.toFixed(1), h: pdfHeight.toFixed(1) },
@@ -2056,7 +2088,7 @@ class QuickFillOverlay {
                     const basePdfHeight = pdfDims.height / pdfScale;
                     const fieldPt = this._getFieldPtFromBbox(boxData.bbox, basePdfWidth, basePdfHeight);
                     const ptToPxScale = boxData.screenRect.width / fieldPt.width;
-                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale);
+                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale, { hasSlashes: boxData.hasSlashes });
                     // Re-add input
                     boxEl.appendChild(input);
                 }
@@ -2088,7 +2120,7 @@ class QuickFillOverlay {
             const basePdfHeight = pdfDims.height / pdfScale;
             const fieldPt = this._getFieldPtFromBbox(box.bbox, basePdfWidth, basePdfHeight);
             const ptToPxScale = box.screenRect.width / fieldPt.width;
-            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale);
+            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, { hasSlashes: box.hasSlashes });
             if (input) boxEl.appendChild(input);
             const deleteBtn = boxEl.querySelector('.quick-fill-delete');
             if (deleteBtn) boxEl.appendChild(deleteBtn);

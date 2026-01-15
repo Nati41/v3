@@ -8,6 +8,11 @@
 const CHECKMARK_OFFSET_X = 2.5;
 const CHECKMARK_OFFSET_Y = 3;
 
+// Date field constants - spacing to avoid printed slashes
+// Must match preview-text-renderer.js values
+const DATE_SLASH_GAP_RATIO = 0.08;  // 8% gap for each slash area
+const DATE_SEGMENT_RATIOS = [0.22, 0.22, 0.44];  // DD=22%, MM=22%, YYYY=44%
+
 // normalizeField is available from window.normalizeField (loaded from shared/normalizeField.js)
 // Note: Do not redeclare - it's already declared in the main HTML inline script
 
@@ -607,10 +612,29 @@ window.ExportEngine = {
 
                 const isNumeric = /^[0-9]+$/.test(rawValue);
 
+                // V3.11: Check for hasSlashes from field or data
+                const hasSlashes = field.hasSlashes || data.hasSlashes || false;
+
                 // -----------------------------
                 // ✔ DIGITS — כל ספרה בתיבה
                 // V3.10: Smart spacing - only for long numbers or narrow cells
+                // V3.11: Date fields with slashes get special spacing
                 // -----------------------------
+                // V3.11: If hasSlashes AND 8-digit value → use date spacing to avoid printed slashes
+                if (isNumeric && hasSlashes && isDateValue(rawValue)) {
+                    drawDateField(
+                        page,
+                        rawValue,
+                        xPDF,
+                        yBottomPDF,
+                        wPDF,
+                        hPDF,
+                        hebrewFont,
+                        fontSize,
+                        PDFLib.rgb(color.r, color.g, color.b)
+                    );
+                    continue;
+                }
                 // V3.10: Short numbers (1-3 digits) render as regular text, centered
                 // Long numbers (4+) get spaced digits for ID/phone fields
                 if (isNumeric && rawValue.length >= 4) {
@@ -731,6 +755,7 @@ window.ExportEngine = {
 
                                 // V3.10: Short numbers (1-3 digits) render as regular text
                                 // Long numbers (4+) get spaced digits
+                                // Note: Table cells don't use hasSlashes - no date field detection
                                 if (isNumeric && textValue.length >= 4) {
                                     // Numbers: use drawNumericInBoxes (same as regular fields)
                                     drawNumericInBoxes(
@@ -829,6 +854,93 @@ window.ExportEngine = {
         }
     }
 };
+
+// -------------------------------------
+// פונקציה: בדיקת תאריך
+// -------------------------------------
+/**
+ * Check if value is an 8-digit date (DDMMYYYY format)
+ * @param {string} value - Value to check
+ * @returns {boolean} True if value is 8 digits
+ */
+function isDateValue(value) {
+    return /^[0-9]{8}$/.test(value);
+}
+
+// -------------------------------------
+// פונקציה: שדה תאריך עם רווחים לקווים
+// -------------------------------------
+/**
+ * Draws date text (DDMMYYYY) with gaps for printed slashes
+ * Segments: DD [gap] MM [gap] YYYY
+ * @param {PDFPage} page - pdf-lib page object
+ * @param {string} text - 8-digit date string (DDMMYYYY)
+ * @param {number} xField - X position in PDF points
+ * @param {number} yBottom - Y position in PDF points (bottom-left)
+ * @param {number} fieldWidth - Field width in PDF points
+ * @param {number} fieldHeight - Field height in PDF points
+ * @param {PDFFont} font - pdf-lib font object
+ * @param {number} fontSize - Font size
+ * @param {RGB} color - pdf-lib RGB color object
+ */
+function drawDateField(page, text, xField, yBottom, fieldWidth, fieldHeight, font, fontSize, color) {
+    if (text.length !== 8) {
+        // Fallback to regular numeric rendering
+        drawNumericInBoxes(page, text, xField, yBottom, fieldWidth, fieldHeight, font, fontSize, color);
+        return;
+    }
+
+    // Split into segments: DD, MM, YYYY
+    const segments = [
+        text.substring(0, 2),   // Day
+        text.substring(2, 4),   // Month
+        text.substring(4, 8)    // Year
+    ];
+
+    // Calculate positions for each segment
+    // Layout: [DD][gap][MM][gap][YYYY]
+    const totalGapRatio = DATE_SLASH_GAP_RATIO * 2;
+    const segmentTotalRatio = 1 - totalGapRatio;
+
+    // Segment positions (normalized to field width)
+    const segmentPositions = [
+        { start: 0, width: DATE_SEGMENT_RATIOS[0] * segmentTotalRatio },
+        { start: DATE_SEGMENT_RATIOS[0] * segmentTotalRatio + DATE_SLASH_GAP_RATIO,
+          width: DATE_SEGMENT_RATIOS[1] * segmentTotalRatio },
+        { start: (DATE_SEGMENT_RATIOS[0] + DATE_SEGMENT_RATIOS[1]) * segmentTotalRatio + totalGapRatio,
+          width: DATE_SEGMENT_RATIOS[2] * segmentTotalRatio }
+    ];
+
+    // Bottom anchor: 15% padding from bottom or at least 2pt
+    const bottomPadding = Math.max(2, fieldHeight * 0.15);
+
+    // Render each segment
+    segments.forEach((segment, segIndex) => {
+        const pos = segmentPositions[segIndex];
+        const segmentStartX = xField + (pos.start * fieldWidth);
+        const segmentWidth = pos.width * fieldWidth;
+        const digitCount = segment.length;
+        const cellWidth = segmentWidth / digitCount;
+
+        for (let i = 0; i < digitCount; i++) {
+            const ch = segment[i];
+            const cellX = segmentStartX + (i * cellWidth);
+            const cellMidX = cellX + cellWidth / 2;
+
+            const glyphWidth = font.widthOfTextAtSize(ch, fontSize);
+            const tx = cellMidX - glyphWidth / 2;
+            const ty = yBottom + bottomPadding;
+
+            page.drawText(ch, {
+                x: tx,
+                y: ty,
+                size: fontSize,
+                font,
+                color
+            });
+        }
+    });
+}
 
 // -------------------------------------
 // פונקציה: מספרים — כל ספרה בתיבה

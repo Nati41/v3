@@ -37,6 +37,10 @@
     const BOTTOM_OFFSET_RATIO = 0.08;  // 🔒 Bottom offset = 8% of field height
     const DIGIT_WIDTH_RATIO = 0.55;    // 🔒 Approximate digit width / fontSize for David Libre
 
+    // Date field constants - spacing to avoid printed slashes
+    const DATE_SLASH_GAP_RATIO = 0.08;  // 8% gap for each slash area
+    const DATE_SEGMENT_RATIOS = [0.22, 0.22, 0.44];  // DD=22%, MM=22%, YYYY=44%
+
     // ============================================
     // Font measurement cache
     // ============================================
@@ -163,6 +167,112 @@
     }
 
     // ============================================
+    // DATE FIELD RENDERING
+    // Renders 8-digit dates (DDMMYYYY) with gaps for printed slashes
+    // ============================================
+
+    /**
+     * Check if value is an 8-digit date (DDMMYYYY format)
+     * @param {string} value - Value to check
+     * @returns {boolean} True if value is 8 digits
+     */
+    function isDateValue(value) {
+        return /^[0-9]{8}$/.test(value);
+    }
+
+    /**
+     * Render date field with segments spaced for printed slashes
+     * Splits DDMMYYYY into DD, MM, YYYY with gaps between
+     *
+     * @param {HTMLElement} container - Container element
+     * @param {string} value - 8-digit date string (DDMMYYYY)
+     * @param {Object} fieldPt - Field dimensions in PDF points {width, height}
+     * @param {number} scale - Scale factor: pt → px
+     * @param {Object} style - Style options
+     */
+    function renderDateField(container, value, fieldPt, scale, style = {}) {
+        const digits = String(value || '');
+        if (digits.length !== 8) {
+            // Fallback to regular numeric rendering
+            renderNumericField(container, value, fieldPt, scale, style);
+            return;
+        }
+
+        // Clear container
+        container.innerHTML = '';
+
+        // Split into segments: DD, MM, YYYY
+        const segments = [
+            digits.substring(0, 2),   // Day
+            digits.substring(2, 4),   // Month
+            digits.substring(4, 8)    // Year
+        ];
+
+        // Calculate positions for each segment
+        // Layout: [DD][gap][MM][gap][YYYY]
+        // Total gaps take 16% (2 × 8%), segments take 84%
+        const totalGapRatio = DATE_SLASH_GAP_RATIO * 2;
+        const segmentTotalRatio = 1 - totalGapRatio;
+
+        // Segment positions (normalized to field width)
+        const segmentPositions = [
+            { start: 0, width: DATE_SEGMENT_RATIOS[0] * segmentTotalRatio },
+            { start: DATE_SEGMENT_RATIOS[0] * segmentTotalRatio + DATE_SLASH_GAP_RATIO,
+              width: DATE_SEGMENT_RATIOS[1] * segmentTotalRatio },
+            { start: (DATE_SEGMENT_RATIOS[0] + DATE_SEGMENT_RATIOS[1]) * segmentTotalRatio + totalGapRatio,
+              width: DATE_SEGMENT_RATIOS[2] * segmentTotalRatio }
+        ];
+
+        const fontSizePt = style.fontSize || calcFontSize(fieldPt.height);
+        const color = style.color || '#000000';
+        const fontSizePx = fontSizePt * scale;
+        const containerWidthPx = fieldPt.width * scale;
+
+        // Container for all segments
+        const dateContainer = document.createElement('div');
+        dateContainer.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        `;
+
+        // Render each segment
+        segments.forEach((segment, segIndex) => {
+            const pos = segmentPositions[segIndex];
+            const segmentStartPx = pos.start * containerWidthPx;
+            const segmentWidthPx = pos.width * containerWidthPx;
+            const digitCount = segment.length;
+            const cellWidthPx = segmentWidthPx / digitCount;
+
+            for (let i = 0; i < digitCount; i++) {
+                const ch = segment[i];
+                const cellLeftPx = segmentStartPx + (i * cellWidthPx);
+                const cellCenterPx = cellLeftPx + cellWidthPx / 2;
+
+                const digitSpan = document.createElement('span');
+                digitSpan.textContent = ch;
+                digitSpan.style.cssText = `
+                    position: absolute;
+                    left: ${cellCenterPx}px;
+                    bottom: 0;
+                    transform: translateX(-50%) translateY(15%);
+                    font-family: 'David Libre', serif;
+                    font-size: ${fontSizePx}px;
+                    line-height: 0.8;
+                    color: ${color};
+                    direction: ltr;
+                `;
+
+                dateContainer.appendChild(digitSpan);
+            }
+        });
+
+        container.appendChild(dateContainer);
+    }
+
+    // ============================================
     // TEXT FIELD RENDERING
     // Replicates regular text rendering from export-engine.js
     // ============================================
@@ -243,9 +353,10 @@
      * @param {Object} options.fieldPt - Field dimensions in PDF points {width, height}
      * @param {number} options.scale - Scale factor: pt → px
      * @param {Object} options.style - Style from liveFillData
+     * @param {boolean} options.hasSlashes - V3.11: True if field area has "/" characters
      */
     function render(container, value, options = {}) {
-        const { fieldPt, scale = 1, style = {} } = options;
+        const { fieldPt, scale = 1, style = {}, hasSlashes = false } = options;
 
         if (!fieldPt || !fieldPt.width || !fieldPt.height) {
             console.warn('[PreviewTextRenderer] Missing fieldPt dimensions');
@@ -262,11 +373,13 @@
         const isNumeric = /^[0-9]+$/.test(text);
 
         if (isNumeric) {
+            // V3.11: If hasSlashes detected AND 8-digit value → use date spacing
+            if (hasSlashes && isDateValue(text)) {
+                renderDateField(container, text, fieldPt, scale, style);
+            }
             // V3.10: Smart spacing - short numbers (1-3 digits) render as regular text
             // Long numbers (4+) get spaced digits for ID/phone number fields
-            const MIN_DIGITS_FOR_SPACING = 4;
-
-            if (text.length >= MIN_DIGITS_FOR_SPACING) {
+            else if (text.length >= 4) {
                 renderNumericField(container, text, fieldPt, scale, style);
             } else {
                 // Short number (1-3 digits) - render centered, no spacing
@@ -284,13 +397,17 @@
         render,
         renderNumericField,
         renderTextField,
+        renderDateField,
+        isDateValue,
         measureTextWidth,
 
         // Expose constants for debugging
         FONT_SIZE_RATIO,
         MAX_FONT_SIZE,
         MIN_FONT_SIZE,
-        BOTTOM_OFFSET_RATIO
+        BOTTOM_OFFSET_RATIO,
+        DATE_SLASH_GAP_RATIO,
+        DATE_SEGMENT_RATIOS
     };
 
     console.log('[PreviewTextRenderer] Module loaded - Export-matching text renderer ready');
