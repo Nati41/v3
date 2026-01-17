@@ -830,9 +830,17 @@ class QuickFillOverlay {
      * @param {number} containerHeight - Container height in pixels
      */
     _renderStructuredSegments(container, segments, fontSize, containerHeight) {
+        console.log('[QuickFillOverlay] _renderStructuredSegments called:', {
+            containerSize: { w: container.offsetWidth, h: container.offsetHeight },
+            segments: segments,
+            fontSize: fontSize,
+            containerHeight: containerHeight
+        });
+
         // Clear container
         container.innerHTML = '';
         container.style.position = 'relative';
+        container.style.overflow = 'visible'; // Ensure segments are visible
 
         // Bottom padding (same as PreviewTextRenderer)
         const bottomPadding = Math.max(2, containerHeight * 0.15);
@@ -848,9 +856,13 @@ class QuickFillOverlay {
                 font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
                 white-space: nowrap;
                 pointer-events: none;
+                color: black;
             `;
             container.appendChild(span);
+            console.log('[QuickFillOverlay] Added segment span:', segment.text, 'at x=' + segment.x);
         }
+
+        console.log('[QuickFillOverlay] Container children after render:', container.children.length);
     }
 
     /**
