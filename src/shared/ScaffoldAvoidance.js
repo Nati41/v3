@@ -649,12 +649,20 @@
         const bands = detectVerticalInkBands(imageData, rect);
         const inkRegions = findInkRegions(bands);
 
+        // Debug: show ink bands and regions
+        const inkBands = bands.filter(b => b.isInk);
+        console.log('[StructuredPlacement] Detected bands:', bands.length,
+            'Ink bands:', inkBands.length,
+            'Ink regions:', inkRegions?.length || 0);
+        console.log('[StructuredPlacement] Ink bands at X:', inkBands.map(b => b.x));
+        console.log('[StructuredPlacement] Ink regions:', inkRegions?.map(r => ({ x: r.x, width: r.width })));
+
         // Must have exactly 2 slashes for DD/MM/YYYY
         if (!inkRegions || inkRegions.length !== 2) {
             return {
                 ...FALLBACK,
                 reason: 'not_2_slashes',
-                debug: { inkRegions: inkRegions?.length || 0 }
+                debug: { inkRegions: inkRegions?.length || 0, inkBands: inkBands.length }
             };
         }
 
