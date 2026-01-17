@@ -556,7 +556,13 @@
     }
 
     /**
-     * Compute structured placement for date/numeric fields with printed separators
+     * Compute structured placement for date fields with printed slashes
+     *
+     * Simple logic:
+     * - If 2 ink regions (slashes) detected AND 8 digits → DD/MM/YYYY
+     * - Zone 1: before first slash → DD
+     * - Zone 2: between slashes → MM
+     * - Zone 3: after second slash → YYYY
      *
      * @param {Object} params
      * @param {Object} params.screenRect - { x, y, width, height } in screen coordinates
@@ -587,11 +593,11 @@
         }
 
         // ═══════════════════════════════════════════════════
-        // GATE 3: Extract pure digits
+        // GATE 3: Extract pure digits - must be exactly 8 for date
         // ═══════════════════════════════════════════════════
         const digits = extractDigits(params.text);
-        if (!digits || digits.length === 0) {
-            return { ...FALLBACK, reason: 'no_digits' };
+        if (!digits || digits.length !== 8) {
+            return { ...FALLBACK, reason: 'not_8_digits', debug: { digits: digits?.length } };
         }
 
         // ═══════════════════════════════════════════════════
@@ -603,97 +609,80 @@
         }
 
         // ═══════════════════════════════════════════════════
-        // DETECT: Find ink regions and slots
+        // DETECT: Find ink regions (slashes)
         // ═══════════════════════════════════════════════════
         const bands = detectVerticalInkBands(imageData, rect);
         const inkRegions = findInkRegions(bands);
 
-        if (!inkRegions || inkRegions.length === 0) {
-            return { ...FALLBACK, reason: 'no_ink_regions' };
-        }
-
-        const slots = detectSlots(inkRegions, rect.width);
-        if (!slots || slots.length < 2) {
-            return { ...FALLBACK, reason: 'insufficient_slots', debug: { inkRegions: inkRegions.length } };
-        }
-
-        // ═══════════════════════════════════════════════════
-        // MATCH: Find matching pattern
-        // ═══════════════════════════════════════════════════
-        const pattern = matchPattern(digits, slots.length);
-        if (!pattern) {
+        // Must have exactly 2 slashes for DD/MM/YYYY
+        if (!inkRegions || inkRegions.length !== 2) {
             return {
                 ...FALLBACK,
-                reason: 'no_matching_pattern',
-                debug: { digits: digits.length, slots: slots.length }
+                reason: 'not_2_slashes',
+                debug: { inkRegions: inkRegions?.length || 0 }
             };
         }
 
         // ═══════════════════════════════════════════════════
-        // COMPUTE: Build segment placements
-        // Slots are sorted left→right by X position
-        // Segments map 1:1: slot[0]←segment[0], slot[1]←segment[1], etc.
+        // COMPUTE: Sort slashes left→right, build zones
         // ═══════════════════════════════════════════════════
-        const textSegments = splitIntoSegments(digits, pattern.segments);
+        const sortedSlashes = [...inkRegions].sort((a, b) => a.x - b.x);
+        const slash1 = sortedSlashes[0];  // First slash (after DD)
+        const slash2 = sortedSlashes[1];  // Second slash (after MM)
+
+        // Define zones:
+        // Zone 1: 0 → slash1.x (for DD)
+        // Zone 2: slash1.x + slash1.width → slash2.x (for MM)
+        // Zone 3: slash2.x + slash2.width → rect.width (for YYYY)
+        const zone1 = { start: 0, end: slash1.x };
+        const zone2 = { start: slash1.x + slash1.width, end: slash2.x };
+        const zone3 = { start: slash2.x + slash2.width, end: rect.width };
+
+        console.debug('[StructuredPlacement] slashes at:', slash1.x, slash2.x);
+        console.debug('[StructuredPlacement] zones:', zone1, zone2, zone3);
+
+        // ═══════════════════════════════════════════════════
+        // SPLIT: DD (2), MM (2), YYYY (4)
+        // ═══════════════════════════════════════════════════
+        const dd = digits.substring(0, 2);
+        const mm = digits.substring(2, 4);
+        const yyyy = digits.substring(4, 8);
+
         const fontSize = params.fontSize || (rect.height * 0.65);
         const charWidth = fontSize * 0.6;
 
-        // Debug: Log slot X positions (should be ascending left→right)
-        console.debug('[StructuredPlacement] slots:', slots.map(s => s.x));
-        console.debug('[StructuredPlacement] textSegments:', textSegments);
-
+        // ═══════════════════════════════════════════════════
+        // PLACE: Center each segment in its zone
+        // ═══════════════════════════════════════════════════
         const segments = [];
-        for (let i = 0; i < textSegments.length; i++) {
-            const text = textSegments[i];
-            const slot = slots[i];  // slot[0] is leftmost, maps to segment[0] (DD)
 
-            if (!slot) {
-                // Not enough slots for segments - fallback
-                return {
-                    ...FALLBACK,
-                    reason: 'slot_mismatch',
-                    debug: { segmentCount: textSegments.length, slotCount: slots.length }
-                };
-            }
+        // DD in zone 1
+        const ddWidth = 2 * charWidth;
+        const ddX = zone1.start + (zone1.end - zone1.start - ddWidth) / 2;
+        segments.push({ text: dd, x: Math.max(0, ddX), width: ddWidth });
 
-            const textWidth = text.length * charWidth;
+        // MM in zone 2
+        const mmWidth = 2 * charWidth;
+        const mmX = zone2.start + (zone2.end - zone2.start - mmWidth) / 2;
+        segments.push({ text: mm, x: mmX, width: mmWidth });
 
-            // Check if text fits in slot
-            if (textWidth > slot.innerWidth) {
-                return {
-                    ...FALLBACK,
-                    reason: 'text_exceeds_slot',
-                    debug: { segment: i, textWidth, slotWidth: slot.innerWidth }
-                };
-            }
+        // YYYY in zone 3
+        const yyyyWidth = 4 * charWidth;
+        const yyyyX = zone3.start + (zone3.end - zone3.start - yyyyWidth) / 2;
+        segments.push({ text: yyyy, x: yyyyX, width: yyyyWidth });
 
-            // Center text within slot
-            const x = slot.innerX + (slot.innerWidth - textWidth) / 2;
-
-            segments.push({
-                text: text,
-                x: x,
-                width: textWidth,
-                slotIndex: i
-            });
-        }
-
-        // Debug: Log final segment placements
-        console.debug('[StructuredPlacement] segments:', segments.map(s => ({ text: s.text, x: s.x })));
-
-        console.log(`[ScaffoldAvoidance] Structured placement: ${pattern.name}, ` +
-                   `${segments.length} segments, ${inkRegions.length} separators`);
+        console.debug('[StructuredPlacement] segments:', segments.map(s => ({ text: s.text, x: s.x.toFixed(1) })));
+        console.log(`[ScaffoldAvoidance] Structured placement: DD/MM/YYYY → ${dd}/${mm}/${yyyy}`);
 
         return {
             mode: 'structured',
             segments: segments,
-            pattern: pattern.name,
+            pattern: 'DD/MM/YYYY',
             fontSize: fontSize,
             reason: 'structured_match',
             debug: {
-                pattern: pattern.key,
-                inkRegions: inkRegions.length,
-                slots: slots.length,
+                slashes: [slash1.x, slash2.x],
+                zones: [zone1, zone2, zone3],
                 digits: digits
             }
         };
