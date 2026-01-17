@@ -65,7 +65,9 @@
     // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Get ImageData for a bbox region from the PDF canvas
+     * Get ImageData for a bbox region from the PDF image or canvas
+     * Note: PDFEngine renders PDF to a temporary canvas, converts to PNG,
+     * and displays as <img>. So we need to read from the img element.
      * @param {Object} screenRect - { x, y, width, height } in screen coordinates
      * @returns {ImageData|null} - ImageData for the region, or null if unavailable
      */
@@ -76,21 +78,22 @@
             return null;
         }
 
-        // PDF.js renders to canvas
+        // PDFEngine displays the PDF as an <img> element (not a canvas)
+        // Try to find the PDF image first, then fall back to canvas
+        const pdfImage = document.querySelector('#pdf-container img');
         const pdfCanvas = document.querySelector('#pdf-container canvas') ||
                           document.querySelector('.pdf-canvas') ||
                           document.querySelector('canvas[id*="pdf"]');
 
-        if (!pdfCanvas) {
-            console.log('[ScaffoldAvoidance] getImageDataForBbox: NO CANVAS FOUND');
-            // Log available canvases for debugging
-            const allCanvases = document.querySelectorAll('canvas');
-            console.log('[ScaffoldAvoidance] Available canvases:', allCanvases.length,
-                Array.from(allCanvases).map(c => ({ id: c.id, class: c.className, parent: c.parentElement?.id })));
+        const sourceElement = pdfImage || pdfCanvas;
+
+        if (!sourceElement) {
+            console.log('[ScaffoldAvoidance] getImageDataForBbox: NO PDF IMAGE OR CANVAS FOUND');
             return null;
         }
 
-        console.log('[ScaffoldAvoidance] getImageDataForBbox: canvas found', pdfCanvas.id || pdfCanvas.className);
+        console.log('[ScaffoldAvoidance] getImageDataForBbox: found', sourceElement.tagName,
+            sourceElement.id || sourceElement.className || '(no id)');
 
         try {
             const tempCanvas = document.createElement('canvas');
@@ -98,10 +101,32 @@
             tempCanvas.height = Math.ceil(screenRect.height);
             const ctx = tempCanvas.getContext('2d');
 
+            // For img elements, we need to account for the displayed size vs natural size
+            // The screenRect is in screen coordinates (displayed size)
+            // But the img's natural size might be different (high DPI rendering)
+            let scaleX = 1, scaleY = 1;
+            if (sourceElement.tagName === 'IMG') {
+                const displayedWidth = sourceElement.offsetWidth || sourceElement.width;
+                const displayedHeight = sourceElement.offsetHeight || sourceElement.height;
+                const naturalWidth = sourceElement.naturalWidth;
+                const naturalHeight = sourceElement.naturalHeight;
+
+                if (naturalWidth && displayedWidth) {
+                    scaleX = naturalWidth / displayedWidth;
+                    scaleY = naturalHeight / displayedHeight;
+                }
+                console.log('[ScaffoldAvoidance] Image scale:', scaleX.toFixed(2), 'x', scaleY.toFixed(2));
+            }
+
+            // Scale the coordinates from screen space to image space
+            const srcX = Math.floor(screenRect.x * scaleX);
+            const srcY = Math.floor(screenRect.y * scaleY);
+            const srcW = Math.ceil(screenRect.width * scaleX);
+            const srcH = Math.ceil(screenRect.height * scaleY);
+
             ctx.drawImage(
-                pdfCanvas,
-                Math.floor(screenRect.x), Math.floor(screenRect.y),
-                Math.ceil(screenRect.width), Math.ceil(screenRect.height),
+                sourceElement,
+                srcX, srcY, srcW, srcH,
                 0, 0,
                 tempCanvas.width, tempCanvas.height
             );
