@@ -727,7 +727,28 @@ class QuickFillOverlay {
         }
 
         // ══════════════════════════════════════════════════════════════════
-        // SCAFFOLD AVOIDANCE (V3.11) - Horizontal-only, no Y shift
+        // STRUCTURED PLACEMENT (V2.1) - Try segment-based rendering first
+        // For date fields with printed separators: DD / MM / YYYY
+        // ══════════════════════════════════════════════════════════════════
+        if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance?.computeStructuredPlacement && screenRect) {
+            const fontSize = fieldPt.height * 0.65 * scale;
+            const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
+                screenRect: screenRect,
+                fontSize: fontSize,
+                text: value
+            });
+
+            if (structured.mode === 'structured' && structured.segments) {
+                // Render each segment separately at computed positions
+                this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale);
+                container.style.marginLeft = '';
+                container.style.transform = '';
+                return;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        // FALLBACK: SCAFFOLD AVOIDANCE (V2.0) - Horizontal-only, no Y shift
         // Applies: X offset (marginLeft) and/or font scale
         // ══════════════════════════════════════════════════════════════════
         let xOffsetPx = 0;
@@ -736,7 +757,7 @@ class QuickFillOverlay {
         if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance && screenRect) {
             const adjustment = window.ScaffoldAvoidance.computeAdjustment({
                 screenRect: screenRect,
-                fontSize: fieldPt.height * 0.65 * scale,  // Match PreviewTextRenderer calculation
+                fontSize: fieldPt.height * 0.65 * scale,
                 text: value
             });
 
@@ -769,6 +790,37 @@ class QuickFillOverlay {
             container.style.marginLeft = '';
         }
         container.style.transform = ''; // Ensure no Y shift from previous version
+    }
+
+    /**
+     * Render structured segments at computed X positions
+     * @param {HTMLElement} container - Box element
+     * @param {Array} segments - Array of { text, x, width }
+     * @param {number} fontSize - Font size in pixels
+     * @param {number} containerHeight - Container height in pixels
+     */
+    _renderStructuredSegments(container, segments, fontSize, containerHeight) {
+        // Clear container
+        container.innerHTML = '';
+        container.style.position = 'relative';
+
+        // Bottom padding (same as PreviewTextRenderer)
+        const bottomPadding = Math.max(2, containerHeight * 0.15);
+
+        for (const segment of segments) {
+            const span = document.createElement('span');
+            span.textContent = segment.text;
+            span.style.cssText = `
+                position: absolute;
+                left: ${segment.x}px;
+                bottom: ${bottomPadding}px;
+                font-size: ${fontSize}px;
+                font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
+                white-space: nowrap;
+                pointer-events: none;
+            `;
+            container.appendChild(span);
+        }
     }
 
     /**

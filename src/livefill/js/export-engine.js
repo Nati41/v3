@@ -656,42 +656,82 @@ window.ExportEngine = {
                 let ty = yBottomPDF + bottomPadding;
 
                 // ══════════════════════════════════════════════════════════════════
-                // SCAFFOLD AVOIDANCE (V3.11) - Horizontal-only, QuickFill only
-                // Applies: X offset and/or font scale reduction (NO Y shift)
+                // STRUCTURED PLACEMENT (V2.1) - Segment-based rendering for dates
+                // QuickFill only - renders DD / MM / YYYY in separate slots
                 // ══════════════════════════════════════════════════════════════════
+                let usedStructuredPlacement = false;
+
                 if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
-                    window.ScaffoldAvoidance &&
+                    window.ScaffoldAvoidance?.computeStructuredPlacement &&
                     field.isQuickFill &&
                     field.screenRect) {
 
-                    const adjustment = window.ScaffoldAvoidance.computeAdjustment({
+                    const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
                         screenRect: field.screenRect,
                         fontSize: fontSize,
                         text: rawValue
                     });
 
-                    if (adjustment?.didAdjust) {
-                        // Apply horizontal offset (X only, never Y)
-                        if (adjustment.xOffset) {
-                            tx += adjustment.xOffset;
-                            console.log(`[Export] Scaffold X offset: ${adjustment.xOffset}px for field ${fid}`);
+                    if (structured.mode === 'structured' && structured.segments) {
+                        // Render each segment at computed X position
+                        // Convert screen X to PDF X (scale factor)
+                        const screenToPdfScale = wPDF / field.screenRect.width;
+
+                        for (const segment of structured.segments) {
+                            const segmentX = xPDF + (segment.x * screenToPdfScale);
+                            page.drawText(segment.text, {
+                                x: segmentX,
+                                y: ty,
+                                size: fontSize,
+                                font: hebrewFont,
+                                color: PDFLib.rgb(color.r, color.g, color.b),
+                            });
                         }
-                        // Apply font scale reduction
-                        if (adjustment.fontScale && adjustment.fontScale < 1.0) {
-                            fontSize *= adjustment.fontScale;
-                            console.log(`[Export] Scaffold font scale: ${adjustment.fontScale} for field ${fid}`);
-                        }
+
+                        console.log(`[Export] Structured placement: ${structured.pattern} for field ${fid}`);
+                        usedStructuredPlacement = true;
                     }
                 }
-                // ══════════════════════════════════════════════════════════════════
 
-                page.drawText(rawValue, {
-                    x: tx,
-                    y: ty,
-                    size: fontSize,
-                    font: hebrewFont,
-                    color: PDFLib.rgb(color.r, color.g, color.b),
-                });
+                // ══════════════════════════════════════════════════════════════════
+                // FALLBACK: SCAFFOLD AVOIDANCE (V2.0) - Horizontal-only, QuickFill only
+                // Applies: X offset and/or font scale reduction (NO Y shift)
+                // ══════════════════════════════════════════════════════════════════
+                if (!usedStructuredPlacement) {
+                    if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
+                        window.ScaffoldAvoidance &&
+                        field.isQuickFill &&
+                        field.screenRect) {
+
+                        const adjustment = window.ScaffoldAvoidance.computeAdjustment({
+                            screenRect: field.screenRect,
+                            fontSize: fontSize,
+                            text: rawValue
+                        });
+
+                        if (adjustment?.didAdjust) {
+                            // Apply horizontal offset (X only, never Y)
+                            if (adjustment.xOffset) {
+                                tx += adjustment.xOffset;
+                                console.log(`[Export] Scaffold X offset: ${adjustment.xOffset}px for field ${fid}`);
+                            }
+                            // Apply font scale reduction
+                            if (adjustment.fontScale && adjustment.fontScale < 1.0) {
+                                fontSize *= adjustment.fontScale;
+                                console.log(`[Export] Scaffold font scale: ${adjustment.fontScale} for field ${fid}`);
+                            }
+                        }
+                    }
+
+                    page.drawText(rawValue, {
+                        x: tx,
+                        y: ty,
+                        size: fontSize,
+                        font: hebrewFont,
+                        color: PDFLib.rgb(color.r, color.g, color.b),
+                    });
+                }
+                // ══════════════════════════════════════════════════════════════════
             }
 
             // ============================

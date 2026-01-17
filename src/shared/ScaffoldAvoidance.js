@@ -15,7 +15,7 @@
  * 8. Feature-flagged - can be disabled via FEATURES.SCAFFOLD_AVOIDANCE
  * 9. QuickFill only - does not affect mapped-fill export
  *
- * @version 2.0.0
+ * @version 2.1.0 - Added structured placement for date fields
  */
 
 (function() {
@@ -46,7 +46,18 @@
 
         // Gating
         MIN_BBOX_HEIGHT: 10,             // Minimum bbox height to attempt detection
-        MIN_BBOX_WIDTH: 20               // Minimum bbox width to attempt detection
+        MIN_BBOX_WIDTH: 20,              // Minimum bbox width to attempt detection
+
+        // Structured placement
+        STRUCTURED_MIN_SLOT_WIDTH: 8,    // Minimum slot width in pixels
+        STRUCTURED_MIN_INK_GAP: 4,       // Minimum gap between ink regions
+        STRUCTURED_SLOT_PADDING: 2       // Padding inside each slot
+    };
+
+    // Known structured patterns: [digitCount, slotCount, segmentLengths]
+    const STRUCTURED_PATTERNS = {
+        DATE_8: { digits: 8, slots: 3, segments: [2, 2, 4], name: 'DD/MM/YYYY' },
+        DATE_6: { digits: 6, slots: 3, segments: [2, 2, 2], name: 'DD/MM/YY' }
     };
 
     // ════════════════════════════════════════════════════════════════════════
@@ -438,22 +449,266 @@
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // STRUCTURED PLACEMENT (V2.1)
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Extract pure digits from text (removes separators)
+     * @param {string} text - Input text (e.g., "09/09/2013" or "09092013")
+     * @returns {string} - Pure digits only (e.g., "09092013")
+     */
+    function extractDigits(text) {
+        return text.replace(/[^0-9]/g, '');
+    }
+
+    /**
+     * Detect slots between ink regions
+     * @param {Array} inkRegions - Array of { x, width } ink regions
+     * @param {number} bboxWidth - Total width of the bbox
+     * @returns {Array|null} - Array of slots { x, width } or null if invalid
+     */
+    function detectSlots(inkRegions, bboxWidth) {
+        if (!inkRegions || inkRegions.length === 0) {
+            return null;
+        }
+
+        // Sort ink regions by X position
+        const sortedInk = [...inkRegions].sort((a, b) => a.x - b.x);
+
+        const slots = [];
+
+        // Slot 1: from bbox start to first ink region
+        const firstSlotEnd = sortedInk[0].x;
+        if (firstSlotEnd >= CONFIG.STRUCTURED_MIN_SLOT_WIDTH) {
+            slots.push({
+                x: 0,
+                width: firstSlotEnd,
+                innerX: CONFIG.STRUCTURED_SLOT_PADDING,
+                innerWidth: firstSlotEnd - CONFIG.STRUCTURED_SLOT_PADDING * 2
+            });
+        }
+
+        // Middle slots: between ink regions
+        for (let i = 0; i < sortedInk.length - 1; i++) {
+            const slotStart = sortedInk[i].x + sortedInk[i].width;
+            const slotEnd = sortedInk[i + 1].x;
+            const slotWidth = slotEnd - slotStart;
+
+            if (slotWidth >= CONFIG.STRUCTURED_MIN_SLOT_WIDTH) {
+                slots.push({
+                    x: slotStart,
+                    width: slotWidth,
+                    innerX: slotStart + CONFIG.STRUCTURED_SLOT_PADDING,
+                    innerWidth: slotWidth - CONFIG.STRUCTURED_SLOT_PADDING * 2
+                });
+            }
+        }
+
+        // Last slot: from last ink region to bbox end
+        const lastInk = sortedInk[sortedInk.length - 1];
+        const lastSlotStart = lastInk.x + lastInk.width;
+        const lastSlotWidth = bboxWidth - lastSlotStart;
+        if (lastSlotWidth >= CONFIG.STRUCTURED_MIN_SLOT_WIDTH) {
+            slots.push({
+                x: lastSlotStart,
+                width: lastSlotWidth,
+                innerX: lastSlotStart + CONFIG.STRUCTURED_SLOT_PADDING,
+                innerWidth: lastSlotWidth - CONFIG.STRUCTURED_SLOT_PADDING * 2
+            });
+        }
+
+        return slots.length > 0 ? slots : null;
+    }
+
+    /**
+     * Match text against known structured patterns
+     * @param {string} digits - Pure digits
+     * @param {number} slotCount - Number of detected slots
+     * @returns {Object|null} - Matched pattern or null
+     */
+    function matchPattern(digits, slotCount) {
+        for (const [key, pattern] of Object.entries(STRUCTURED_PATTERNS)) {
+            if (pattern.digits === digits.length && pattern.slots === slotCount) {
+                return { ...pattern, key };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Split digits into segments according to pattern
+     * @param {string} digits - Pure digits (e.g., "09092013")
+     * @param {Array} segmentLengths - Array of segment lengths (e.g., [2, 2, 4])
+     * @returns {Array} - Array of segment strings (e.g., ["09", "09", "2013"])
+     */
+    function splitIntoSegments(digits, segmentLengths) {
+        const segments = [];
+        let pos = 0;
+        for (const len of segmentLengths) {
+            segments.push(digits.substring(pos, pos + len));
+            pos += len;
+        }
+        return segments;
+    }
+
+    /**
+     * Compute structured placement for date/numeric fields with printed separators
+     *
+     * @param {Object} params
+     * @param {Object} params.screenRect - { x, y, width, height } in screen coordinates
+     * @param {number} params.fontSize - Font size in pixels
+     * @param {string} params.text - The text to be rendered (e.g., "09092013" or "09/09/2013")
+     * @returns {Object} - { mode: "structured"|"fallback", segments?, reason, debug }
+     */
+    function computeStructuredPlacement(params) {
+        const FALLBACK = {
+            mode: 'fallback',
+            reason: 'not_applicable',
+            debug: null
+        };
+
+        // ═══════════════════════════════════════════════════
+        // GATE 1: Feature flag
+        // ═══════════════════════════════════════════════════
+        if (!window.FEATURES?.SCAFFOLD_AVOIDANCE) {
+            return { ...FALLBACK, reason: 'feature_disabled' };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // GATE 2: Valid params
+        // ═══════════════════════════════════════════════════
+        const rect = params.screenRect;
+        if (!rect || !rect.width || !rect.height) {
+            return { ...FALLBACK, reason: 'invalid_rect' };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // GATE 3: Extract pure digits
+        // ═══════════════════════════════════════════════════
+        const digits = extractDigits(params.text);
+        if (!digits || digits.length === 0) {
+            return { ...FALLBACK, reason: 'no_digits' };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // GATE 4: Get image data
+        // ═══════════════════════════════════════════════════
+        const imageData = getImageDataForBbox(rect);
+        if (!imageData) {
+            return { ...FALLBACK, reason: 'no_image_data' };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // DETECT: Find ink regions and slots
+        // ═══════════════════════════════════════════════════
+        const bands = detectVerticalInkBands(imageData, rect);
+        const inkRegions = findInkRegions(bands);
+
+        if (!inkRegions || inkRegions.length === 0) {
+            return { ...FALLBACK, reason: 'no_ink_regions' };
+        }
+
+        const slots = detectSlots(inkRegions, rect.width);
+        if (!slots || slots.length < 2) {
+            return { ...FALLBACK, reason: 'insufficient_slots', debug: { inkRegions: inkRegions.length } };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // MATCH: Find matching pattern
+        // ═══════════════════════════════════════════════════
+        const pattern = matchPattern(digits, slots.length);
+        if (!pattern) {
+            return {
+                ...FALLBACK,
+                reason: 'no_matching_pattern',
+                debug: { digits: digits.length, slots: slots.length }
+            };
+        }
+
+        // ═══════════════════════════════════════════════════
+        // COMPUTE: Build segment placements
+        // ═══════════════════════════════════════════════════
+        const textSegments = splitIntoSegments(digits, pattern.segments);
+        const fontSize = params.fontSize || (rect.height * 0.65);
+        const charWidth = fontSize * 0.6;
+
+        const segments = [];
+        for (let i = 0; i < textSegments.length; i++) {
+            const text = textSegments[i];
+            const slot = slots[i];
+
+            if (!slot) {
+                // Not enough slots for segments - fallback
+                return {
+                    ...FALLBACK,
+                    reason: 'slot_mismatch',
+                    debug: { segmentCount: textSegments.length, slotCount: slots.length }
+                };
+            }
+
+            const textWidth = text.length * charWidth;
+
+            // Check if text fits in slot
+            if (textWidth > slot.innerWidth) {
+                return {
+                    ...FALLBACK,
+                    reason: 'text_exceeds_slot',
+                    debug: { segment: i, textWidth, slotWidth: slot.innerWidth }
+                };
+            }
+
+            // Center text within slot
+            const x = slot.innerX + (slot.innerWidth - textWidth) / 2;
+
+            segments.push({
+                text: text,
+                x: x,
+                width: textWidth,
+                slotIndex: i
+            });
+        }
+
+        console.log(`[ScaffoldAvoidance] Structured placement: ${pattern.name}, ` +
+                   `${segments.length} segments, ${inkRegions.length} separators`);
+
+        return {
+            mode: 'structured',
+            segments: segments,
+            pattern: pattern.name,
+            fontSize: fontSize,
+            reason: 'structured_match',
+            debug: {
+                pattern: pattern.key,
+                inkRegions: inkRegions.length,
+                slots: slots.length,
+                digits: digits
+            }
+        };
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // EXPORT
     // ════════════════════════════════════════════════════════════════════════
 
     window.ScaffoldAvoidance = {
         computeAdjustment,
+        computeStructuredPlacement,
 
         // Expose for debugging/testing
         CONFIG,
+        STRUCTURED_PATTERNS,
         getImageDataForBbox,
         detectVerticalInkBands,
         findInkRegions,
+        detectSlots,
         estimateTextBounds,
-        hasCollision
+        hasCollision,
+        extractDigits,
+        matchPattern,
+        splitIntoSegments
     };
 
-    console.log('%c[ScaffoldAvoidance] v2.0 - Horizontal-only scaffold avoidance ready',
+    console.log('%c[ScaffoldAvoidance] v2.1 - Structured placement for dates ready',
         'background: #9C27B0; color: white; padding: 3px 8px; border-radius: 3px;');
 
 })();
