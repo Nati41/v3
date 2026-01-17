@@ -738,11 +738,21 @@ class QuickFillOverlay {
         // ══════════════════════════════════════════════════════════════════
         if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance?.computeStructuredPlacement && screenRect) {
             const fontSize = fieldPt.height * 0.65 * scale;
+
+            console.log('[QuickFillOverlay] Checking structured placement:', {
+                text: value,
+                screenRect: screenRect,
+                fontSize: fontSize,
+                hasBox: !!box
+            });
+
             const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
                 screenRect: screenRect,
                 fontSize: fontSize,
                 text: value
             });
+
+            console.log('[QuickFillOverlay] Structured result:', structured);
 
             if (structured.mode === 'structured' && structured.segments) {
                 // Store segments on box for export (cache the detection result)
