@@ -752,7 +752,7 @@ class QuickFillOverlay {
                 text: value
             });
 
-            console.log('[QuickFillOverlay] Structured result:', structured);
+            console.log('[QuickFillOverlay] Structured result:', structured.mode, structured.reason, structured.debug);
 
             if (structured.mode === 'structured' && structured.segments) {
                 // Store segments on box for export (cache the detection result)
