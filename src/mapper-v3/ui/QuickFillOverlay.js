@@ -839,8 +839,11 @@ class QuickFillOverlay {
 
         // Clear container
         container.innerHTML = '';
+
+        // CRITICAL: Override CSS that might hide content
         container.style.position = 'relative';
-        container.style.overflow = 'visible'; // Ensure segments are visible
+        container.style.overflow = 'visible';  // Override CSS overflow:hidden
+        container.style.direction = 'ltr';      // Override RTL for proper positioning
 
         // Bottom padding (same as PreviewTextRenderer)
         const bottomPadding = Math.max(2, containerHeight * 0.15);
@@ -857,6 +860,7 @@ class QuickFillOverlay {
                 white-space: nowrap;
                 pointer-events: none;
                 color: black;
+                direction: ltr;
             `;
             container.appendChild(span);
             console.log('[QuickFillOverlay] Added segment span:', segment.text, 'at x=' + segment.x);
