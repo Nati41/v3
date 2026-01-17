@@ -517,6 +517,10 @@
             });
         }
 
+        // CRITICAL: Ensure slots are sorted by X position (left → right in visual/PDF space)
+        // This guarantees slot[0] is leftmost, slot[1] is next, etc.
+        slots.sort((a, b) => a.x - b.x);
+
         return slots.length > 0 ? slots : null;
     }
 
@@ -627,15 +631,21 @@
 
         // ═══════════════════════════════════════════════════
         // COMPUTE: Build segment placements
+        // Slots are sorted left→right by X position
+        // Segments map 1:1: slot[0]←segment[0], slot[1]←segment[1], etc.
         // ═══════════════════════════════════════════════════
         const textSegments = splitIntoSegments(digits, pattern.segments);
         const fontSize = params.fontSize || (rect.height * 0.65);
         const charWidth = fontSize * 0.6;
 
+        // Debug: Log slot X positions (should be ascending left→right)
+        console.debug('[StructuredPlacement] slots:', slots.map(s => s.x));
+        console.debug('[StructuredPlacement] textSegments:', textSegments);
+
         const segments = [];
         for (let i = 0; i < textSegments.length; i++) {
             const text = textSegments[i];
-            const slot = slots[i];
+            const slot = slots[i];  // slot[0] is leftmost, maps to segment[0] (DD)
 
             if (!slot) {
                 // Not enough slots for segments - fallback
@@ -667,6 +677,9 @@
                 slotIndex: i
             });
         }
+
+        // Debug: Log final segment placements
+        console.debug('[StructuredPlacement] segments:', segments.map(s => ({ text: s.text, x: s.x })));
 
         console.log(`[ScaffoldAvoidance] Structured placement: ${pattern.name}, ` +
                    `${segments.length} segments, ${inkRegions.length} separators`);
