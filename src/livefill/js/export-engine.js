@@ -608,46 +608,34 @@ window.ExportEngine = {
                 const isNumeric = /^[0-9]+$/.test(rawValue);
 
                 // -----------------------------
-                // ✔ STRUCTURED PLACEMENT - Check FIRST for date fields with slashes
+                // ✔ STRUCTURED PLACEMENT - Use cached segments from preview
+                // (Pixel detection happens during preview when canvas is available)
                 // -----------------------------
                 if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
-                    window.ScaffoldAvoidance?.computeStructuredPlacement &&
                     field.isQuickFill &&
-                    field.screenRect &&
-                    isNumeric &&
-                    rawValue.length === 8) {
+                    field.structuredSegments &&
+                    field.structuredSegments.length > 0) {
 
-                    console.log('[Export] Checking structured placement for 8-digit field:', rawValue);
+                    console.log('[Export] Using cached structuredSegments:', field.structuredSegments);
 
-                    const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
-                        screenRect: field.screenRect,
-                        fontSize: fontSize,
-                        text: rawValue
-                    });
+                    // Render DD / MM / YYYY in separate positions
+                    const screenToPdfScale = wPDF / field.screenRect.width;
+                    const bottomPadding = Math.max(2, hPDF * 0.15);
+                    const ty = yBottomPDF + bottomPadding;
 
-                    console.log('[Export] Structured result:', structured);
-
-                    if (structured.mode === 'structured' && structured.segments) {
-                        // Render DD / MM / YYYY in separate positions
-                        const screenToPdfScale = wPDF / field.screenRect.width;
-                        const bottomPadding = Math.max(2, hPDF * 0.15);
-                        const ty = yBottomPDF + bottomPadding;
-
-                        for (const segment of structured.segments) {
-                            const segmentX = xPDF + (segment.x * screenToPdfScale);
-                            page.drawText(segment.text, {
-                                x: segmentX,
-                                y: ty,
-                                size: fontSize,
-                                font: hebrewFont,
-                                color: PDFLib.rgb(color.r, color.g, color.b),
-                            });
-                        }
-
-                        console.log(`✅ Structured placement: ${structured.pattern} for ${fid}`);
-                        continue;  // Done with this field
+                    for (const segment of field.structuredSegments) {
+                        const segmentX = xPDF + (segment.x * screenToPdfScale);
+                        page.drawText(segment.text, {
+                            x: segmentX,
+                            y: ty,
+                            size: fontSize,
+                            font: hebrewFont,
+                            color: PDFLib.rgb(color.r, color.g, color.b),
+                        });
                     }
-                    // If structured placement failed, fall through to regular numeric handling
+
+                    console.log(`✅ Structured placement from cache for ${fid}`);
+                    continue;  // Done with this field
                 }
 
                 // -----------------------------

@@ -553,7 +553,7 @@ class QuickFillOverlay {
             }
 
             // Render with PreviewTextRenderer (same as LiveFill)
-            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect);
+            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect, box);
 
             // Re-add hidden input (renderPreviewText clears innerHTML)
             boxEl.appendChild(hiddenInput);
@@ -718,12 +718,18 @@ class QuickFillOverlay {
      * @param {Object} fieldPt - Field dimensions in PDF points
      * @param {number} scale - pt to px scale factor
      * @param {Object} screenRect - Optional screen coordinates for scaffold avoidance
+     * @param {Object} box - Optional box object to store structured placement for export
      */
-    _renderPreviewText(container, value, fieldPt, scale, screenRect = null) {
+    _renderPreviewText(container, value, fieldPt, scale, screenRect = null, box = null) {
         if (!window.PreviewTextRenderer) {
             console.warn('[QuickFillOverlay] PreviewTextRenderer not loaded');
             container.textContent = value || '';
             return;
+        }
+
+        // Clear any previous structured placement data
+        if (box) {
+            box.structuredSegments = null;
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -739,6 +745,12 @@ class QuickFillOverlay {
             });
 
             if (structured.mode === 'structured' && structured.segments) {
+                // Store segments on box for export (cache the detection result)
+                if (box) {
+                    box.structuredSegments = structured.segments;
+                    console.log('[QuickFillOverlay] Cached structured segments for export:', structured.segments);
+                }
+
                 // Render each segment separately at computed positions
                 this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale);
                 container.style.marginLeft = '';
@@ -1546,7 +1558,7 @@ class QuickFillOverlay {
         const ptToPxScale = box.screenRect.width / fieldPt.width;
 
         // Re-render text with new scale
-        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect);
+        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect, box);
 
         // V3.10: Re-add hidden input after rendering
         if (hiddenInput) {
@@ -1805,7 +1817,7 @@ class QuickFillOverlay {
 
             if (box.type === 'text') {
                 // Text field - provide BOTH V1 (bbox) for validation and V2 for export
-                fields.push({
+                const fieldData = {
                     id: box.id,
                     type: 'text',
                     page: box.page,
@@ -1819,7 +1831,15 @@ class QuickFillOverlay {
                     // V3.11: QuickFill marker for scaffold avoidance
                     isQuickFill: true,
                     screenRect: box.screenRect  // For pixel-based scaffold detection
-                });
+                };
+
+                // V3.11: Include cached structured segments if available (from preview detection)
+                if (box.structuredSegments) {
+                    fieldData.structuredSegments = box.structuredSegments;
+                    console.log('[QuickFillOverlay] Including cached structuredSegments for export');
+                }
+
+                fields.push(fieldData);
 
                 // LiveFill format: { value: "...", checked: false }
                 liveFillData[box.id] = {
@@ -2149,7 +2169,7 @@ class QuickFillOverlay {
                     const basePdfHeight = pdfDims.height / pdfScale;
                     const fieldPt = this._getFieldPtFromBbox(boxData.bbox, basePdfWidth, basePdfHeight);
                     const ptToPxScale = boxData.screenRect.width / fieldPt.width;
-                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale, boxData.screenRect);
+                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale, boxData.screenRect, boxData);
                     // Re-add input
                     boxEl.appendChild(input);
                 }
@@ -2181,7 +2201,7 @@ class QuickFillOverlay {
             const basePdfHeight = pdfDims.height / pdfScale;
             const fieldPt = this._getFieldPtFromBbox(box.bbox, basePdfWidth, basePdfHeight);
             const ptToPxScale = box.screenRect.width / fieldPt.width;
-            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect);
+            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect, box);
             if (input) boxEl.appendChild(input);
             const deleteBtn = boxEl.querySelector('.quick-fill-delete');
             if (deleteBtn) boxEl.appendChild(deleteBtn);
