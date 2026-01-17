@@ -72,6 +72,7 @@
     function getImageDataForBbox(screenRect) {
         if (!screenRect || screenRect.width < CONFIG.MIN_BBOX_WIDTH ||
             screenRect.height < CONFIG.MIN_BBOX_HEIGHT) {
+            console.debug('[ScaffoldAvoidance] getImageDataForBbox: invalid rect', screenRect);
             return null;
         }
 
@@ -81,8 +82,15 @@
                           document.querySelector('canvas[id*="pdf"]');
 
         if (!pdfCanvas) {
+            console.debug('[ScaffoldAvoidance] getImageDataForBbox: no canvas found');
+            // Log available canvases for debugging
+            const allCanvases = document.querySelectorAll('canvas');
+            console.debug('[ScaffoldAvoidance] Available canvases:', allCanvases.length,
+                Array.from(allCanvases).map(c => ({ id: c.id, class: c.className, parent: c.parentElement?.id })));
             return null;
         }
+
+        console.debug('[ScaffoldAvoidance] getImageDataForBbox: canvas found', pdfCanvas.id || pdfCanvas.className);
 
         try {
             const tempCanvas = document.createElement('canvas');
@@ -98,7 +106,9 @@
                 tempCanvas.width, tempCanvas.height
             );
 
-            return ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+            console.debug('[ScaffoldAvoidance] getImageDataForBbox: success, size=' + imageData.data.length);
+            return imageData;
         } catch (error) {
             console.warn('[ScaffoldAvoidance] Failed to get image data:', error.message);
             return null;
