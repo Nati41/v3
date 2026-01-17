@@ -837,33 +837,33 @@ class QuickFillOverlay {
             containerHeight: containerHeight
         });
 
-        // Clear container
-        container.innerHTML = '';
+        // Use PreviewTextRenderer for simple display (like regular text)
+        // Concatenate segments with visual separators for preview
+        const displayText = segments.map(s => s.text).join(' / ');
+        console.log('[QuickFillOverlay] Structured display text:', displayText);
 
-        // CRITICAL: Override CSS that might hide content
-        container.style.position = 'relative';
-        container.style.overflow = 'visible';  // Override CSS overflow:hidden
-        container.style.direction = 'ltr';      // Override RTL for proper positioning
-
-        // Bottom padding (same as PreviewTextRenderer)
-        const bottomPadding = Math.max(2, containerHeight * 0.15);
-
-        for (const segment of segments) {
+        // Let PreviewTextRenderer handle the display
+        if (window.PreviewTextRenderer) {
+            window.PreviewTextRenderer.render(container, displayText, {
+                fieldPt: { width: container.offsetWidth, height: containerHeight },
+                scale: 1,
+                style: {}
+            });
+        } else {
+            // Fallback
+            container.innerHTML = '';
             const span = document.createElement('span');
-            span.textContent = segment.text;
+            span.textContent = displayText;
             span.style.cssText = `
                 position: absolute;
-                left: ${segment.x}px;
-                bottom: ${bottomPadding}px;
+                left: 4px;
+                bottom: 4px;
                 font-size: ${fontSize}px;
                 font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
                 white-space: nowrap;
-                pointer-events: none;
                 color: black;
-                direction: ltr;
             `;
             container.appendChild(span);
-            console.log('[QuickFillOverlay] Added segment span:', segment.text, 'at x=' + segment.x);
         }
 
         console.log('[QuickFillOverlay] Container children after render:', container.children.length);
