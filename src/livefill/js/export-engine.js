@@ -661,6 +661,16 @@ window.ExportEngine = {
                 // ══════════════════════════════════════════════════════════════════
                 let usedStructuredPlacement = false;
 
+                // DEBUG: Log scaffold avoidance conditions
+                console.debug('[Export] ScaffoldAvoidance check:', {
+                    featureFlag: !!window.FEATURES?.SCAFFOLD_AVOIDANCE,
+                    hasModule: !!window.ScaffoldAvoidance?.computeStructuredPlacement,
+                    isQuickFill: field.isQuickFill,
+                    hasScreenRect: !!field.screenRect,
+                    screenRect: field.screenRect,
+                    text: rawValue
+                });
+
                 if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
                     window.ScaffoldAvoidance?.computeStructuredPlacement &&
                     field.isQuickFill &&
@@ -671,6 +681,8 @@ window.ExportEngine = {
                         fontSize: fontSize,
                         text: rawValue
                     });
+
+                    console.debug('[Export] Structured placement result:', structured);
 
                     if (structured.mode === 'structured' && structured.segments) {
                         // Render each segment at computed X position
