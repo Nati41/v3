@@ -608,6 +608,49 @@ window.ExportEngine = {
                 const isNumeric = /^[0-9]+$/.test(rawValue);
 
                 // -----------------------------
+                // ✔ STRUCTURED PLACEMENT - Check FIRST for date fields with slashes
+                // -----------------------------
+                if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
+                    window.ScaffoldAvoidance?.computeStructuredPlacement &&
+                    field.isQuickFill &&
+                    field.screenRect &&
+                    isNumeric &&
+                    rawValue.length === 8) {
+
+                    console.log('[Export] Checking structured placement for 8-digit field:', rawValue);
+
+                    const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
+                        screenRect: field.screenRect,
+                        fontSize: fontSize,
+                        text: rawValue
+                    });
+
+                    console.log('[Export] Structured result:', structured);
+
+                    if (structured.mode === 'structured' && structured.segments) {
+                        // Render DD / MM / YYYY in separate positions
+                        const screenToPdfScale = wPDF / field.screenRect.width;
+                        const bottomPadding = Math.max(2, hPDF * 0.15);
+                        const ty = yBottomPDF + bottomPadding;
+
+                        for (const segment of structured.segments) {
+                            const segmentX = xPDF + (segment.x * screenToPdfScale);
+                            page.drawText(segment.text, {
+                                x: segmentX,
+                                y: ty,
+                                size: fontSize,
+                                font: hebrewFont,
+                                color: PDFLib.rgb(color.r, color.g, color.b),
+                            });
+                        }
+
+                        console.log(`✅ Structured placement: ${structured.pattern} for ${fid}`);
+                        continue;  // Done with this field
+                    }
+                    // If structured placement failed, fall through to regular numeric handling
+                }
+
+                // -----------------------------
                 // ✔ DIGITS — כל ספרה בתיבה
                 // V3.10: Smart spacing - only for long numbers or narrow cells
                 // -----------------------------
@@ -656,94 +699,15 @@ window.ExportEngine = {
                 let ty = yBottomPDF + bottomPadding;
 
                 // ══════════════════════════════════════════════════════════════════
-                // STRUCTURED PLACEMENT (V2.1) - Segment-based rendering for dates
-                // QuickFill only - renders DD / MM / YYYY in separate slots
+                // Regular text rendering (non-numeric or short numbers)
                 // ══════════════════════════════════════════════════════════════════
-                let usedStructuredPlacement = false;
-
-                // DEBUG: Log scaffold avoidance conditions
-                console.debug('[Export] ScaffoldAvoidance check:', {
-                    featureFlag: !!window.FEATURES?.SCAFFOLD_AVOIDANCE,
-                    hasModule: !!window.ScaffoldAvoidance?.computeStructuredPlacement,
-                    isQuickFill: field.isQuickFill,
-                    hasScreenRect: !!field.screenRect,
-                    screenRect: field.screenRect,
-                    text: rawValue
+                page.drawText(rawValue, {
+                    x: tx,
+                    y: ty,
+                    size: fontSize,
+                    font: hebrewFont,
+                    color: PDFLib.rgb(color.r, color.g, color.b),
                 });
-
-                if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
-                    window.ScaffoldAvoidance?.computeStructuredPlacement &&
-                    field.isQuickFill &&
-                    field.screenRect) {
-
-                    const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
-                        screenRect: field.screenRect,
-                        fontSize: fontSize,
-                        text: rawValue
-                    });
-
-                    console.debug('[Export] Structured placement result:', structured);
-
-                    if (structured.mode === 'structured' && structured.segments) {
-                        // Render each segment at computed X position
-                        // Convert screen X to PDF X (scale factor)
-                        const screenToPdfScale = wPDF / field.screenRect.width;
-
-                        for (const segment of structured.segments) {
-                            const segmentX = xPDF + (segment.x * screenToPdfScale);
-                            page.drawText(segment.text, {
-                                x: segmentX,
-                                y: ty,
-                                size: fontSize,
-                                font: hebrewFont,
-                                color: PDFLib.rgb(color.r, color.g, color.b),
-                            });
-                        }
-
-                        console.log(`[Export] Structured placement: ${structured.pattern} for field ${fid}`);
-                        usedStructuredPlacement = true;
-                    }
-                }
-
-                // ══════════════════════════════════════════════════════════════════
-                // FALLBACK: SCAFFOLD AVOIDANCE (V2.0) - Horizontal-only, QuickFill only
-                // Applies: X offset and/or font scale reduction (NO Y shift)
-                // ══════════════════════════════════════════════════════════════════
-                if (!usedStructuredPlacement) {
-                    if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
-                        window.ScaffoldAvoidance &&
-                        field.isQuickFill &&
-                        field.screenRect) {
-
-                        const adjustment = window.ScaffoldAvoidance.computeAdjustment({
-                            screenRect: field.screenRect,
-                            fontSize: fontSize,
-                            text: rawValue
-                        });
-
-                        if (adjustment?.didAdjust) {
-                            // Apply horizontal offset (X only, never Y)
-                            if (adjustment.xOffset) {
-                                tx += adjustment.xOffset;
-                                console.log(`[Export] Scaffold X offset: ${adjustment.xOffset}px for field ${fid}`);
-                            }
-                            // Apply font scale reduction
-                            if (adjustment.fontScale && adjustment.fontScale < 1.0) {
-                                fontSize *= adjustment.fontScale;
-                                console.log(`[Export] Scaffold font scale: ${adjustment.fontScale} for field ${fid}`);
-                            }
-                        }
-                    }
-
-                    page.drawText(rawValue, {
-                        x: tx,
-                        y: ty,
-                        size: fontSize,
-                        font: hebrewFont,
-                        color: PDFLib.rgb(color.r, color.g, color.b),
-                    });
-                }
-                // ══════════════════════════════════════════════════════════════════
             }
 
             // ============================
