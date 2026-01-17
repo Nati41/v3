@@ -553,7 +553,11 @@ class QuickFillOverlay {
             }
 
             // Render with PreviewTextRenderer (same as LiveFill)
-            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect, box);
+            try {
+                this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect, box);
+            } catch (err) {
+                console.error('[QuickFillOverlay] ERROR in _renderPreviewText:', err);
+            }
 
             // Re-add hidden input (renderPreviewText clears innerHTML)
             boxEl.appendChild(hiddenInput);
@@ -737,35 +741,39 @@ class QuickFillOverlay {
         // For date fields with printed separators: DD / MM / YYYY
         // ══════════════════════════════════════════════════════════════════
         if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance?.computeStructuredPlacement && screenRect) {
-            const fontSize = fieldPt.height * 0.65 * scale;
+            try {
+                const fontSize = fieldPt.height * 0.65 * scale;
 
-            console.log('[QuickFillOverlay] Checking structured placement:', {
-                text: value,
-                screenRect: screenRect,
-                fontSize: fontSize,
-                hasBox: !!box
-            });
+                console.log('[QuickFillOverlay] Checking structured placement:', {
+                    text: value,
+                    screenRect: screenRect,
+                    fontSize: fontSize,
+                    hasBox: !!box
+                });
 
-            const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
-                screenRect: screenRect,
-                fontSize: fontSize,
-                text: value
-            });
+                const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
+                    screenRect: screenRect,
+                    fontSize: fontSize,
+                    text: value
+                });
 
-            console.log('[QuickFillOverlay] Structured result: mode=' + structured.mode + ', reason=' + structured.reason + ', debug=' + JSON.stringify(structured.debug));
+                console.log('[QuickFillOverlay] Structured result: mode=' + structured.mode + ', reason=' + structured.reason + ', debug=' + JSON.stringify(structured.debug));
 
-            if (structured.mode === 'structured' && structured.segments) {
-                // Store segments on box for export (cache the detection result)
-                if (box) {
-                    box.structuredSegments = structured.segments;
-                    console.log('[QuickFillOverlay] Cached structured segments for export:', structured.segments);
+                if (structured.mode === 'structured' && structured.segments) {
+                    // Store segments on box for export (cache the detection result)
+                    if (box) {
+                        box.structuredSegments = structured.segments;
+                        console.log('[QuickFillOverlay] Cached structured segments for export:', structured.segments);
+                    }
+
+                    // Render each segment separately at computed positions
+                    this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale);
+                    container.style.marginLeft = '';
+                    container.style.transform = '';
+                    return;
                 }
-
-                // Render each segment separately at computed positions
-                this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale);
-                container.style.marginLeft = '';
-                container.style.transform = '';
-                return;
+            } catch (err) {
+                console.error('[QuickFillOverlay] ERROR in structured placement:', err);
             }
         }
 
