@@ -653,7 +653,37 @@ window.ExportEngine = {
 
                 // Bottom anchor: 15% padding from bottom or at least 2pt
                 const bottomPadding = Math.max(2, hPDF * 0.15);
-                const ty = yBottomPDF + bottomPadding;
+                let ty = yBottomPDF + bottomPadding;
+
+                // ══════════════════════════════════════════════════════════════════
+                // SCAFFOLD AVOIDANCE (V3.11) - Horizontal-only, QuickFill only
+                // Applies: X offset and/or font scale reduction (NO Y shift)
+                // ══════════════════════════════════════════════════════════════════
+                if (window.FEATURES?.SCAFFOLD_AVOIDANCE &&
+                    window.ScaffoldAvoidance &&
+                    field.isQuickFill &&
+                    field.screenRect) {
+
+                    const adjustment = window.ScaffoldAvoidance.computeAdjustment({
+                        screenRect: field.screenRect,
+                        fontSize: fontSize,
+                        text: rawValue
+                    });
+
+                    if (adjustment?.didAdjust) {
+                        // Apply horizontal offset (X only, never Y)
+                        if (adjustment.xOffset) {
+                            tx += adjustment.xOffset;
+                            console.log(`[Export] Scaffold X offset: ${adjustment.xOffset}px for field ${fid}`);
+                        }
+                        // Apply font scale reduction
+                        if (adjustment.fontScale && adjustment.fontScale < 1.0) {
+                            fontSize *= adjustment.fontScale;
+                            console.log(`[Export] Scaffold font scale: ${adjustment.fontScale} for field ${fid}`);
+                        }
+                    }
+                }
+                // ══════════════════════════════════════════════════════════════════
 
                 page.drawText(rawValue, {
                     x: tx,

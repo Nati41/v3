@@ -1441,6 +1441,13 @@
 <!-- Intent resolver and per-glyph renderer for box fields -->
 <script src="../shared/FieldIntentResolver.js?v=20251229g"></script>
 <script src="../shared/PerGlyphBoxRenderer.js?v=20251229"></script>
+<!-- Scaffold Avoidance - Pixel-based detection for date lines/grids (V3.11) -->
+<script src="../shared/ScaffoldAvoidance.js"></script>
+<script>
+    // Feature flags
+    window.FEATURES = window.FEATURES || {};
+    window.FEATURES.SCAFFOLD_AVOIDANCE = true;  // V3.11: Kill switch for scaffold avoidance
+</script>
 <script src="js/livefill-core.js"></script>
 <script src="js/livefill-ui.js"></script>
 <script src="js/data-store-manager.js"></script>

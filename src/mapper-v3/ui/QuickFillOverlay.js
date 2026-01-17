@@ -553,7 +553,7 @@ class QuickFillOverlay {
             }
 
             // Render with PreviewTextRenderer (same as LiveFill)
-            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale);
+            this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect);
 
             // Re-add hidden input (renderPreviewText clears innerHTML)
             boxEl.appendChild(hiddenInput);
@@ -717,20 +717,58 @@ class QuickFillOverlay {
      * @param {string} value - Text value
      * @param {Object} fieldPt - Field dimensions in PDF points
      * @param {number} scale - pt to px scale factor
+     * @param {Object} screenRect - Optional screen coordinates for scaffold avoidance
      */
-    _renderPreviewText(container, value, fieldPt, scale) {
+    _renderPreviewText(container, value, fieldPt, scale, screenRect = null) {
         if (!window.PreviewTextRenderer) {
             console.warn('[QuickFillOverlay] PreviewTextRenderer not loaded');
             container.textContent = value || '';
             return;
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        // SCAFFOLD AVOIDANCE (V3.11) - Horizontal-only, no Y shift
+        // Applies: X offset (marginLeft) and/or font scale
+        // ══════════════════════════════════════════════════════════════════
+        let xOffsetPx = 0;
+        let fontScale = 1.0;
+
+        if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance && screenRect) {
+            const adjustment = window.ScaffoldAvoidance.computeAdjustment({
+                screenRect: screenRect,
+                fontSize: fieldPt.height * 0.65 * scale,  // Match PreviewTextRenderer calculation
+                text: value
+            });
+
+            if (adjustment?.didAdjust) {
+                xOffsetPx = adjustment.xOffset || 0;
+                fontScale = adjustment.fontScale || 1.0;
+            }
+        }
+        // ══════════════════════════════════════════════════════════════════
+
         // Use standard PreviewTextRenderer (single-line, bottom-anchored)
+        // Apply font scale if needed
+        const effectiveFieldPt = fontScale < 1.0 ? {
+            width: fieldPt.width,
+            height: fieldPt.height * fontScale
+        } : fieldPt;
+
         window.PreviewTextRenderer.render(container, value, {
-            fieldPt,
+            fieldPt: effectiveFieldPt,
             scale,
             style: {}
         });
+
+        // ══════════════════════════════════════════════════════════════════
+        // Apply horizontal offset via CSS (no vertical movement)
+        // ══════════════════════════════════════════════════════════════════
+        if (xOffsetPx !== 0) {
+            container.style.marginLeft = `${xOffsetPx}px`;
+        } else {
+            container.style.marginLeft = '';
+        }
+        container.style.transform = ''; // Ensure no Y shift from previous version
     }
 
     /**
@@ -1456,7 +1494,7 @@ class QuickFillOverlay {
         const ptToPxScale = box.screenRect.width / fieldPt.width;
 
         // Re-render text with new scale
-        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale);
+        this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect);
 
         // V3.10: Re-add hidden input after rendering
         if (hiddenInput) {
@@ -1725,7 +1763,10 @@ class QuickFillOverlay {
                     pdfX: pdfX,
                     pdfY: pdfY,
                     pdfWidth: pdfWidth,
-                    pdfHeight: pdfHeight
+                    pdfHeight: pdfHeight,
+                    // V3.11: QuickFill marker for scaffold avoidance
+                    isQuickFill: true,
+                    screenRect: box.screenRect  // For pixel-based scaffold detection
                 });
 
                 // LiveFill format: { value: "...", checked: false }
@@ -2056,7 +2097,7 @@ class QuickFillOverlay {
                     const basePdfHeight = pdfDims.height / pdfScale;
                     const fieldPt = this._getFieldPtFromBbox(boxData.bbox, basePdfWidth, basePdfHeight);
                     const ptToPxScale = boxData.screenRect.width / fieldPt.width;
-                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale);
+                    this._renderPreviewText(boxEl, boxData.text, fieldPt, ptToPxScale, boxData.screenRect);
                     // Re-add input
                     boxEl.appendChild(input);
                 }
@@ -2088,7 +2129,7 @@ class QuickFillOverlay {
             const basePdfHeight = pdfDims.height / pdfScale;
             const fieldPt = this._getFieldPtFromBbox(box.bbox, basePdfWidth, basePdfHeight);
             const ptToPxScale = box.screenRect.width / fieldPt.width;
-            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale);
+            this._renderPreviewText(boxEl, box.text || '', fieldPt, ptToPxScale, box.screenRect);
             if (input) boxEl.appendChild(input);
             const deleteBtn = boxEl.querySelector('.quick-fill-delete');
             if (deleteBtn) boxEl.appendChild(deleteBtn);

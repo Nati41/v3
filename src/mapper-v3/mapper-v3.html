@@ -342,6 +342,14 @@
     <!-- Layout Helper - Safe accessors for field layout (Phase 3) -->
     <script src="./shared/LayoutHelper.js"></script>
 
+    <!-- V3.11: Scaffold Avoidance - Pixel-based detection for date lines/grids -->
+    <script src="../shared/ScaffoldAvoidance.js"></script>
+    <script>
+        // Feature flags
+        window.FEATURES = window.FEATURES || {};
+        window.FEATURES.SCAFFOLD_AVOIDANCE = true;  // V3.11: Kill switch for scaffold avoidance
+    </script>
+
     <!-- V3.10: PreviewTextRenderer from LiveFill - for Quick Fill mode text rendering -->
     <script src="../livefill/js/preview-text-renderer.js"></script>
 
