@@ -34,7 +34,7 @@
         }
 
         try {
-            const pdfBytesSafe = clonePdfBytes(state.documentState.pdfBytesSafe);
+            const pdfBytesSafe = clonePdfBytes(state.documentState.pdfBytesSafeForExport);
             if (!pdfBytesSafe) {
                 window.MobileFillEventBus.emit('EXPORT_ERROR', {
                     error: 'PDF bytes missing'

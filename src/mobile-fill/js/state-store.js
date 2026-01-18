@@ -15,6 +15,7 @@
         },
         documentState: {
             pdfBytesSafe: null,
+            pdfBytesSafeForExport: null,
             pdfJsDoc: null,
             pdfLoadStatus: 'idle',
             pdfError: null,

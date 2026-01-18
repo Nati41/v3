@@ -39,6 +39,7 @@
                 state.selectionState.selectedForm = null;
 
                 state.documentState.pdfBytesSafe = null;
+                state.documentState.pdfBytesSafeForExport = null;
                 state.documentState.pdfJsDoc = null;
                 state.documentState.pdfLoadStatus = 'idle';
                 state.documentState.pdfError = null;
@@ -79,6 +80,7 @@
 
             on('PDF_LOADED', (payload) => {
                 state.documentState.pdfBytesSafe = payload?.pdfBytesSafe || null;
+                state.documentState.pdfBytesSafeForExport = payload?.pdfBytesSafeForExport || null;
                 state.documentState.pdfJsDoc = payload?.pdfJsDoc || null;
                 state.documentState.pageCount = payload?.pageCount ?? null;
                 state.documentState.pdfLoadStatus = 'ready';

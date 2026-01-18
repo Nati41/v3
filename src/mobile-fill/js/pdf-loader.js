@@ -27,9 +27,11 @@
 
             const arrayBuffer = await response.arrayBuffer();
             const pdfBytesSafe = new Uint8Array(arrayBuffer);
+            const pdfBytesSafeForExport = new Uint8Array(arrayBuffer.slice(0));
 
             window.MobileFillEventBus.emit('PDF_LOADED', {
                 pdfBytesSafe,
+                pdfBytesSafeForExport,
                 pageCount: null
             });
         } catch (error) {
