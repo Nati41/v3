@@ -39,15 +39,19 @@
         }
 
         try {
-            const exportResult = await window.ExportEngine.export({
-                pdfBytesSafe: state.documentState.pdfBytesSafe,
-                fieldsMapping: state.mappingState.fieldsMapping,
-                liveFillData: state.liveFillState.liveFillData
+            const { exportResult, capturedBlob } = await runExportWithCapture(() => {
+                return window.ExportEngine.export({
+                    pdfBytesSafe: state.documentState.pdfBytesSafe,
+                    fieldsMapping: state.mappingState.fieldsMapping,
+                    liveFillData: state.liveFillState.liveFillData
+                });
             });
 
             const pdfBytes = extractPdfBytes(exportResult);
             if (pdfBytes) {
                 downloadPdfBytes(pdfBytes);
+            } else if (capturedBlob) {
+                downloadPdfBlob(capturedBlob);
             }
 
             window.MobileFillEventBus.emit('EXPORT_DONE', {
@@ -57,6 +61,25 @@
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: error?.message || 'Export failed'
             });
+        }
+    }
+
+    async function runExportWithCapture(exportFn) {
+        let capturedBlob = null;
+        const originalCreateObjectURL = URL.createObjectURL;
+
+        URL.createObjectURL = function(blob) {
+            if (blob instanceof Blob) {
+                capturedBlob = blob;
+            }
+            return originalCreateObjectURL.call(URL, blob);
+        };
+
+        try {
+            const exportResult = await exportFn();
+            return { exportResult, capturedBlob };
+        } finally {
+            URL.createObjectURL = originalCreateObjectURL;
         }
     }
 
@@ -85,25 +108,29 @@
     function downloadPdfBytes(pdfBytes) {
         try {
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob);
-
-            if (isIOSMobileSafari()) {
-                window.location.href = url;
-            } else {
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `filled_form_${Date.now()}.pdf`;
-                a.click();
-            }
-
-            setTimeout(() => {
-                URL.revokeObjectURL(url);
-            }, 2000);
+            downloadPdfBlob(blob);
         } catch (error) {
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: error?.message || 'Download failed'
             });
         }
+    }
+
+    function downloadPdfBlob(blob) {
+        const url = URL.createObjectURL(blob);
+
+        if (isIOSMobileSafari()) {
+            window.location.href = url;
+        } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `filled_form_${Date.now()}.pdf`;
+            a.click();
+        }
+
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 2000);
     }
 
     function isIOSMobileSafari() {
