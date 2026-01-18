@@ -1,4 +1,2006 @@
 {
-  "version": 2,
-  "fields": []
+  "version": "3.3",
+  "exportedAt": "2026-01-10T18:32:44.031Z",
+  "document": {
+    "loaded": true,
+    "fileName": "mipuy",
+    "totalPages": 2,
+    "currentPage": 1
+  },
+  "fields": [
+    {
+      "id": "fld_1_1768069722302",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.6968036529680366,
+        0.7835917312661499,
+        0.21004566210045664,
+        0.014857881136950905
+      ],
+      "label_he": "שם",
+      "label_en": "employer_name",
+      "isMapped": true,
+      "canonical": "employer_name",
+      "context": "Employer organization name",
+      "category": "employer_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_2_1768069724716",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.3515981735159817,
+        0.7835917312661499,
+        0.3415525114155251,
+        0.014857881136950905
+      ],
+      "label_he": "כתובת",
+      "label_en": "employer_address",
+      "isMapped": true,
+      "canonical": "employer_address",
+      "context": "Employer business address",
+      "category": "employer_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_3_1768069727273",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.2191780821917808,
+        0.7829457364341085,
+        0.12876712328767123,
+        0.014857881136950905
+      ],
+      "label_he": "מספר טלפון",
+      "label_en": "employer_phone",
+      "isMapped": true,
+      "canonical": "employer_phone",
+      "context": "Employer contact phone",
+      "category": "employer_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_4_1768069732762",
+      "type": "number",
+      "page": 1,
+      "bbox": [
+        0.06301369863013699,
+        0.7829457364341085,
+        0.15251141552511416,
+        0.014857881136950905
+      ],
+      "label_he": "מספר תיק ניכויים",
+      "label_en": "employer_deduction_file_number",
+      "isMapped": true,
+      "canonical": "employer_deduction_file_number",
+      "context": "Tax deduction file number",
+      "category": "employer_details",
+      "status": "draft",
+      "detectedType": "number",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_5_1768069735924",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.7360730593607306,
+        0.7189922480620156,
+        0.17077625570776256,
+        0.014857881136950905
+      ],
+      "label_he": "מספר זהות (9 ספרות)",
+      "label_en": "employee_id_number",
+      "isMapped": true,
+      "canonical": "employee_id_number",
+      "context": "Israeli ID number",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_6_1768069740206",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.6593607305936073,
+        0.6841085271317829,
+        0.24748858447488584,
+        0.01937984496124031
+      ],
+      "label_he": "מספר דרכון (למי שאין מספר ת.ז.)",
+      "label_en": "employee_passport_number",
+      "isMapped": true,
+      "canonical": "employee_passport_number",
+      "context": "Passport number for non-ID holders",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_7_1768069743613",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.5278538812785388,
+        0.7189922480620156,
+        0.2045662100456621,
+        0.01550387596899225
+      ],
+      "label_he": "שם משפחה",
+      "label_en": "employee_last_name",
+      "isMapped": true,
+      "canonical": "employee_last_name",
+      "context": "Employee family name",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_8_1768069746058",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.35251141552511417,
+        0.7189922480620156,
+        0.17168949771689498,
+        0.01550387596899225
+      ],
+      "label_he": "שם פרטי",
+      "label_en": "employee_first_name",
+      "isMapped": true,
+      "canonical": "employee_first_name",
+      "context": "Employee given name",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_9_1768069748466",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.19999999999999998,
+        0.7189922480620156,
+        0.14885844748858448,
+        0.01550387596899225
+      ],
+      "label_he": "תאריך לידה",
+      "label_en": "employee_birth_date",
+      "isMapped": true,
+      "canonical": "employee_birth_date",
+      "context": "Employee date of birth",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_10_1768069751240",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.048401826484018265,
+        0.7189922480620156,
+        0.14794520547945206,
+        0.014857881136950905
+      ],
+      "label_he": "תאריך עליה",
+      "label_en": "employee_immigration_date",
+      "isMapped": true,
+      "canonical": "employee_immigration_date",
+      "context": "Date of immigration to Israel",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_11_1768069760088",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.38447488584474887,
+        0.6918604651162792,
+        0.27123287671232876,
+        0.014211886304909561
+      ],
+      "label_he": "רחוב/שכונה",
+      "label_en": "employee_private_address_street",
+      "isMapped": true,
+      "canonical": "employee_private_address_street",
+      "context": "Employee street address",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_12_1768069764388",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.182648401826484,
+        0.691860465116279,
+        0.15799086757990866,
+        0.027131782945736437
+      ],
+      "label_he": "עיר/ישוב",
+      "label_en": "employee_private_address_city",
+      "isMapped": true,
+      "canonical": "employee_private_address_city",
+      "context": "Employee city of residence",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_13_1768069774712",
+      "type": "number",
+      "page": 1,
+      "bbox": [
+        0.34246575342465757,
+        0.691860465116279,
+        0.04018264840182648,
+        0.027131782945736437
+      ],
+      "label_he": "מספר",
+      "label_en": "number",
+      "isMapped": true,
+      "canonical": "house_number",
+      "context": "employee",
+      "category": null,
+      "format": null,
+      "status": "draft",
+      "detectedType": "number",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "boxCount": null,
+      "structure": "text",
+      "source": "click-select"
+    },
+    {
+      "id": "fld_14_1768069782454",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.049315068493150684,
+        0.691860465116279,
+        0.12968036529680366,
+        0.027131782945736437
+      ],
+      "label_he": "מיקוד",
+      "label_en": "employee_private_address_postal",
+      "isMapped": true,
+      "canonical": "employee_private_address_postal",
+      "context": "Employee postal code",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_15_1768069787533",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.6063926940639269,
+        0.6104651162790697,
+        0.3004566210045662,
+        0.011627906976744188
+      ],
+      "label_he": "כתובת דואר אלקטרוני",
+      "label_en": "employee_email",
+      "isMapped": true,
+      "canonical": "employee_email",
+      "context": "Employee email contact",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_16_1768069790189",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.3452054794520548,
+        0.6104651162790697,
+        0.25753424657534246,
+        0.011627906976744188
+      ],
+      "label_he": "מספר טלפון",
+      "label_en": "employee_phone",
+      "isMapped": true,
+      "canonical": "employee_phone",
+      "context": "Employee home phone",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_17_1768069793399",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.048401826484018265,
+        0.6104651162790697,
+        0.29315068493150687,
+        0.011627906976744188
+      ],
+      "label_he": "מספר טלפון נייד",
+      "label_en": "employee_mobile",
+      "isMapped": true,
+      "canonical": "employee_mobile",
+      "context": "Employee mobile phone",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_18_1768069796551",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.8849315068493151,
+        0.6563307493540051,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "זכר",
+      "label_en": "gender_male",
+      "isMapped": true,
+      "canonical": "gender_male",
+      "context": "Gender selection - male",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.8958904109589041,
+        0.6640826873385012
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_19_1768069800601",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.8840182648401828,
+        0.638888888888889,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "נקבה",
+      "label_en": "gender_female",
+      "isMapped": true,
+      "canonical": "gender_female",
+      "context": "Gender selection - female",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.8949771689497718,
+        0.6466408268733849
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_20_1768069803684",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.5141552511415526,
+        0.6550387596899224,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "תושב ישראל - כן",
+      "label_en": "israeli_resident_yes",
+      "isMapped": true,
+      "canonical": "israeli_resident_yes",
+      "context": "Israeli residency status - yes",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.5251141552511416,
+        0.6627906976744186
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_21_1768069807034",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.5150684931506849,
+        0.6395348837209303,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "תושב ישראל - לא",
+      "label_en": "israeli_resident_no",
+      "isMapped": true,
+      "canonical": "israeli_resident_no",
+      "context": "Israeli residency status - no",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.526027397260274,
+        0.6472868217054263
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_22_1768069811118",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.8182648401826484,
+        0.6556847545219638,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "רווק/ה",
+      "label_en": "marital_status_single",
+      "isMapped": true,
+      "canonical": "marital_status_single",
+      "context": "Marital status - single",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.8292237442922374,
+        0.6634366925064599
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_23_1768069815184",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.7187214611872147,
+        0.6569767441860466,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "נשוי/אה",
+      "label_en": "marital_status_married",
+      "isMapped": true,
+      "canonical": "marital_status_married",
+      "context": "Marital status - married",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.7296803652968037,
+        0.6647286821705426
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_24_1768069819050",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.6054794520547946,
+        0.6563307493540051,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "גרוש/ה",
+      "label_en": "marital_status_divorced",
+      "isMapped": true,
+      "canonical": "marital_status_divorced",
+      "context": "Marital status - divorced",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.6164383561643836,
+        0.6640826873385012
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_25_1768069823400",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.8182648401826484,
+        0.6401808785529716,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אלמן/ה",
+      "label_en": "marital_status_widowed",
+      "isMapped": true,
+      "canonical": "marital_status_widowed",
+      "context": "Marital status - widowed",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.8292237442922374,
+        0.6479328165374678
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_26_1768069825551",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.7388127853881279,
+        0.6414728682170542,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "פרוד/ה (חובה לצרף אישור פ\"ש)",
+      "label_en": "marital_status_separated",
+      "isMapped": true,
+      "canonical": "marital_status_separated",
+      "context": "Marital status - separated",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.7497716894977169,
+        0.6492248062015503
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_27_1768069829800",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.20365296803652969,
+        0.6569767441860466,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "חבר בקופת חולים - לא",
+      "label_en": "health_fund_member_no",
+      "isMapped": true,
+      "canonical": "health_fund_member_no",
+      "context": "Health fund membership - no",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.21461187214611874,
+        0.6647286821705426
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_28_1768069831633",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.20182648401826483,
+        0.6414728682170542,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "חבר בקופת חולים - כן, שם הקופה",
+      "label_en": "health_fund_member_yes",
+      "isMapped": true,
+      "canonical": "health_fund_member_yes",
+      "context": "Health fund membership - yes with name",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.21278538812785389,
+        0.6492248062015503
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_29_1768069835650",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.4511415525114155,
+        0.6550387596899224,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "חבר קיבוץ/מושב שיתופי - לא",
+      "label_en": "kibbutz_member_no",
+      "isMapped": true,
+      "canonical": "kibbutz_member_no",
+      "context": "Kibbutz membership - no",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4621004566210046,
+        0.6627906976744186
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_30_1768069840700",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.4127853881278539,
+        0.6556847545219638,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "חבר קיבוץ/מושב שיתופי - כן. הכנסותיי ממעסיק זה מועברות לקיבוץ",
+      "label_en": "kibbutz_member_yes_income_transferred",
+      "isMapped": true,
+      "canonical": "kibbutz_member_yes_income_transferred",
+      "context": "Kibbutz member with income transfer",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.423744292237443,
+        0.6634366925064599
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_31_1768069843850",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.4502283105022831,
+        0.6401808785529716,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "חבר קיבוץ/מושב שיתופי - כן. הכנסותיי ממעסיק זה אינן מועברות לקיבוץ",
+      "label_en": "kibbutz_member_yes_income_not_transferred",
+      "isMapped": true,
+      "canonical": "kibbutz_member_yes_income_not_transferred",
+      "context": "Kibbutz member without income transfer",
+      "category": "employee_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4611872146118721,
+        0.6479328165374678
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_32_1768069849700",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3954337899543379,
+        0.562015503875969,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "משכורת חודש",
+      "label_en": "income_type_monthly_salary",
+      "isMapped": true,
+      "canonical": "income_type_monthly_salary",
+      "context": "Income type - monthly salary",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.406392694063927,
+        0.5697674418604651
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_33_1768069853299",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3963470319634703,
+        0.547157622739018,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "משכורת בעד משרה נוספת",
+      "label_en": "income_type_additional_position",
+      "isMapped": true,
+      "canonical": "income_type_additional_position",
+      "context": "Income type - additional position",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40730593607305937,
+        0.5549095607235142
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_34_1768069855716",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3963470319634703,
+        0.5322997416020672,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "משכורת חלקית",
+      "label_en": "income_type_partial_salary",
+      "isMapped": true,
+      "canonical": "income_type_partial_salary",
+      "context": "Income type - partial salary",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40730593607305937,
+        0.5400516795865633
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_35_1768069857600",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3963470319634703,
+        0.5200258397932817,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "שכר עבודה (עובד יומי)",
+      "label_en": "income_type_daily_wage",
+      "isMapped": true,
+      "canonical": "income_type_daily_wage",
+      "context": "Income type - daily wage",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40730593607305937,
+        0.5277777777777778
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_36_1768069859949",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3972602739726027,
+        0.5051679586563307,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "קצבה",
+      "label_en": "income_type_pension",
+      "isMapped": true,
+      "canonical": "income_type_pension",
+      "context": "Income type - pension",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40821917808219177,
+        0.5129198966408268
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_37_1768069862182",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3954337899543379,
+        0.49095607235142114,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "מלגה",
+      "label_en": "income_type_scholarship",
+      "isMapped": true,
+      "canonical": "income_type_scholarship",
+      "context": "Income type - scholarship",
+      "category": "income_type",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.406392694063927,
+        0.4987080103359173
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_40_1768069918435",
+      "type": "text",
+      "page": 1,
+      "bbox": [
+        0.052054794520547946,
+        0.5355297157622738,
+        0.15159817351598173,
+        0.02260981912144703
+      ],
+      "label_he": "תאריך תחילה העבודה בשנת המס",
+      "label_en": "employment_start_date",
+      "isMapped": true,
+      "canonical": "employment_start_date",
+      "context": "Employment start date",
+      "category": "income_details",
+      "status": "draft",
+      "detectedType": "text",
+      "detectedStructure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "structure": {
+        "intent": "flowText",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "No box indicators, defaulting to flowText"
+        ]
+      },
+      "source": "guided_mapping"
+    },
+    {
+      "id": "fld_41_1768069923630",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3917808219178082,
+        0.3488372093023256,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אבקש לקבל נקודות זיכוי ומדרגות מס כנגד הכנסתי זו",
+      "label_en": "request_tax_credits",
+      "isMapped": true,
+      "canonical": "request_tax_credits",
+      "context": "Request tax credits",
+      "category": "income_details",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40273972602739727,
+        0.3565891472868216
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_42_1768069926813",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3926940639269406,
+        0.44702842377260976,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אין לי הכנסות אחרות ממשכורת, מקצבה וממלגה",
+      "label_en": "no_other_income",
+      "isMapped": true,
+      "canonical": "no_other_income",
+      "context": "No other income declaration",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40365296803652967,
+        0.4547803617571059
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_43_1768069930447",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.38995433789954337,
+        0.32105943152454774,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אני מקבל/ת נקודות זיכוי ומדרגות מס בהכנסה אחרת",
+      "label_en": "receive_credits_elsewhere",
+      "isMapped": true,
+      "canonical": "receive_credits_elsewhere",
+      "context": "Credits received elsewhere",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4009132420091324,
+        0.32881136950904394
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_44_1768069935780",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.39360730593607307,
+        0.41860465116279066,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "יש לי הכנסות אחרות כמפורט להלן",
+      "label_en": "have_other_income",
+      "isMapped": true,
+      "canonical": "have_other_income",
+      "context": "Has other income",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4045662100456621,
+        0.4263565891472868
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_45_1768069939630",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.39360730593607307,
+        0.4024547803617571,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - משכורת חודש",
+      "label_en": "other_income_monthly_salary",
+      "isMapped": true,
+      "canonical": "other_income_monthly_salary",
+      "context": "Other income - monthly salary",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4045662100456621,
+        0.41020671834625316
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_46_1768069942546",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.39360730593607307,
+        0.38953488372093015,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - משכורת בעד משרה נוספת",
+      "label_en": "other_income_additional_position",
+      "isMapped": true,
+      "canonical": "other_income_additional_position",
+      "context": "Other income - additional position",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4045662100456621,
+        0.3972868217054263
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_47_1768069944196",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.39360730593607307,
+        0.3772609819121446,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - משכורת חלקית",
+      "label_en": "other_income_partial_salary",
+      "isMapped": true,
+      "canonical": "other_income_partial_salary",
+      "context": "Other income - partial salary",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4045662100456621,
+        0.38501291989664077
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_48_1768069948597",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.19360730593607306,
+        0.40374677002583975,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - שכר עבודה (עובד יומי)",
+      "label_en": "other_income_daily_wage",
+      "isMapped": true,
+      "canonical": "other_income_daily_wage",
+      "context": "Other income - daily wage",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.2045662100456621,
+        0.4114987080103359
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_49_1768069950896",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.1954337899543379,
+        0.39082687338501293,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - קצבה",
+      "label_en": "other_income_pension",
+      "isMapped": true,
+      "canonical": "other_income_pension",
+      "context": "Other income - pension",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.20639269406392696,
+        0.39857881136950896
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_50_1768069952847",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.19452054794520549,
+        0.377906976744186,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "הכנסה אחרת - מלגה",
+      "label_en": "other_income_scholarship",
+      "isMapped": true,
+      "canonical": "other_income_scholarship",
+      "context": "Other income - scholarship",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.2054794520547945,
+        0.3856589147286821
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_51_1768069957497",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3917808219178082,
+        0.2926356589147286,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אין מפרישים עבורי לקרן השתלמות בגין הכנסתי האחרת",
+      "label_en": "no_continuing_education_contributions",
+      "isMapped": true,
+      "canonical": "no_continuing_education_contributions",
+      "context": "No education fund contributions elsewhere",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.40273972602739727,
+        0.3003875968992248
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    },
+    {
+      "id": "fld_52_1768069959363",
+      "type": "checkbox",
+      "page": 1,
+      "bbox": [
+        0.3908675799086758,
+        0.25258397932816534,
+        0.021917808219178086,
+        0.01550387596899225
+      ],
+      "label_he": "אין מפרישים עבורי לקצבה/לביטוח אובדן כושר עבודה/פיצויים בגין הכנסתי האחרת",
+      "label_en": "no_pension_contributions",
+      "isMapped": true,
+      "canonical": "no_pension_contributions",
+      "context": "No pension contributions elsewhere",
+      "category": "other_income",
+      "status": "draft",
+      "detectedType": "checkbox",
+      "detectedStructure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "structure": {
+        "intent": "checkbox",
+        "boxCount": null,
+        "confidence": 1,
+        "reason": [
+          "type: checkbox"
+        ]
+      },
+      "source": "guided_mapping",
+      "anchor": [
+        0.4018264840182649,
+        0.26033591731266154
+      ],
+      "overlayWidth": 24,
+      "overlayHeight": 24
+    }
+  ],
+  "radioGroups": [],
+  "tables": [],
+  "mappingSummary": {
+    "totalFields": 50,
+    "mappedFields": 50,
+    "unmappedFields": 0
+  }
 }
