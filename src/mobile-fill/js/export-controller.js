@@ -17,7 +17,7 @@
             return;
         }
 
-        if (!window.MobileFillStateStore || !window.MobileFillExportGate) {
+        if (!window.MobileFillStateStore) {
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: 'Export dependencies missing'
             });
@@ -25,11 +25,6 @@
         }
 
         const state = window.MobileFillStateStore.state;
-        const gateResult = window.MobileFillExportGate.canExport(state);
-
-        if (!gateResult.allowed) {
-            return;
-        }
 
         if (!window.ExportEngine || typeof window.ExportEngine.export !== 'function') {
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
@@ -39,11 +34,23 @@
         }
 
         try {
+            const pdfBytesSafe = clonePdfBytes(state.documentState.pdfBytesSafe);
+            if (!pdfBytesSafe) {
+                window.MobileFillEventBus.emit('EXPORT_ERROR', {
+                    error: 'PDF bytes missing'
+                });
+                return;
+            }
+
+            const fieldsMapping = state.mappingState.fieldsMapping;
+            const liveFillData = state.liveFillState.liveFillData;
+
+            console.log('[MobileFill] Calling ExportEngine.export');
             const { exportResult, capturedBlob } = await runExportWithCapture(() => {
                 return window.ExportEngine.export({
-                    pdfBytesSafe: state.documentState.pdfBytesSafe,
-                    fieldsMapping: state.mappingState.fieldsMapping,
-                    liveFillData: state.liveFillState.liveFillData
+                    pdfBytesSafe,
+                    fieldsMapping,
+                    liveFillData
                 });
             });
 
@@ -54,10 +61,12 @@
                 downloadPdfBlob(capturedBlob);
             }
 
+            console.log('[MobileFill] Export finished successfully');
             window.MobileFillEventBus.emit('EXPORT_DONE', {
                 fileName: null
             });
         } catch (error) {
+            console.error('[MobileFill] Export failed:', error);
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: error?.message || 'Export failed'
             });
@@ -100,6 +109,20 @@
 
         if (exportResult.pdfBytes instanceof ArrayBuffer) {
             return new Uint8Array(exportResult.pdfBytes);
+        }
+
+        return null;
+    }
+
+    function clonePdfBytes(pdfBytesSafe) {
+        if (!pdfBytesSafe) return null;
+
+        if (pdfBytesSafe instanceof Uint8Array) {
+            return new Uint8Array(pdfBytesSafe.slice(0));
+        }
+
+        if (pdfBytesSafe instanceof ArrayBuffer) {
+            return new Uint8Array(pdfBytesSafe.slice(0));
         }
 
         return null;
