@@ -79,6 +79,30 @@
                 hotspot.style.height = `${position.height}px`;
 
                 hotspot.addEventListener('click', () => {
+                    const fieldType = field.type || 'text';
+
+                    if (fieldType === 'checkbox') {
+                        const nextChecked = !getFieldChecked(fieldId);
+                        window.MobileFillEventBus.emit('FIELD_UPDATED', {
+                            fieldId,
+                            value: null,
+                            checked: nextChecked,
+                            tableContext: null
+                        });
+                        return;
+                    }
+
+                    if (fieldType === 'radio') {
+                        uncheckRadioSiblings(field);
+                        window.MobileFillEventBus.emit('FIELD_UPDATED', {
+                            fieldId,
+                            value: null,
+                            checked: true,
+                            tableContext: null
+                        });
+                        return;
+                    }
+
                     window.MobileFillEventBus.emit('FIELD_FOCUS_REQUESTED', {
                         fieldId,
                         tableContext: null,
@@ -124,6 +148,44 @@
         }
 
         return null;
+    }
+
+    function getFieldChecked(fieldId) {
+        const state = window.MobileFillStateStore?.state;
+        const entry = state?.liveFillState?.liveFillData?.fields?.[fieldId];
+        return Boolean(entry?.checked);
+    }
+
+    function uncheckRadioSiblings(field) {
+        const groupKey = getRadioGroupKey(field);
+        if (!groupKey) return;
+
+        const fields = currentMapping?.fields || [];
+        fields.forEach((item) => {
+            const itemId = item.id || item.fieldId;
+            if (!itemId || itemId === (field.id || field.fieldId)) return;
+            if ((item.type || 'text') !== 'radio') return;
+
+            const itemGroupKey = getRadioGroupKey(item);
+            if (itemGroupKey !== groupKey) return;
+
+            window.MobileFillEventBus.emit('FIELD_UPDATED', {
+                fieldId: itemId,
+                value: null,
+                checked: false,
+                tableContext: null
+            });
+        });
+    }
+
+    function getRadioGroupKey(field) {
+        return field.groupId ||
+            field.group ||
+            field.group_id ||
+            field.entity_id ||
+            field.section_id ||
+            field.rules?.part_of_group ||
+            null;
     }
 
     window.MobileFillHotspotOverlay = { init };
