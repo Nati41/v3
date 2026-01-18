@@ -23,6 +23,10 @@
         window.MobileFillExportBlockedBanner.init();
     }
 
+    if (window.MobileFillExportButton && typeof window.MobileFillExportButton.init === 'function') {
+        window.MobileFillExportButton.init();
+    }
+
     if (window.MobileFillFormListUI && typeof window.MobileFillFormListUI.init === 'function') {
         window.MobileFillFormListUI.init();
     }
@@ -56,5 +60,9 @@
         if (typeof window.MobileFillFormCatalogService.loadCatalog === 'function') {
             window.MobileFillFormCatalogService.loadCatalog('data/form-catalog.json', { skipStartEmit: true });
         }
+    }
+
+    if (window.MobileFillExportController && typeof window.MobileFillExportController.init === 'function') {
+        window.MobileFillExportController.init();
     }
 })();

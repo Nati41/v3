@@ -1,9 +1,19 @@
 (function() {
     'use strict';
 
-    async function exportPdf() {
+    function init() {
         if (!window.MobileFillEventBus) {
-            console.warn('[MobileFill] EventBus missing; export disabled');
+            console.warn('[MobileFill] EventBus missing; export controller disabled');
+            return;
+        }
+
+        window.MobileFillEventBus.on('EXPORT_STARTED', () => {
+            handleExportRequest();
+        });
+    }
+
+    async function handleExportRequest() {
+        if (!window.MobileFillEventBus) {
             return;
         }
 
@@ -18,9 +28,6 @@
         const gateResult = window.MobileFillExportGate.canExport(state);
 
         if (!gateResult.allowed) {
-            window.MobileFillEventBus.emit('EXPORT_BLOCKED', {
-                reason: gateResult.reason || 'Export blocked'
-            });
             return;
         }
 
@@ -30,8 +37,6 @@
             });
             return;
         }
-
-        window.MobileFillEventBus.emit('EXPORT_STARTED');
 
         try {
             await window.ExportEngine.export({
@@ -51,6 +56,6 @@
     }
 
     window.MobileFillExportController = {
-        exportPdf
+        init
     };
 })();

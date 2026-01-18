@@ -20,7 +20,7 @@
         });
     }
 
-    function renderField(fieldId) {
+    function renderField(fieldId, fieldOverride = null) {
         if (!fieldId) return;
         if (!window.PreviewTextRenderer) {
             console.warn('[MobileFill] PreviewTextRenderer missing; preview skipped');
@@ -30,7 +30,7 @@
         const state = window.MobileFillStateStore.state;
         const mapping = state.mappingState.fieldsMapping;
         const fields = mapping?.fields || [];
-        const field = fields.find((item) => (item.id || item.fieldId) === fieldId);
+        const field = fieldOverride || fields.find((item) => (item.id || item.fieldId) === fieldId);
         if (!field) return;
 
         const layer = findHotspotLayer(field.page || 1);
@@ -39,9 +39,15 @@
         const hotspot = layer.querySelector(`.mobilefill-hotspot[data-field-id="${fieldId}"]`);
         if (!hotspot) return;
 
-        const entry = state.liveFillState.liveFillData.fields?.[fieldId];
-        const value = entry?.value ?? '';
+        const entry = state.liveFillState.liveFillData.fields?.[fieldId] || {};
+        const fieldType = field.type || 'text';
 
+        if (fieldType === 'checkbox' || fieldType === 'radio') {
+            renderChoiceIntoHotspot(hotspot, fieldType, Boolean(entry.checked));
+            return;
+        }
+
+        const value = entry.value ?? '';
         renderPreviewIntoHotspot(hotspot, value, field, field.page || 1);
     }
 
@@ -51,11 +57,7 @@
         fields.forEach((field) => {
             const fieldId = field.id || field.fieldId;
             if (!fieldId) return;
-
-            const entry = state.liveFillState.liveFillData.fields?.[fieldId];
-            if (!entry || entry.value === undefined) return;
-
-            renderField(fieldId);
+            renderField(fieldId, field);
         });
     }
 
@@ -82,6 +84,21 @@
             scale,
             style: field.style || {}
         });
+    }
+
+    function renderChoiceIntoHotspot(hotspot, fieldType, checked) {
+        hotspot.innerHTML = '';
+
+        if (!checked) return;
+
+        const symbol = document.createElement('span');
+        symbol.className = 'mobilefill-choice-symbol';
+        symbol.textContent = fieldType === 'radio' ? '●' : '✓';
+
+        const size = Math.min(hotspot.offsetWidth, hotspot.offsetHeight) * 0.7;
+        symbol.style.fontSize = `${size}px`;
+
+        hotspot.appendChild(symbol);
     }
 
     function getFieldPt(field, viewport) {
