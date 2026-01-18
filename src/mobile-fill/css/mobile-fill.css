@@ -1,0 +1,132 @@
+/* MobileFill base styles (intentionally minimal for foundation stage). */
+
+#mobilefill-status {
+    margin: 0;
+    padding: 12px;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+
+#mobilefill-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px;
+}
+
+#mobilefill-controls button {
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+#export-blocked-banner {
+    padding: 10px 12px;
+    border: 1px solid #b91c1c;
+    background: #fee2e2;
+    color: #7f1d1d;
+    margin: 0 12px 12px;
+    font-size: 12px;
+    display: none;
+}
+
+#export-blocked-banner.visible {
+    display: block;
+}
+
+#mobilefill-pdf-container {
+    padding: 12px;
+}
+
+.mobilefill-page {
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.mobilefill-page canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.mobilefill-hotspot-layer {
+    position: absolute;
+    inset: 0;
+}
+
+.mobilefill-hotspot {
+    position: absolute;
+    border: 1px dashed rgba(37, 99, 235, 0.6);
+    background: rgba(37, 99, 235, 0.05);
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.field-input-popover {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+    width: 240px;
+    font-size: 12px;
+    direction: rtl;
+}
+
+.popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    font-weight: 600;
+}
+
+.popover-close {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.popover-body {
+    padding: 10px;
+}
+
+.popover-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #cbd5f5;
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.input-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.popover-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 10px 10px;
+}
+
+.popover-btn {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid #cbd5f5;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.popover-btn.confirm {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+    color: #ffffff;
+}

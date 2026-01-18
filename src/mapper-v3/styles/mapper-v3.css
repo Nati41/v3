@@ -4137,6 +4137,11 @@ input, textarea {
     direction: rtl;
 }
 
+/* Structured date fields - allow spans to be visible */
+.quick-fill-box.structured-placement {
+    overflow: visible;
+}
+
 /* V3.10: Draggable cursor */
 .quick-fill-box {
     cursor: grab;

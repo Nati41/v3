@@ -736,6 +736,9 @@ class QuickFillOverlay {
             box.structuredSegments = null;
         }
 
+        // Remove structured placement class (will be re-added if needed)
+        container.classList.remove('structured-placement');
+
         // ══════════════════════════════════════════════════════════════════
         // STRUCTURED PLACEMENT (V2.1) - Try segment-based rendering first
         // For date fields with printed separators: DD / MM / YYYY
@@ -766,10 +769,12 @@ class QuickFillOverlay {
                         console.log('[QuickFillOverlay] Cached structured segments for export:', structured.segments);
                     }
 
-                    // Render each segment separately at computed positions
-                    this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale);
-                    container.style.marginLeft = '';
-                    container.style.transform = '';
+                    // Add CSS class that enables overflow:visible
+                    container.classList.add('structured-placement');
+
+                    // Render structured segments in preview (same as export)
+                    // Pass screenRect.width so we use same coordinate space as segment calculation
+                    this._renderStructuredSegments(container, structured.segments, fontSize, fieldPt.height * scale, screenRect.width);
                     return;
                 }
             } catch (err) {
@@ -828,45 +833,45 @@ class QuickFillOverlay {
      * @param {Array} segments - Array of { text, x, width }
      * @param {number} fontSize - Font size in pixels
      * @param {number} containerHeight - Container height in pixels
+     * @param {number} bboxWidth - Original bbox width (for correct percentage calculation)
      */
-    _renderStructuredSegments(container, segments, fontSize, containerHeight) {
-        console.log('[QuickFillOverlay] _renderStructuredSegments called:', {
-            containerSize: { w: container.offsetWidth, h: container.offsetHeight },
-            segments: segments,
-            fontSize: fontSize,
-            containerHeight: containerHeight
-        });
+    _renderStructuredSegments(container, segments, fontSize, containerHeight, bboxWidth) {
+        console.log('[QuickFillOverlay] _renderStructuredSegments:', segments.map(s => s.text + '@' + s.x.toFixed(0)), 'bboxWidth:', bboxWidth);
 
-        // Use PreviewTextRenderer for simple display (like regular text)
-        // Concatenate segments with visual separators for preview
-        const displayText = segments.map(s => s.text).join(' / ');
-        console.log('[QuickFillOverlay] Structured display text:', displayText);
+        // Clear container but keep reference to hidden input
+        const hiddenInput = container.querySelector('.quick-fill-hidden-input');
+        container.innerHTML = '';
 
-        // Let PreviewTextRenderer handle the display
-        if (window.PreviewTextRenderer) {
-            window.PreviewTextRenderer.render(container, displayText, {
-                fieldPt: { width: container.offsetWidth, height: containerHeight },
-                scale: 1,
-                style: {}
-            });
-        } else {
-            // Fallback
-            container.innerHTML = '';
+        // Use bboxWidth (screenRect.width) for percentage calculations
+        // This matches the coordinate space used when computing segments
+        const refWidth = bboxWidth || container.offsetWidth;
+
+        // Create each segment span positioned relative to container
+        for (const segment of segments) {
+            // Use pixel positioning directly (segment.x is in screen pixels relative to bbox)
+            // This matches how Export calculates: segmentX = xPDF + (segment.x * scale)
             const span = document.createElement('span');
-            span.textContent = displayText;
+            span.textContent = segment.text;
+            // Use pixel positioning for X (more accurate than percentage)
+            // Use bottom anchoring like Export (15% from bottom, minimum 2px)
+            const bottomPadding = Math.max(2, containerHeight * 0.15);
             span.style.cssText = `
                 position: absolute;
-                left: 4px;
-                bottom: 4px;
+                left: ${segment.x}px;
+                bottom: ${bottomPadding}px;
                 font-size: ${fontSize}px;
                 font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
                 white-space: nowrap;
+                pointer-events: none;
                 color: black;
             `;
             container.appendChild(span);
         }
 
-        console.log('[QuickFillOverlay] Container children after render:', container.children.length);
+        // Re-add hidden input if it existed
+        if (hiddenInput) {
+            container.appendChild(hiddenInput);
+        }
     }
 
     /**

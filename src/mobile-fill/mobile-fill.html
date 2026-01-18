@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MobileFill</title>
+    <link rel="stylesheet" href="css/mobile-fill.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.0.0"></script>
+    <script>
+        if (window.PDFLib && window.fontkit) {
+            PDFLib.PDFDocument.prototype.registerFontkit = function(fontkitInstance) {
+                this.fontkit = fontkitInstance;
+            };
+            PDFLib.PDFDocument.registerFontkit = function(fontkitInstance) {
+                PDFLib.PDFDocument.prototype.fontkit = fontkitInstance;
+            };
+            PDFLib.PDFDocument.registerFontkit(fontkit);
+        }
+    </script>
+</head>
+<body>
+    <main id="mobilefill-root">
+        <div id="mobilefill-controls">
+            <button type="button" data-action="load-catalog">Load Catalog</button>
+            <button type="button" data-action="select-demo-form">Select Demo Form</button>
+            <button type="button" data-action="form-deselected">Deselect Form</button>
+            <button type="button" data-action="load-pdf">Load PDF</button>
+            <button type="button" data-action="load-mapping">Load Mapping</button>
+            <button type="button" data-action="render-viewer">Render Viewer</button>
+            <button type="button" data-action="hotspots-ready">Hotspots Ready</button>
+            <button type="button" data-action="open-popover">Open Popover</button>
+            <button type="button" data-action="export-stub">Export Stub</button>
+        </div>
+        <div id="export-blocked-banner" role="status" aria-live="polite"></div>
+        <div id="mobilefill-pdf-container"></div>
+        <pre id="mobilefill-status">MobileFill bootstrap loaded</pre>
+    </main>
+
+    <script src="js/event-bus.js"></script>
+    <script src="js/state-store.js"></script>
+    <script src="../shared/normalizeField.js"></script>
+    <script src="../shared/migrateV1toV2.js"></script>
+    <script src="../livefill/js/field-input-popover.js"></script>
+    <script src="../livefill/js/preview-text-renderer.js"></script>
+    <script src="../livefill/js/export-engine.js"></script>
+    <script src="js/event-logger.js"></script>
+    <script src="js/demo-form-selector.js"></script>
+    <script src="js/form-catalog-service.js"></script>
+    <script src="js/pdf-loader.js"></script>
+    <script src="js/mapping-loader.js"></script>
+    <script src="js/mobile-pdf-viewer.js"></script>
+    <script src="js/hotspot-overlay.js"></script>
+    <script src="js/ui-status.js"></script>
+    <script src="js/popover-input-controller.js"></script>
+    <script src="js/export-gate.js"></script>
+    <script src="js/export-blocked-banner.js"></script>
+    <script src="js/live-preview-renderer.js"></script>
+    <script src="js/export-controller.js"></script>
+    <script src="js/dev-controls.js"></script>
+    <script src="js/mobile-flow-controller.js"></script>
+    <script src="js/bootstrap.js"></script>
+</body>
+</html>

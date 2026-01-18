@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "updatedAt": "2026-01-01",
+  "locale": "he-IL",
+  "forms": [
+    {
+      "id": "demo-form-001",
+      "name": "טופס דמה",
+      "description": "טופס פיקטיבי לבדיקת MobileFill",
+      "category": "demo",
+      "tags": ["demo", "mobile"],
+      "thumbnailUrl": "assets/placeholder-thumb.png",
+      "pdfUrl": "assets/demo-form.pdf",
+      "mappingUrl": "assets/demo-form-mapping.json",
+      "pageCount": 1,
+      "rtl": true,
+      "requires": {
+        "tables": false,
+        "signature": false
+      },
+      "export": {
+        "fileName": "demo-form-filled.pdf"
+      },
+      "status": {
+        "active": true,
+        "deprecated": false
+      },
+      "meta": {
+        "createdBy": "system",
+        "createdAt": "2026-01-01",
+        "notes": "Placeholder form for bootstrap stage."
+      }
+    }
+  ]
+}

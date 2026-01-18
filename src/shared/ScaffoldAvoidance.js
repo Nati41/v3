@@ -696,22 +696,26 @@
 
         // ═══════════════════════════════════════════════════
         // PLACE: Center each segment in its zone
+        // IMPORTANT: Clamp to zone.start to avoid overlapping with slashes!
         // ═══════════════════════════════════════════════════
         const segments = [];
 
-        // DD in zone 1
+        // DD in zone 1 - clamp to zone start (but not less than 0)
         const ddWidth = 2 * charWidth;
-        const ddX = zone1.start + (zone1.end - zone1.start - ddWidth) / 2;
-        segments.push({ text: dd, x: Math.max(0, ddX), width: ddWidth });
+        const ddXCentered = zone1.start + (zone1.end - zone1.start - ddWidth) / 2;
+        const ddX = Math.max(0, Math.max(zone1.start, ddXCentered));
+        segments.push({ text: dd, x: ddX, width: ddWidth });
 
-        // MM in zone 2
+        // MM in zone 2 - MUST start at zone2.start or later (not overlap slash!)
         const mmWidth = 2 * charWidth;
-        const mmX = zone2.start + (zone2.end - zone2.start - mmWidth) / 2;
+        const mmXCentered = zone2.start + (zone2.end - zone2.start - mmWidth) / 2;
+        const mmX = Math.max(zone2.start, mmXCentered);
         segments.push({ text: mm, x: mmX, width: mmWidth });
 
-        // YYYY in zone 3
+        // YYYY in zone 3 - MUST start at zone3.start or later (not overlap slash!)
         const yyyyWidth = 4 * charWidth;
-        const yyyyX = zone3.start + (zone3.end - zone3.start - yyyyWidth) / 2;
+        const yyyyXCentered = zone3.start + (zone3.end - zone3.start - yyyyWidth) / 2;
+        const yyyyX = Math.max(zone3.start, yyyyXCentered);
         segments.push({ text: yyyy, x: yyyyX, width: yyyyWidth });
 
         console.debug('[StructuredPlacement] segments:', segments.map(s => ({ text: s.text, x: s.x.toFixed(1) })));
