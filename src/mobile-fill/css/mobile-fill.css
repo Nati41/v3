@@ -135,3 +135,15 @@
     border-color: #0ea5e9;
     color: #ffffff;
 }
+
+.mobilefill-choice-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.mobilefill-choice-option input {
+    width: 16px;
+    height: 16px;
+}

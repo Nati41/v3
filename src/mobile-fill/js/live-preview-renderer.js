@@ -10,6 +10,14 @@
         window.MobileFillEventBus.on('FIELD_UPDATED', (payload) => {
             renderField(payload?.fieldId);
         });
+
+        window.MobileFillEventBus.on('VIEWER_RENDER_DONE', () => {
+            renderAllFilledFields();
+        });
+
+        window.MobileFillEventBus.on('HOTSPOTS_READY', () => {
+            renderAllFilledFields();
+        });
     }
 
     function renderField(fieldId) {
@@ -35,6 +43,20 @@
         const value = entry?.value ?? '';
 
         renderPreviewIntoHotspot(hotspot, value, field, field.page || 1);
+    }
+
+    function renderAllFilledFields() {
+        const state = window.MobileFillStateStore.state;
+        const fields = state.mappingState.fieldsMapping?.fields || [];
+        fields.forEach((field) => {
+            const fieldId = field.id || field.fieldId;
+            if (!fieldId) return;
+
+            const entry = state.liveFillState.liveFillData.fields?.[fieldId];
+            if (!entry || entry.value === undefined) return;
+
+            renderField(fieldId);
+        });
     }
 
     function findHotspotLayer(pageNum) {
