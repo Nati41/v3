@@ -11,12 +11,12 @@
         window.MobileFillUIStatus.init();
     }
 
-    if (window.MobileFillFlowController && typeof window.MobileFillFlowController.init === 'function') {
-        window.MobileFillFlowController.init();
-    }
-
     if (window.MobileFillExportGate && typeof window.MobileFillExportGate.init === 'function') {
         window.MobileFillExportGate.init();
+    }
+
+    if (window.MobileFillFlowController && typeof window.MobileFillFlowController.init === 'function') {
+        window.MobileFillFlowController.init();
     }
 
     if (window.MobileFillExportBlockedBanner && typeof window.MobileFillExportBlockedBanner.init === 'function') {

@@ -10,10 +10,12 @@
         'HOTSPOTS_READY',
         'FIELD_UPDATED',
         'TABLE_CELL_UPDATED',
-        'EXPORT_STARTED',
         'EXPORT_DONE',
-        'EXPORT_ERROR'
+        'EXPORT_ERROR',
+        'EXPORT_BLOCKED'
     ];
+
+    let isLocked = false;
 
     function init() {
         if (!window.MobileFillEventBus || !window.MobileFillExportGate || !window.MobileFillStateStore) {
@@ -25,12 +27,19 @@
         if (!button) return;
 
         button.addEventListener('click', () => {
+            if (isLocked) return;
+
+            lockButton();
             window.MobileFillEventBus.emit('EXPORT_STARTED');
         });
 
         WATCH_EVENTS.forEach((eventName) => {
             window.MobileFillEventBus.on(eventName, updateButtonState);
         });
+
+        window.MobileFillEventBus.on('EXPORT_DONE', unlockButton);
+        window.MobileFillEventBus.on('EXPORT_ERROR', unlockButton);
+        window.MobileFillEventBus.on('EXPORT_BLOCKED', unlockButton);
 
         updateButtonState();
     }
@@ -42,13 +51,26 @@
         const state = window.MobileFillStateStore.state;
         const result = window.MobileFillExportGate.canExport(state);
 
-        if (result.allowed) {
-            button.classList.remove('is-disabled');
-            button.setAttribute('aria-disabled', 'false');
-        } else {
-            button.classList.add('is-disabled');
-            button.setAttribute('aria-disabled', 'true');
-        }
+        const shouldDisable = isLocked || !result.allowed;
+        button.classList.toggle('is-disabled', shouldDisable);
+        button.setAttribute('aria-disabled', shouldDisable ? 'true' : 'false');
+    }
+
+    function lockButton() {
+        const button = document.getElementById('mobilefill-export-button');
+        if (!button) return;
+
+        isLocked = true;
+        button.classList.add('is-disabled');
+        button.setAttribute('aria-disabled', 'true');
+    }
+
+    function unlockButton() {
+        const button = document.getElementById('mobilefill-export-button');
+        if (!button) return;
+
+        isLocked = false;
+        updateButtonState();
     }
 
     window.MobileFillExportButton = { init };
