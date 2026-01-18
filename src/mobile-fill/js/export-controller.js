@@ -56,9 +56,15 @@
 
             const pdfBytes = extractPdfBytes(exportResult);
             if (pdfBytes) {
-                downloadPdfBytes(pdfBytes);
+                downloadPdfBytes(pdfBytes, 'bytes');
             } else if (capturedBlob) {
-                downloadPdfBlob(capturedBlob);
+                downloadPdfBlob(capturedBlob, 'blob');
+            } else {
+                console.error('[MobileFill] Export failed: no generated PDF bytes or blob');
+                window.MobileFillEventBus.emit('EXPORT_ERROR', {
+                    error: 'Generated PDF not available'
+                });
+                return;
             }
 
             console.log('[MobileFill] Export finished successfully');
@@ -128,10 +134,10 @@
         return null;
     }
 
-    function downloadPdfBytes(pdfBytes) {
+    function downloadPdfBytes(pdfBytes, sourceType) {
         try {
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-            downloadPdfBlob(blob);
+            downloadPdfBlob(blob, sourceType);
         } catch (error) {
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: error?.message || 'Download failed'
@@ -139,9 +145,10 @@
         }
     }
 
-    function downloadPdfBlob(blob) {
+    function downloadPdfBlob(blob, sourceType) {
         const url = URL.createObjectURL(blob);
 
+        console.log(`[MobileFill] Opening generated PDF for download (source: ${sourceType || 'fallback'})`);
         if (isIOSMobileSafari()) {
             window.location.href = url;
         } else {
