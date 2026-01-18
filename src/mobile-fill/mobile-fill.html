@@ -28,18 +28,8 @@
 </head>
 <body>
     <main id="mobilefill-root">
-        <div id="mobilefill-controls">
-            <button type="button" data-action="load-catalog">Load Catalog</button>
-            <button type="button" data-action="select-demo-form">Select Demo Form</button>
-            <button type="button" data-action="form-deselected">Deselect Form</button>
-            <button type="button" data-action="load-pdf">Load PDF</button>
-            <button type="button" data-action="load-mapping">Load Mapping</button>
-            <button type="button" data-action="render-viewer">Render Viewer</button>
-            <button type="button" data-action="hotspots-ready">Hotspots Ready</button>
-            <button type="button" data-action="open-popover">Open Popover</button>
-            <button type="button" data-action="export-stub">Export Stub</button>
-        </div>
         <div id="export-blocked-banner" role="status" aria-live="polite"></div>
+        <div id="mobilefill-form-list"></div>
         <div id="mobilefill-pdf-container"></div>
         <pre id="mobilefill-status">MobileFill bootstrap loaded</pre>
     </main>
@@ -64,7 +54,7 @@
     <script src="js/export-blocked-banner.js"></script>
     <script src="js/live-preview-renderer.js"></script>
     <script src="js/export-controller.js"></script>
-    <script src="js/dev-controls.js"></script>
+    <script src="js/form-list-ui.js"></script>
     <script src="js/mobile-flow-controller.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>

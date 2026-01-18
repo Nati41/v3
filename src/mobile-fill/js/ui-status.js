@@ -50,7 +50,14 @@
     }
 
     function init() {
-        if (!window.MobileFillEventBus) {
+        const statusEl = document.getElementById('mobilefill-status');
+        const isDebug = window.location.search.includes('debug');
+
+        if (!isDebug && statusEl) {
+            statusEl.style.display = 'none';
+        }
+
+        if (!isDebug || !window.MobileFillEventBus) {
             console.warn('[MobileFill] EventBus missing; UI status disabled');
             return;
         }

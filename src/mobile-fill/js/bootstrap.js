@@ -23,6 +23,10 @@
         window.MobileFillExportBlockedBanner.init();
     }
 
+    if (window.MobileFillFormListUI && typeof window.MobileFillFormListUI.init === 'function') {
+        window.MobileFillFormListUI.init();
+    }
+
     if (window.MobileFillPdfLoader && typeof window.MobileFillPdfLoader.init === 'function') {
         window.MobileFillPdfLoader.init();
     }
@@ -47,7 +51,10 @@
         window.MobileFillLivePreviewRenderer.init();
     }
 
-    if (window.MobileFillDevControls && typeof window.MobileFillDevControls.init === 'function') {
-        window.MobileFillDevControls.init();
+    if (window.MobileFillEventBus && window.MobileFillFormCatalogService) {
+        window.MobileFillEventBus.emit('CATALOG_LOAD_STARTED', { url: 'data/form-catalog.json' });
+        if (typeof window.MobileFillFormCatalogService.loadCatalog === 'function') {
+            window.MobileFillFormCatalogService.loadCatalog('data/form-catalog.json', { skipStartEmit: true });
+        }
     }
 })();

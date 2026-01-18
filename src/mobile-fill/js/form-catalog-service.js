@@ -3,12 +3,14 @@
 
     const DEFAULT_CATALOG_URL = 'data/form-catalog.json';
 
-    async function loadCatalog(url = DEFAULT_CATALOG_URL) {
+    async function loadCatalog(url = DEFAULT_CATALOG_URL, options = {}) {
         if (!window.MobileFillEventBus) {
             throw new Error('MobileFillEventBus is not available');
         }
 
-        window.MobileFillEventBus.emit('CATALOG_LOAD_STARTED', { url });
+        if (!options.skipStartEmit) {
+            window.MobileFillEventBus.emit('CATALOG_LOAD_STARTED', { url });
+        }
 
         try {
             const response = await fetch(url, { cache: 'no-store' });
