@@ -189,3 +189,54 @@
     background: #94a3b8;
     cursor: not-allowed;
 }
+
+#mobile-debug-console {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 35vh;
+    background: rgba(15, 23, 42, 0.95);
+    color: #e2e8f0;
+    font-size: 11px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+#mobile-debug-console.collapsed {
+    max-height: 28px;
+}
+
+.mobile-debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+    font-weight: 600;
+}
+
+.mobile-debug-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.mobile-debug-content {
+    padding: 6px 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mobile-debug-line.warn {
+    color: #fbbf24;
+}
+
+.mobile-debug-line.error {
+    color: #f87171;
+}

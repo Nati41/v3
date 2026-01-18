@@ -7,6 +7,10 @@
         window.MobileFillEventLogger.init();
     }
 
+    if (window.MobileFillDebugConsole && typeof window.MobileFillDebugConsole.init === 'function') {
+        window.MobileFillDebugConsole.init();
+    }
+
     if (window.MobileFillUIStatus && typeof window.MobileFillUIStatus.init === 'function') {
         window.MobileFillUIStatus.init();
     }
