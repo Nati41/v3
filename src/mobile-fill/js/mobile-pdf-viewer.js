@@ -20,6 +20,10 @@
             return;
         }
 
+        if (isExportRunning()) {
+            return;
+        }
+
         const container = document.getElementById('mobilefill-pdf-container');
         if (!container) {
             console.warn('[MobileFill] PDF container missing; viewer render skipped');
@@ -106,6 +110,9 @@
 
             resizeTimeout = setTimeout(() => {
                 if (lastPdfBytesSafe) {
+                    if (isExportRunning()) {
+                        return;
+                    }
                     renderPdf(lastPdfBytesSafe);
                 }
             }, 150);
@@ -114,6 +121,11 @@
 
     function render() {
         renderPdf(window.MobileFillStateStore?.state?.documentState?.pdfBytesSafe || null);
+    }
+
+    function isExportRunning() {
+        const status = window.MobileFillStateStore?.state?.exportState?.exportStatus;
+        return status === 'running';
     }
 
     window.MobileFillPdfViewer = {
