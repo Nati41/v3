@@ -66,6 +66,9 @@
     }
 
     function renderPreviewIntoHotspot(hotspot, value, field, pageNum) {
+        if (hotspot.classList.contains('is-editing')) {
+            return;
+        }
         const viewport = window.MobileFillStateStore.state.viewerState.pageViewports?.[pageNum];
         const canvasSize = window.MobileFillStateStore.state.viewerState.canvasSize?.[pageNum];
         if (!viewport || !canvasSize) return;

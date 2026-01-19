@@ -4581,7 +4581,8 @@ input, textarea {
 .quick-fill-tools .qf-tool-btn,
 .quick-fill-tools .load-json-btn,
 .quick-fill-tools .export-pdf-btn,
-.quick-fill-tools .clear-all-btn {
+.quick-fill-tools .clear-all-btn,
+.quick-fill-tools .advanced-mode-btn {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -4606,7 +4607,8 @@ input, textarea {
 .quick-fill-tools .qf-tool-btn .icon,
 .quick-fill-tools .load-json-btn .icon,
 .quick-fill-tools .export-pdf-btn .icon,
-.quick-fill-tools .clear-all-btn .icon {
+.quick-fill-tools .clear-all-btn .icon,
+.quick-fill-tools .advanced-mode-btn .icon {
     font-size: 14px;
     line-height: 1;
     flex-shrink: 0;
@@ -4641,11 +4643,11 @@ input, textarea {
 /* Hover state */
 .quick-fill-tools .qf-tool-btn:hover,
 .quick-fill-tools .load-json-btn:hover,
-.quick-fill-tools .export-pdf-btn:hover {
+.quick-fill-tools .export-pdf-btn:hover,
+.quick-fill-tools .clear-all-btn:hover,
+.quick-fill-tools .advanced-mode-btn:hover {
     background: var(--bg-secondary);
     border-color: var(--primary-color);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 /* Active/Selected state */

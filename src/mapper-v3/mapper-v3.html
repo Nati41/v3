@@ -169,6 +169,45 @@
                 </div>
             </div>
 
+            <!-- V3.11: Static QuickFill toolbar (shown in QuickFill mode) -->
+            <div id="qf-static-toolbar" class="toolbar-group quick-fill-tools hidden">
+                <button class="toolbar-btn qf-tool-btn active" data-tool="draw_text" title="מילוי טקסט">
+                    <span class="icon">📝</span>
+                    <span class="qf-text"><span class="qf-title">טקסט</span></span>
+                </button>
+                <button class="toolbar-btn qf-tool-btn" data-tool="draw_checkbox" title="סימון ✓">
+                    <span class="icon">☑️</span>
+                    <span class="qf-text"><span class="qf-title">סימון</span></span>
+                </button>
+                <button class="toolbar-btn qf-tool-btn" data-tool="draw_radio" title="בחירה ●">
+                    <span class="icon">🔘</span>
+                    <span class="qf-text"><span class="qf-title">בחירה</span></span>
+                </button>
+                <button class="toolbar-btn qf-tool-btn" data-tool="draw_signature" title="חתימה">
+                    <span class="icon">✍️</span>
+                    <span class="qf-text"><span class="qf-title">חתימה</span></span>
+                </button>
+            </div>
+            <div class="toolbar-separator quick-fill-tools hidden"></div>
+            <div id="qf-static-actions" class="toolbar-group quick-fill-tools hidden">
+                <span class="qf-box-count">0 שדות</span>
+                <button class="toolbar-btn load-json-btn" title="טען מיפוי">
+                    <span class="icon">📋</span>
+                    <span class="qf-text"><span class="qf-title">מיפוי</span></span>
+                </button>
+                <button class="toolbar-btn export-pdf-btn" title="הורד PDF">
+                    <span class="icon">⬇️</span>
+                    <span class="qf-text"><span class="qf-title">הורד</span></span>
+                </button>
+                <button class="toolbar-btn clear-all-btn" title="נקה הכל">
+                    <span class="icon">🗑️</span>
+                    <span class="qf-text"><span class="qf-title">נקה</span></span>
+                </button>
+                <button class="toolbar-btn advanced-mode-btn" title="מצב מתקדם">
+                    <span class="icon">🔧</span>
+                    <span class="qf-text"><span class="qf-title">מתקדם</span></span>
+                </button>
+            </div>
             <div class="toolbar-spacer"></div>
 
             <div class="toolbar-group">
@@ -616,6 +655,9 @@
                 // Setup file inputs
                 setupFileInputs();
 
+                // V3.11: Setup static QuickFill toolbar handlers
+                setupStaticQuickFillToolbar();
+
                 // Setup context menu
                 setupContextMenu();
 
@@ -923,7 +965,10 @@
             // V3.10: Flow mode toggle buttons (Mapping / Quick Fill)
             const flowModeButtons = document.querySelectorAll('.flow-mode-btn');
             flowModeButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    // V3.11: Only handle real user clicks
+                    if (!e.isTrusted) return;
+
                     const mode = btn.dataset.mode;
 
                     // Set flow mode in state
@@ -948,6 +993,22 @@
                     const isQuickFill = btn.dataset.mode === 'quick_fill';
                     btn.classList.toggle('active', isQuickFill === active);
                 });
+
+                // V3.11: Load WordSelector on-demand when switching to Mapping mode
+                // This is needed if page was loaded with ?mode=quickfill but user switches to mapping
+                if (!active && !window.wordSelector) {
+                    console.log('[Mapper] Loading WordSelector for Mapping mode...');
+                    import('./engines/WordSelector.js').then((module) => {
+                        wordSelector = module.wordSelector;
+                        window.wordSelector = wordSelector;
+                        if (wordSelector && typeof wordSelector.init === 'function') {
+                            wordSelector.init();
+                        }
+                        console.log('[Mapper] WordSelector loaded dynamically');
+                    }).catch((err) => {
+                        console.error('[Mapper] Failed to load WordSelector:', err);
+                    });
+                }
             });
 
             // Update remaining count when fields change
@@ -1170,6 +1231,79 @@
                 }
                 e.target.value = '';
             });
+        }
+
+        /**
+         * V3.11: Setup static QuickFill toolbar handlers
+         * These are fallback handlers for the HTML-defined toolbar buttons
+         */
+        function setupStaticQuickFillToolbar() {
+            const staticToolbar = document.getElementById('qf-static-toolbar');
+            const staticActions = document.getElementById('qf-static-actions');
+
+            if (!staticToolbar || !staticActions) {
+                console.log('[Mapper] Static QuickFill toolbar not found');
+                return;
+            }
+
+            // Tool buttons
+            staticToolbar.querySelectorAll('.qf-tool-btn[data-tool]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tool = btn.dataset.tool;
+                    state.setTool(Tools[tool.toUpperCase()] || tool);
+
+                    // Update active state
+                    staticToolbar.querySelectorAll('.qf-tool-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                });
+            });
+
+            // Load JSON button
+            staticActions.querySelector('.load-json-btn')?.addEventListener('click', () => {
+                document.getElementById('json-file-input')?.click();
+            });
+
+            // Export PDF button
+            staticActions.querySelector('.export-pdf-btn')?.addEventListener('click', () => {
+                if (quickFillOverlay) {
+                    quickFillOverlay.exportPDF();
+                }
+            });
+
+            // Clear button
+            staticActions.querySelector('.clear-all-btn')?.addEventListener('click', () => {
+                if (quickFillOverlay) {
+                    quickFillOverlay.clearAll();
+                }
+            });
+
+            // Advanced mode button
+            // V3.11: Disable button during init to prevent accidental clicks
+            const advancedModeBtn = staticActions.querySelector('.advanced-mode-btn');
+            if (advancedModeBtn) {
+                // Disable the button initially
+                advancedModeBtn.disabled = true;
+                advancedModeBtn.style.opacity = '0.5';
+                advancedModeBtn.style.pointerEvents = 'none';
+
+                // Enable after 1.5 seconds
+                setTimeout(() => {
+                    advancedModeBtn.disabled = false;
+                    advancedModeBtn.style.opacity = '';
+                    advancedModeBtn.style.pointerEvents = '';
+                    console.log('[Toolbar] Advanced mode button enabled');
+                }, 1500);
+
+                advancedModeBtn.addEventListener('click', (e) => {
+                    // V3.11: Only switch if we're actually in QuickFill mode and this is a real click
+                    if (state.isQuickFillMode() && e.isTrusted && !advancedModeBtn.disabled) {
+                        console.log('[Toolbar] Advanced mode button clicked - switching to MAPPING');
+                        state.setFlowMode(FlowModes.MAPPING);
+                    }
+                });
+            }
+
+            console.log('[Mapper] Static QuickFill toolbar initialized');
         }
 
         /**

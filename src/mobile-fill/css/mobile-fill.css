@@ -1,5 +1,38 @@
 /* MobileFill base styles (intentionally minimal for foundation stage). */
 
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+body.mobilefill-portrait {
+    overflow: hidden;
+}
+
+#mobilefill-root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#mobilefill-rotate-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.92);
+    color: #f8fafc;
+    font-size: 16px;
+    text-align: center;
+    padding: 24px;
+    z-index: 3000;
+}
+
 #mobilefill-status {
     margin: 0;
     padding: 12px;
@@ -12,6 +45,10 @@
     flex-direction: column;
     gap: 10px;
     padding: 12px;
+}
+
+#mobilefill-form-list.is-hidden {
+    display: none;
 }
 
 .mobilefill-form-button {
@@ -39,19 +76,26 @@
 }
 
 #mobilefill-pdf-container {
-    padding: 12px;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding-bottom: 96px;
+    touch-action: pan-y;
+    overscroll-behavior-x: none;
+    width: 100vw;
+    box-sizing: border-box;
 }
 
 .mobilefill-page {
-    margin-bottom: 12px;
+    margin: 0;
     position: relative;
+    width: 100%;
 }
 
 .mobilefill-page canvas {
     display: block;
-    max-width: 100%;
-    height: auto;
+    width: 100%;
+    height: 100%;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
@@ -66,6 +110,48 @@
     background: rgba(37, 99, 235, 0.05);
     cursor: pointer;
     overflow: hidden;
+}
+
+.mobilefill-hotspot.is-active {
+    border-color: rgba(14, 165, 233, 0.9);
+    background: rgba(14, 165, 233, 0.12);
+}
+
+.mobilefill-inline-input {
+    width: 100%;
+    height: 100%;
+    border: 1px solid rgba(14, 165, 233, 0.7);
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 16px;
+    font-family: inherit;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.mobilefill-inline-actions {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    display: flex;
+    gap: 4px;
+    z-index: 2;
+}
+
+.mobilefill-inline-btn {
+    border: none;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.9);
+    color: #f8fafc;
+}
+
+.mobilefill-inline-btn.cancel {
+    background: rgba(148, 163, 184, 0.95);
+    color: #0f172a;
 }
 
 .field-input-popover {

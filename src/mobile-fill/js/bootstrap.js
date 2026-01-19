@@ -11,6 +11,10 @@
         window.MobileFillDebugConsole.init();
     }
 
+    if (window.MobileFillLandscapeGate && typeof window.MobileFillLandscapeGate.init === 'function') {
+        window.MobileFillLandscapeGate.init();
+    }
+
     if (window.MobileFillUIStatus && typeof window.MobileFillUIStatus.init === 'function') {
         window.MobileFillUIStatus.init();
     }
@@ -49,10 +53,6 @@
 
     if (window.MobileFillHotspotOverlay && typeof window.MobileFillHotspotOverlay.init === 'function') {
         window.MobileFillHotspotOverlay.init();
-    }
-
-    if (window.MobileFillPopoverInputController && typeof window.MobileFillPopoverInputController.init === 'function') {
-        window.MobileFillPopoverInputController.init();
     }
 
     if (window.MobileFillLivePreviewRenderer && typeof window.MobileFillLivePreviewRenderer.init === 'function') {

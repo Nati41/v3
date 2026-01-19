@@ -18,6 +18,7 @@
         }
 
         if (!window.MobileFillStateStore) {
+            logExportBlocked('State store missing');
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: 'Export dependencies missing'
             });
@@ -27,6 +28,7 @@
         const state = window.MobileFillStateStore.state;
 
         if (!window.ExportEngine || typeof window.ExportEngine.export !== 'function') {
+            logExportBlocked('Export engine unavailable');
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
                 error: 'Export engine unavailable'
             });
@@ -36,6 +38,7 @@
         try {
             const pdfBytesSafe = clonePdfBytes(state.documentState.pdfBytesSafeForExport);
             if (!pdfBytesSafe) {
+                logExportBlocked('PDF bytes missing');
                 window.MobileFillEventBus.emit('EXPORT_ERROR', {
                     error: 'PDF bytes missing'
                 });
@@ -45,12 +48,14 @@
             const fieldsMapping = cloneExportData(state.mappingState.fieldsMapping);
             const liveFillData = cloneExportData(state.liveFillState.liveFillData);
             if (!fieldsMapping || !liveFillData) {
+                logExportBlocked('Export data unavailable');
                 window.MobileFillEventBus.emit('EXPORT_ERROR', {
                     error: 'Export data unavailable'
                 });
                 return;
             }
 
+            logExportTrace(state);
             console.log('[MobileFill] About to call ExportEngine.export');
             const { exportResult, capturedBlob, capturedBlobUrl } = await runExportWithCapture(() => {
                 return window.ExportEngine.export({
@@ -246,6 +251,61 @@
 
     function logNavigationAttempt(method, url) {
         console.log(`[MobileFill] NAVIGATION ATTEMPT: ${method} ${url || ''}`.trim());
+    }
+
+    function logExportTrace(state) {
+        const gateResult = window.MobileFillExportGate?.canExport
+            ? window.MobileFillExportGate.canExport(state)
+            : { allowed: false, reason: 'Export gate unavailable' };
+        const mappingCount = Array.isArray(state.mappingState?.fieldsMapping?.fields)
+            ? state.mappingState.fieldsMapping.fields.length
+            : 0;
+        const filledCount = countFilledValues(state.liveFillState?.liveFillData);
+        const activeEditField = Boolean(document.querySelector('.mobilefill-inline-input'));
+
+        console.log('[ExportTrace]', {
+            gate: gateResult,
+            mappingCount,
+            filledCount,
+            activeEditField
+        });
+    }
+
+    function logExportBlocked(reason) {
+        console.warn('[ExportTrace] Export blocked:', reason);
+    }
+
+    function countFilledValues(liveFillData) {
+        if (!liveFillData) return 0;
+        let count = 0;
+        const fields = liveFillData.fields || {};
+        Object.keys(fields).forEach((key) => {
+            const entry = fields[key] || {};
+            if (entry.checked === true) {
+                count += 1;
+                return;
+            }
+            const value = entry.value;
+            if (value !== null && value !== undefined && String(value).trim() !== '') {
+                count += 1;
+            }
+        });
+
+        const tables = liveFillData.tables || {};
+        Object.keys(tables).forEach((tableId) => {
+            const rows = tables[tableId] || [];
+            rows.forEach((row) => {
+                if (!row) return;
+                Object.keys(row).forEach((cellKey) => {
+                    const value = row[cellKey];
+                    if (value !== null && value !== undefined && String(value).trim() !== '') {
+                        count += 1;
+                    }
+                });
+            });
+        });
+
+        return count;
     }
 
     function shouldBlockUrl(url) {

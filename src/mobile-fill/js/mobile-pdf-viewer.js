@@ -61,7 +61,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'mobilefill-page';
                 wrapper.dataset.pageNum = String(pageNum);
-                wrapper.style.width = `${targetWidth}px`;
+                wrapper.style.width = '100%';
                 wrapper.style.height = `${targetHeight}px`;
 
                 const canvas = document.createElement('canvas');
@@ -69,8 +69,8 @@
 
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
-                canvas.style.width = `${targetWidth}px`;
-                canvas.style.height = `${targetHeight}px`;
+                canvas.style.width = '100%';
+                canvas.style.height = '100%';
 
                 await page.render({ canvasContext: context, viewport }).promise;
 
@@ -83,6 +83,8 @@
                     height: targetHeight
                 };
             }
+
+            container.scrollLeft = 0;
 
             window.MobileFillEventBus.emit('VIEWER_RENDER_DONE', {
                 pageViewports,

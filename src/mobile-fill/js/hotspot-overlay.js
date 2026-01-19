@@ -6,6 +6,8 @@
     let currentMapping = null;
     let pageViewports = null;
     let canvasSize = null;
+    let activeEditor = null;
+    const KEYBOARD_SAFE_OFFSET_PX = 80;
 
     function init() {
         if (!window.MobileFillEventBus) {
@@ -23,6 +25,8 @@
             canvasSize = payload?.canvasSize || null;
             renderIfReady();
         });
+
+        document.addEventListener('click', handleDocumentClick, true);
     }
 
     function renderIfReady() {
@@ -35,6 +39,7 @@
 
     function clearOverlays() {
         document.querySelectorAll('.mobilefill-hotspot-layer').forEach((layer) => layer.remove());
+        activeEditor = null;
     }
 
     function renderFieldHotspots() {
@@ -80,8 +85,14 @@
                 hotspot.style.width = `${position.width}px`;
                 hotspot.style.height = `${position.height}px`;
 
-                hotspot.addEventListener('click', () => {
+                hotspot.addEventListener('click', (event) => {
+                    event.stopPropagation();
                     const fieldType = field.type || 'text';
+                    setActiveHotspot(hotspot);
+
+                    if (activeEditor && activeEditor.hotspot !== hotspot) {
+                        cleanupInlineEdit(activeEditor.hotspot);
+                    }
 
                     if (fieldType === 'checkbox') {
                         const nextChecked = !getFieldChecked(fieldId);
@@ -105,11 +116,7 @@
                         return;
                     }
 
-                    window.MobileFillEventBus.emit('FIELD_FOCUS_REQUESTED', {
-                        fieldId,
-                        tableContext: null,
-                        anchorElement: hotspot
-                    });
+                    startInlineEdit(field, hotspot);
                 });
 
                 overlay.appendChild(hotspot);
@@ -152,10 +159,154 @@
         return null;
     }
 
+    function setActiveHotspot(target) {
+        document.querySelectorAll('.mobilefill-hotspot.is-active').forEach((item) => {
+            if (item !== target) item.classList.remove('is-active');
+        });
+        target.classList.add('is-active');
+    }
+
+    function startInlineEdit(field, hotspot) {
+        const fieldId = field.id || field.fieldId;
+        if (!fieldId) return;
+
+        if (activeEditor && activeEditor.hotspot !== hotspot) {
+            cleanupInlineEdit(activeEditor.hotspot);
+        }
+
+        hotspot.classList.add('is-editing');
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'mobilefill-inline-input';
+        const initialValue = getFieldValue(fieldId) || '';
+        input.value = initialValue;
+
+        const actions = document.createElement('div');
+        actions.className = 'mobilefill-inline-actions';
+
+        const doneBtn = document.createElement('button');
+        doneBtn.type = 'button';
+        doneBtn.className = 'mobilefill-inline-btn done';
+        doneBtn.textContent = '✔';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'mobilefill-inline-btn cancel';
+        cancelBtn.textContent = '✕';
+
+        actions.appendChild(doneBtn);
+        actions.appendChild(cancelBtn);
+
+        input.addEventListener('input', () => {
+            window.MobileFillEventBus.emit('FIELD_UPDATED', {
+                fieldId,
+                value: input.value,
+                checked: null,
+                tableContext: null
+            });
+        });
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                finalizeEdit(fieldId, input.value);
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                cancelEdit(fieldId, initialValue);
+            }
+        });
+
+        input.addEventListener('blur', () => {
+            finalizeEdit(fieldId, input.value);
+        });
+
+        doneBtn.addEventListener('click', () => {
+            finalizeEdit(fieldId, input.value);
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            cancelEdit(fieldId, initialValue);
+        });
+
+        hotspot.innerHTML = '';
+        hotspot.appendChild(input);
+        hotspot.appendChild(actions);
+        clampHotspotIntoView(hotspot);
+        input.focus();
+        input.select();
+
+        activeEditor = { hotspot, input, fieldId, initialValue };
+    }
+
+    function cleanupInlineEdit(hotspot) {
+        if (!hotspot) return;
+        hotspot.classList.remove('is-editing');
+        if (activeEditor?.hotspot === hotspot) {
+            activeEditor = null;
+        }
+    }
+
+    function finalizeEdit(fieldId, value) {
+        window.MobileFillEventBus.emit('FIELD_UPDATED', {
+            fieldId,
+            value,
+            checked: null,
+            tableContext: null
+        });
+        if (activeEditor?.hotspot) {
+            cleanupInlineEdit(activeEditor.hotspot);
+        }
+    }
+
+    function cancelEdit(fieldId, value) {
+        window.MobileFillEventBus.emit('FIELD_UPDATED', {
+            fieldId,
+            value,
+            checked: null,
+            tableContext: null
+        });
+        if (activeEditor?.hotspot) {
+            cleanupInlineEdit(activeEditor.hotspot);
+        }
+    }
+
+    function clampHotspotIntoView(hotspot) {
+        const container = document.getElementById('mobilefill-pdf-container');
+        if (!container || !hotspot) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const hotspotRect = hotspot.getBoundingClientRect();
+        const currentScroll = container.scrollTop;
+        const hotspotOffsetTop = hotspotRect.top - containerRect.top + currentScroll;
+        const target = Math.max(
+            0,
+            hotspotOffsetTop - (containerRect.height / 2) + (hotspotRect.height / 2) - KEYBOARD_SAFE_OFFSET_PX
+        );
+        const maxScroll = Math.max(0, container.scrollHeight - containerRect.height);
+        const clamped = Math.min(maxScroll, target);
+
+        container.scrollTo({ top: clamped, behavior: 'smooth' });
+    }
+
+    function handleDocumentClick(event) {
+        if (!activeEditor?.input) return;
+        const editorHotspot = activeEditor.hotspot;
+        if (!editorHotspot || editorHotspot.contains(event.target)) return;
+        finalizeEdit(activeEditor.fieldId, activeEditor.input.value);
+    }
+
     function getFieldChecked(fieldId) {
         const state = window.MobileFillStateStore?.state;
         const entry = state?.liveFillState?.liveFillData?.fields?.[fieldId];
         return Boolean(entry?.checked);
+    }
+
+    function getFieldValue(fieldId) {
+        const state = window.MobileFillStateStore?.state;
+        const entry = state?.liveFillState?.liveFillData?.fields?.[fieldId];
+        return entry?.value ? String(entry.value) : '';
     }
 
     function uncheckRadioSiblings(field) {

@@ -66,6 +66,7 @@
         window.MobileFillEventBus.on('EXPORT_STARTED', () => {
             const result = canExport(window.MobileFillStateStore.state);
             if (!result.allowed) {
+                console.warn('[ExportTrace] Export blocked by gate:', result.reason);
                 window.MobileFillEventBus.emit('EXPORT_BLOCKED', {
                     reason: result.reason || 'Export blocked'
                 });

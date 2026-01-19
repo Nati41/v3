@@ -13,13 +13,23 @@ import { eventBus, Events } from '../core/EventBus.js';
 import { pdfEngine } from '../engines/PDFEngine.js';
 import { fieldNamer } from '../engines/FieldNamer.js';
 
-const urlParams = new URLSearchParams(window.location.search);
-const modeParam = urlParams.get('mode');
-const isQuickFillMode = modeParam === 'quickfill' || modeParam === 'quick_fill' || modeParam === 'quick-fill';
 let wordSelectorPromise = null;
 
+/**
+ * Get WordSelector instance
+ * V3.11: Check current flow mode from state, not URL (allows mode switching)
+ * Also check window.wordSelector for dynamically loaded instance
+ */
 async function getWordSelector() {
-    if (isQuickFillMode) {
+    // V3.11: First check if WordSelector was dynamically loaded (via mode switch)
+    if (window.wordSelector) {
+        return window.wordSelector;
+    }
+
+    // V3.11: Check current flow mode, not URL parameter
+    // This allows WordSelector to work after switching from QuickFill to Mapping
+    const { state, FlowModes } = await import('../core/StateManager.js');
+    if (state.getFlowMode() === FlowModes.QUICK_FILL) {
         return null;
     }
 

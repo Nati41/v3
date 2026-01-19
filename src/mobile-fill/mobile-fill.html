@@ -27,6 +27,9 @@
     </script>
 </head>
 <body>
+    <div id="mobilefill-rotate-overlay" role="status" aria-live="polite">
+        Rotate to landscape for best experience
+    </div>
     <main id="mobilefill-root">
         <div id="export-blocked-banner" role="status" aria-live="polite"></div>
         <div id="mobilefill-form-list"></div>
@@ -41,7 +44,6 @@
     <script src="js/state-store.js"></script>
     <script src="../shared/normalizeField.js"></script>
     <script src="../shared/migrateV1toV2.js"></script>
-    <script src="../livefill/js/field-input-popover.js"></script>
     <script src="../livefill/js/preview-text-renderer.js"></script>
     <script src="../livefill/js/export-engine.js"></script>
     <script src="js/mobile-debug-console.js"></script>
@@ -53,7 +55,7 @@
     <script src="js/mobile-pdf-viewer.js"></script>
     <script src="js/hotspot-overlay.js"></script>
     <script src="js/ui-status.js"></script>
-    <script src="js/popover-input-controller.js"></script>
+    <script src="js/landscape-gate.js"></script>
     <script src="js/export-gate.js"></script>
     <script src="js/export-blocked-banner.js"></script>
     <script src="js/export-button.js"></script>

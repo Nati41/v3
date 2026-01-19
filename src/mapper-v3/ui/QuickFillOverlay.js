@@ -80,8 +80,28 @@ class QuickFillOverlay {
     /**
      * Inject QuickFill buttons into the main toolbar
      * Creates a toolbar group that shows only in QuickFill mode
+     * V3.11: Skip if static toolbar already exists in HTML
      */
     _injectToolbarButtons() {
+        // V3.11: Check if static toolbar exists - if so, use it instead of injecting
+        const staticToolbar = document.getElementById('qf-static-toolbar');
+        if (staticToolbar) {
+            console.log('[QuickFillOverlay] Using static toolbar from HTML, skipping injection');
+            this._toolbarGroup = staticToolbar;
+            this._actionsGroup = document.getElementById('qf-static-actions');
+            this._statusBar = this._actionsGroup;
+
+            // Still need to create instruction bar
+            const toolbar = document.getElementById('toolbar');
+            this._instructionBar = document.createElement('div');
+            this._instructionBar.className = 'quick-fill-instructions quick-fill-tools hidden';
+            this._instructionBar.innerHTML = `<span class="qf-instruction-text">בחר כלי למעלה → לחץ על המקום בטופס → מלא → הורד PDF</span>`;
+            if (toolbar && toolbar.parentElement) {
+                toolbar.parentElement.insertBefore(this._instructionBar, toolbar.nextSibling);
+            }
+            return;
+        }
+
         const toolbar = document.getElementById('toolbar');
         if (!toolbar) {
             console.warn('[QuickFillOverlay] Toolbar not found, cannot inject buttons');
@@ -166,8 +186,15 @@ class QuickFillOverlay {
             <button class="toolbar-btn clear-all-btn" title="נקה הכל">
                 <span class="icon">🗑️</span>
                 <span class="qf-text">
-                    <span class="qf-title">ניקוי טופס</span>
+                    <span class="qf-title">ניקוי</span>
                     <span class="qf-subtitle">מחק את הסימונים והטקסט שהזנת</span>
+                </span>
+            </button>
+            <button class="toolbar-btn advanced-mode-btn" title="מצב מתקדם - כלי מיפוי">
+                <span class="icon">🔧</span>
+                <span class="qf-text">
+                    <span class="qf-title">מתקדם</span>
+                    <span class="qf-subtitle">עבור לכלי המיפוי המלא</span>
                 </span>
             </button>
         `;
@@ -259,6 +286,14 @@ class QuickFillOverlay {
         this._actionsGroup.querySelector('.export-pdf-btn').addEventListener('click', () => {
             this._setInstructionText('סיום: הורד את הקובץ המלא ושמור אותו אצלך');
             this.exportPDF();
+        });
+
+        // Advanced mode button - switch to Mapper mode
+        this._actionsGroup.querySelector('.advanced-mode-btn').addEventListener('click', (e) => {
+            // V3.11: Only switch if this is a real user click
+            if (e.isTrusted && state.isQuickFillMode()) {
+                state.setFlowMode(FlowModes.MAPPING);
+            }
         });
     }
 

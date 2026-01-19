@@ -203,9 +203,35 @@ class QuickFillUIProfile {
 
     /**
      * Add "Advanced Mode" button to toolbar
+     * V3.11: Skip if static toolbar already has an advanced mode button
      */
     _addAdvancedModeButton() {
         if (this._advancedModeBtn) return;
+
+        // V3.11: Check if static toolbar already has advanced mode button
+        const staticActions = document.getElementById('qf-static-actions');
+        const existingBtn = staticActions?.querySelector('.advanced-mode-btn');
+        if (existingBtn) {
+            console.log('[QuickFillUIProfile] Using existing advanced mode button from static toolbar');
+            // The static toolbar handler already calls setFlowMode(MAPPING)
+            // We need to make it also call our exitPublicMode for proper cleanup
+            this._advancedModeBtn = existingBtn;
+
+            existingBtn.addEventListener('click', (e) => {
+                // V3.11: Only run if this is a real user click and button is not disabled
+                if (!e.isTrusted || existingBtn.disabled) return;
+
+                // Exit public mode (hides UI elements, restores sidebar, etc.)
+                this._isPublicMode = false;
+                document.body.classList.remove('quickfill-public-mode');
+                this._showElements();
+                this._restorePdfViewer();
+                document.title = 'Mapper V3 - Field Mapping Tool';
+                eventBus.emit('UI_PROFILE_CHANGED', { mode: 'full' });
+                console.log('[QuickFillUIProfile] Exited public mode via static button');
+            });
+            return;
+        }
 
         const toolbar = document.getElementById('toolbar');
         if (!toolbar) return;
@@ -229,16 +255,28 @@ class QuickFillUIProfile {
         }
 
         // Click handler
-        this._advancedModeBtn.addEventListener('click', () => {
-            this.exitPublicMode();
+        this._advancedModeBtn.addEventListener('click', (e) => {
+            // V3.11: Only run if this is a real user click
+            if (e.isTrusted) {
+                this.exitPublicMode();
+            }
         });
     }
 
     /**
      * Remove "Advanced Mode" button
+     * V3.11: Don't remove if using static toolbar button
      */
     _removeAdvancedModeButton() {
         if (this._advancedModeBtn) {
+            // V3.11: Don't remove static toolbar button, just clear reference
+            const staticActions = document.getElementById('qf-static-actions');
+            if (staticActions?.contains(this._advancedModeBtn)) {
+                // Static button - just clear reference, don't remove from DOM
+                this._advancedModeBtn = null;
+                return;
+            }
+            // Dynamic button - remove from DOM
             this._advancedModeBtn.remove();
             this._advancedModeBtn = null;
         }
