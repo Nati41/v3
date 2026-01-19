@@ -1145,6 +1145,24 @@
                             mapper.importProject(data);
                             showToast('Project imported', 'success');
                         }
+
+                        // V3.11: If in QuickFill mode, convert imported fields to QuickFill boxes
+                        const isQuickFillMode = state.get('flowMode') === FlowModes.QUICK_FILL;
+                        if (isQuickFillMode && quickFillOverlay) {
+                            // Small delay to ensure fields are fully imported
+                            setTimeout(() => {
+                                const count = quickFillOverlay.importFromFields();
+                                if (count === -1) {
+                                    // PDF not loaded yet - mark as pending for auto-import when PDF loads
+                                    quickFillOverlay._pendingImportFromFields = true;
+                                    showToast('המיפוי נשמר - יטען אוטומטית כשתטען PDF', 'info');
+                                } else if (count > 0) {
+                                    showToast(`נטענו ${count} שדות למילוי`, 'success');
+                                } else {
+                                    showToast('לא נמצאו שדות ממופים בקובץ', 'warning');
+                                }
+                            }, 100);
+                        }
                     } catch (error) {
                         console.error('Failed to import JSON:', error);
                         showToast('Failed to import: ' + error.message, 'error');

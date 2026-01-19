@@ -29,6 +29,9 @@ class QuickFillOverlay {
         this._undoStack = [];      // Stack of actions: { type, data }
         this._redoStack = [];
         this._maxUndoSteps = 50;
+
+        // V3.11: Flag for pending import (when JSON loaded before PDF)
+        this._pendingImportFromFields = false;
     }
 
     /**
@@ -318,6 +321,26 @@ class QuickFillOverlay {
         window.addEventListener('resize', this._resizeHandler);
         console.log('[QuickFillOverlay] Resize listener attached');
 
+        // V3.11: Listen for PDF loaded to auto-import pending fields
+        eventBus.on(Events.PDF_LOADED, () => {
+            console.log('[QuickFillOverlay] PDF loaded event received');
+            if (this._pendingImportFromFields) {
+                console.log('[QuickFillOverlay] Processing pending import from fields...');
+                this._pendingImportFromFields = false;
+                // Small delay to ensure PDF dimensions are fully set
+                setTimeout(() => {
+                    const count = this.importFromFields();
+                    if (count > 0) {
+                        // Emit event for toast
+                        eventBus.emit(Events.TOAST_SHOW, {
+                            message: `נטענו ${count} שדות למילוי`,
+                            type: 'success'
+                        });
+                    }
+                }, 200);
+            }
+        });
+
         // V3.10: Listen for UI profile changes (public/advanced mode switch)
         // When sidebar shows/hides, overlay layer size changes - need to recalculate positions
         eventBus.on('UI_PROFILE_CHANGED', ({ mode }) => {
@@ -601,8 +624,9 @@ class QuickFillOverlay {
     /**
      * Render a box overlay with PreviewTextRenderer (same as LiveFill)
      * @param {Object} box - Box data
+     * @param {boolean} skipFocus - If true, don't auto-focus the input (for bulk import)
      */
-    _renderBox(box) {
+    _renderBox(box, skipFocus = false) {
         const currentPage = state.get('document.currentPage');
         const pdfDims = state.get('pdfDimensions') || { width: 595, height: 842, scale: 1 };
 
@@ -752,15 +776,18 @@ class QuickFillOverlay {
 
         this._overlayContainer.appendChild(boxEl);
 
-        // Focus the input immediately
-        setTimeout(() => hiddenInput.focus(), 50);
+        // Focus the input immediately (unless skipFocus is true)
+        if (!skipFocus) {
+            setTimeout(() => hiddenInput.focus(), 50);
+        }
     }
 
     /**
      * Render a checkbox or radio box (same style as LiveFill)
      * @param {Object} box - Box data with type 'checkbox' or 'radio'
+     * @param {boolean} skipFocus - If true, don't auto-focus (for bulk import)
      */
-    _renderCheckboxRadio(box) {
+    _renderCheckboxRadio(box, skipFocus = false) {
         const currentPage = state.get('document.currentPage');
         const isCheckbox = box.type === 'checkbox';
         const isCell = box.type === 'cell';
@@ -1780,6 +1807,122 @@ class QuickFillOverlay {
         eventBus.emit(Events.QUICK_FILL_CLEAR_ALL);
 
         console.log('[QuickFillOverlay] All boxes cleared');
+    }
+
+    /**
+     * V3.11: Import fields from StateManager as QuickFill boxes
+     * Converts mapped fields to editable QuickFill boxes
+     * @param {boolean} clearExisting - Whether to clear existing boxes first (default: true)
+     * @returns {number} Number of boxes imported, or -1 if PDF not loaded
+     */
+    importFromFields(clearExisting = true) {
+        console.log('[QuickFillOverlay] importFromFields called');
+
+        // V3.11: Check if PDF is loaded - dimensions must be available
+        const pdfDims = state.get('pdfDimensions');
+        if (!pdfDims || !pdfDims.width || !pdfDims.height) {
+            console.warn('[QuickFillOverlay] Cannot import - PDF not loaded yet');
+            return -1; // Signal that PDF is not loaded
+        }
+
+        // Debug: Check container and overlay layer dimensions
+        const overlayLayer = document.getElementById('overlay-layer');
+        console.log('[QuickFillOverlay] Container:', this._overlayContainer?.id,
+            'visible:', !this._overlayContainer?.classList.contains('hidden'),
+            'size:', this._overlayContainer?.offsetWidth, 'x', this._overlayContainer?.offsetHeight);
+        console.log('[QuickFillOverlay] Overlay layer size:', overlayLayer?.offsetWidth, 'x', overlayLayer?.offsetHeight);
+        console.log('[QuickFillOverlay] PDF dims:', pdfDims);
+
+        // Get all mapped fields from state
+        const fields = state.get('fields') || [];
+        console.log('[QuickFillOverlay] Total fields in state:', fields.length);
+        const mappedFields = fields.filter(f => f.bbox && Array.isArray(f.bbox) && f.bbox.length === 4);
+
+        if (mappedFields.length === 0) {
+            console.log('[QuickFillOverlay] No mapped fields to import');
+            return 0;
+        }
+
+        // Clear existing boxes if requested
+        if (clearExisting) {
+            this.clearAll();
+        }
+
+        let importedCount = 0;
+
+        const currentPage = state.get('document.currentPage') || 1;
+        console.log('[QuickFillOverlay] Current page:', currentPage, 'Fields to import:', mappedFields.length);
+
+        mappedFields.forEach(field => {
+            console.log('[QuickFillOverlay] Importing field:', field.id, 'bbox:', field.bbox, 'page:', field.page);
+
+            // Determine box type from field type
+            let boxType = 'text';
+            let tool = 'draw_text';
+
+            const fieldType = (field.type || 'text').toLowerCase();
+            if (fieldType === 'checkbox' || fieldType === 'check') {
+                boxType = 'checkbox';
+                tool = 'draw_checkbox';
+            } else if (fieldType === 'radio') {
+                boxType = 'radio';
+                tool = 'draw_radio';
+            } else if (fieldType === 'signature') {
+                // Skip signatures for now - they need special handling
+                console.log('[QuickFillOverlay] Skipping signature field:', field.id);
+                return;
+            }
+
+            // Convert bbox to screenRect using overlayRenderer
+            const screenRect = overlayRenderer.bboxToScreen(field.bbox);
+            console.log('[QuickFillOverlay] Field', field.id, 'screenRect:', screenRect);
+
+            if (!screenRect || screenRect.width <= 0 || screenRect.height <= 0) {
+                console.warn('[QuickFillOverlay] Invalid screenRect for field:', field.id, screenRect);
+                return;
+            }
+
+            // Generate unique ID
+            const boxId = `qf-box-${++this._boxCounter}`;
+
+            // Create box data
+            const box = {
+                id: boxId,
+                bbox: field.bbox,
+                screenRect: screenRect,
+                page: field.page || 1,
+                text: field.value || '',
+                tool: tool,
+                type: boxType,
+                checked: field.checked || false,
+                label: field.label_he || field.label || field.id,
+                sourceFieldId: field.id,  // Track source field
+                createdAt: Date.now()
+            };
+
+            this._boxes.push(box);
+
+            // Render based on type (pass skipFocus=true to avoid focusing each box)
+            if (boxType === 'checkbox' || boxType === 'radio') {
+                this._renderCheckboxRadio(box, true);
+            } else {
+                this._renderBox(box, true);
+            }
+
+            importedCount++;
+        });
+
+        // Update status
+        this._updateStatusBar();
+
+        // Update positions after all boxes are created (ensure correct layout)
+        setTimeout(() => {
+            this._updateAllBoxPositions();
+        }, 100);
+
+        console.log(`[QuickFillOverlay] Imported ${importedCount} boxes from ${mappedFields.length} mapped fields`);
+
+        return importedCount;
     }
 
     /**

@@ -4539,16 +4539,13 @@ input, textarea {
 /* ============ QuickFill Toolbar Integration ============ */
 /* Vertical card-based toolbar layout for QuickFill mode */
 
-/* QuickFill toolbar groups - horizontal scrollable container */
+/* QuickFill toolbar groups - horizontal compact container */
 .toolbar-group.quick-fill-tools {
     display: flex;
-    align-items: stretch;
-    gap: 6px;
+    align-items: center;
+    gap: 4px;
     flex-wrap: nowrap;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 4px 0;
-    scrollbar-width: thin;
+    padding: 0;
 }
 
 .toolbar-group.quick-fill-tools::-webkit-scrollbar {
@@ -4571,7 +4568,7 @@ input, textarea {
 /* QuickFill separators - subtle vertical line */
 .toolbar-separator.quick-fill-tools:not(.hidden) {
     width: 1px;
-    height: 50px;
+    height: 24px;
     background: var(--border-color);
     margin: 0 4px;
     align-self: center;
@@ -4586,76 +4583,59 @@ input, textarea {
 .quick-fill-tools .export-pdf-btn,
 .quick-fill-tools .clear-all-btn {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: flex-start;
-    gap: 4px;
-    padding: 8px 12px;
-    min-width: 90px;
-    max-width: 130px;
-    height: auto;
+    gap: 5px;
+    padding: 4px 8px;
+    min-width: auto;
+    max-width: none;
+    height: 30px;
     border: 1px solid var(--border-color);
     background: var(--bg-primary);
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
     color: var(--text-primary);
     transition: all 0.15s ease;
-    text-align: center;
+    text-align: right;
     flex-shrink: 0;
+    white-space: nowrap;
 }
 
-/* Icon - centered on top */
+/* Icon - inline */
 .quick-fill-tools .qf-tool-btn .icon,
 .quick-fill-tools .load-json-btn .icon,
 .quick-fill-tools .export-pdf-btn .icon,
 .quick-fill-tools .clear-all-btn .icon {
-    font-size: 22px;
+    font-size: 14px;
     line-height: 1;
-    order: 1;
+    flex-shrink: 0;
 }
 
-/* Step badge - small indicator */
+/* Step badge - hidden in compact mode */
 .quick-fill-tools .qf-step {
-    font-size: 9px;
-    color: var(--text-tertiary, #999);
-    background: var(--bg-secondary);
-    padding: 1px 6px;
-    border-radius: 8px;
-    white-space: nowrap;
-    order: 0;
-    margin-bottom: 2px;
+    display: none;
 }
 
-/* Text container - below icon */
+/* Text container - inline */
 .quick-fill-tools .qf-text {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    width: 100%;
-    order: 2;
+    align-items: flex-start;
+    gap: 0;
 }
 
 /* Title - single line, bold */
 .quick-fill-tools .qf-title {
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
     line-height: 1.2;
 }
 
-/* Subtitle - single line, secondary color */
+/* Subtitle - hidden in compact mode */
 .quick-fill-tools .qf-subtitle {
-    font-size: 10px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    line-height: 1.2;
+    display: none;
 }
 
 /* Hover state */
@@ -4727,14 +4707,14 @@ input, textarea {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 30px;
+    height: 30px;
     padding: 0;
     border: 1px solid var(--border-color);
     background: var(--bg-primary);
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
     color: var(--text-primary);
     transition: all 0.15s ease;
     flex-shrink: 0;
@@ -4760,8 +4740,8 @@ input, textarea {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: 4px 12px;
+    font-size: 12px;
     color: var(--text-secondary);
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
@@ -4779,13 +4759,14 @@ body.quick-fill-mode .toolbar {
     border-bottom-color: var(--primary-color);
     min-height: auto;
     height: auto;
-    padding: 8px 12px;
-    flex-wrap: wrap;
-    gap: 8px;
+    padding: 4px 8px;
+    flex-wrap: nowrap;
+    gap: 4px;
+    overflow-x: auto;
 }
 
-/* Hide non-QuickFill elements in QuickFill mode */
-body.quick-fill-mode .toolbar > .toolbar-group:not(.quick-fill-tools),
+/* Hide non-QuickFill elements in QuickFill mode (except page nav and zoom) */
+body.quick-fill-mode .toolbar > .toolbar-group:not(.quick-fill-tools):not(.page-nav):not(.zoom-controls),
 body.quick-fill-mode .toolbar > .toolbar-separator:not(.quick-fill-tools) {
     display: none;
 }
