@@ -45,18 +45,33 @@
                 return;
             }
 
+            // Rebuild mapping from scratch (not clone!)
             const fieldsMapping = buildFieldsMapping(state.quickFillState?.fields || []);
-            const liveFillData = cloneExportData(state.liveFillState.liveFillData);
-            if (!fieldsMapping || !liveFillData) {
-                logExportBlocked('Export data unavailable');
+
+            // Rebuild liveFillData from scratch (not clone!)
+            const liveFillData = rebuildLiveFillData(state.liveFillState.liveFillData);
+
+            // Validate we have data
+            if (!fieldsMapping || !fieldsMapping.fields) {
+                logExportBlocked('Fields mapping unavailable');
                 window.MobileFillEventBus.emit('EXPORT_ERROR', {
-                    error: 'Export data unavailable'
+                    error: 'Fields mapping unavailable'
                 });
                 return;
             }
 
             logExportTrace(state);
-            console.log('[MobileFill] About to call ExportEngine.export');
+
+            // Debug logs before ExportEngine call
+            console.log('EXPORT DEBUG', {
+                isFrozen: Object.isFrozen(liveFillData),
+                isSealed: Object.isSealed(liveFillData),
+                fieldCount: fieldsMapping.fields.length,
+                liveFillDataKeys: Object.keys(liveFillData).length,
+                liveFillDataSample: Object.keys(liveFillData).slice(0, 3)
+            });
+
+            console.log('[MobileFill] About to call ExportEngine.export with rebuilt payload');
             const { exportResult, capturedBlob, capturedBlobUrl } = await runExportWithCapture(() => {
                 return window.ExportEngine.export({
                     pdfBytesSafe,
@@ -177,18 +192,99 @@
         return null;
     }
 
-    function cloneExportData(original) {
-        if (!original) return null;
+    /**
+     * Rebuild liveFillData from scratch - never clone, always create new objects.
+     * This prevents "Attempted to assign to readonly property" errors.
+     * @param {Object} original - Original liveFillData from state
+     * @returns {Object} - Fresh object with only primitive values
+     */
+    function rebuildLiveFillData(original) {
+        const rebuilt = {};
 
-        if (typeof structuredClone === 'function') {
-            return structuredClone(original);
+        if (!original || typeof original !== 'object') {
+            return rebuilt;
         }
 
-        try {
-            return JSON.parse(JSON.stringify(original));
-        } catch (error) {
-            return null;
+        // Iterate over all keys and copy only primitives
+        Object.keys(original).forEach((fieldId) => {
+            if (fieldId === 'tables') {
+                // Handle tables separately if needed
+                rebuilt.tables = rebuildTables(original.tables);
+                return;
+            }
+
+            const entry = original[fieldId];
+            if (!entry || typeof entry !== 'object') {
+                return;
+            }
+
+            // Create fresh entry with primitive values only
+            // Preserve original type (string/number) - don't force String()
+            let valueToStore = null;
+            if (entry.value !== undefined && entry.value !== null) {
+                if (typeof entry.value === 'string') {
+                    valueToStore = entry.value;
+                } else if (typeof entry.value === 'number') {
+                    valueToStore = entry.value;
+                } else {
+                    valueToStore = String(entry.value);
+                }
+            }
+
+            rebuilt[fieldId] = {
+                value: valueToStore,
+                checked: entry.checked === true ? true : (entry.checked === false ? false : null)
+            };
+
+            // Copy style if exists (primitives only)
+            if (entry.style && typeof entry.style === 'object') {
+                rebuilt[fieldId].style = {
+                    fontSize: typeof entry.style.fontSize === 'number' ? entry.style.fontSize : undefined,
+                    color: typeof entry.style.color === 'string' ? entry.style.color : undefined,
+                    alignment: typeof entry.style.alignment === 'string' ? entry.style.alignment : undefined
+                };
+            }
+        });
+
+        return rebuilt;
+    }
+
+    /**
+     * Rebuild tables data from scratch
+     * @param {Object} tables - Original tables object
+     * @returns {Object} - Fresh tables object
+     */
+    function rebuildTables(tables) {
+        if (!tables || typeof tables !== 'object') {
+            return {};
         }
+
+        const rebuilt = {};
+
+        Object.keys(tables).forEach((tableId) => {
+            const tableData = tables[tableId];
+            if (!Array.isArray(tableData)) {
+                return;
+            }
+
+            rebuilt[tableId] = tableData.map((row) => {
+                if (!row || typeof row !== 'object') {
+                    return {};
+                }
+
+                const newRow = {};
+                Object.keys(row).forEach((colKey) => {
+                    const value = row[colKey];
+                    // Copy only primitives
+                    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+                        newRow[colKey] = value;
+                    }
+                });
+                return newRow;
+            });
+        });
+
+        return rebuilt;
     }
 
     function buildFieldsMapping(fields) {
