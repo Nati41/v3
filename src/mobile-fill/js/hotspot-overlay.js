@@ -233,7 +233,8 @@
         hotspot.innerHTML = '';
         hotspot.appendChild(input);
         hotspot.appendChild(actions);
-        clampHotspotIntoView(hotspot);
+        // REMOVED: clampHotspotIntoView(hotspot) - causes document jumps during keyboard open
+        // User controls scroll manually - no auto-scroll during inline edit
         input.focus();
         input.select();
 
