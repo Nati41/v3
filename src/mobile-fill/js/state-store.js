@@ -2,17 +2,6 @@
     'use strict';
 
     const state = {
-        catalogState: {
-            catalog: null,
-            isCatalogLoading: false,
-            catalogError: null,
-            activeCategory: null,
-            searchQuery: ''
-        },
-        selectionState: {
-            selectedFormId: null,
-            selectedForm: null
-        },
         documentState: {
             pdfBytesSafe: null,
             pdfBytesSafeForExport: null,
@@ -21,17 +10,12 @@
             pdfError: null,
             pageCount: null
         },
-        mappingState: {
-            fieldsMapping: null,
-            mappingLoadStatus: 'idle',
-            mappingError: null,
-            normalized: false
+        quickFillState: {
+            fields: [],
+            activeFieldId: null
         },
         liveFillState: {
-            liveFillData: {
-                fields: {},
-                tables: {}
-            },
+            liveFillData: {},
             dirty: false,
             lastChangedAt: null
         },
@@ -43,10 +27,6 @@
             canvasSize: {}
         },
         uiState: {
-            screen: 'landing',
-            isPopoverOpen: false,
-            activeFieldId: null,
-            activeTableContext: null,
             hotspotsReady: false,
             toastQueue: []
         },

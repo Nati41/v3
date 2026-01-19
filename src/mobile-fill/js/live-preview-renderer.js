@@ -28,8 +28,7 @@
         }
 
         const state = window.MobileFillStateStore.state;
-        const mapping = state.mappingState.fieldsMapping;
-        const fields = mapping?.fields || [];
+        const fields = state.quickFillState?.fields || [];
         const field = fieldOverride || fields.find((item) => (item.id || item.fieldId) === fieldId);
         if (!field) return;
 
@@ -39,7 +38,7 @@
         const hotspot = layer.querySelector(`.mobilefill-hotspot[data-field-id="${fieldId}"]`);
         if (!hotspot) return;
 
-        const entry = state.liveFillState.liveFillData.fields?.[fieldId] || {};
+        const entry = state.liveFillState.liveFillData?.[fieldId] || {};
         const fieldType = field.type || 'text';
 
         if (fieldType === 'checkbox' || fieldType === 'radio') {
@@ -53,7 +52,7 @@
 
     function renderAllFilledFields() {
         const state = window.MobileFillStateStore.state;
-        const fields = state.mappingState.fieldsMapping?.fields || [];
+        const fields = state.quickFillState?.fields || [];
         fields.forEach((field) => {
             const fieldId = field.id || field.fieldId;
             if (!fieldId) return;

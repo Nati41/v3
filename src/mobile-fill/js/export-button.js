@@ -4,21 +4,19 @@
     const WATCH_EVENTS = [
         'PDF_LOADED',
         'PDF_LOAD_ERROR',
-        'MAPPING_READY',
-        'MAPPING_LOAD_ERROR',
         'VIEWER_RENDER_DONE',
         'HOTSPOTS_READY',
+        'FIELD_CREATED',
+        'FIELD_REMOVED',
         'FIELD_UPDATED',
-        'TABLE_CELL_UPDATED',
         'EXPORT_DONE',
-        'EXPORT_ERROR',
-        'EXPORT_BLOCKED'
+        'EXPORT_ERROR'
     ];
 
     let isLocked = false;
 
     function init() {
-        if (!window.MobileFillEventBus || !window.MobileFillExportGate || !window.MobileFillStateStore) {
+        if (!window.MobileFillEventBus || !window.MobileFillStateStore) {
             console.warn('[MobileFill] Export button dependencies missing');
             return;
         }
@@ -39,7 +37,6 @@
 
         window.MobileFillEventBus.on('EXPORT_DONE', unlockButton);
         window.MobileFillEventBus.on('EXPORT_ERROR', unlockButton);
-        window.MobileFillEventBus.on('EXPORT_BLOCKED', unlockButton);
 
         updateButtonState();
     }
@@ -49,9 +46,10 @@
         if (!button) return;
 
         const state = window.MobileFillStateStore.state;
-        const result = window.MobileFillExportGate.canExport(state);
-
-        const shouldDisable = isLocked || !result.allowed;
+        const hasPdf = state.documentState.pdfLoadStatus === 'ready';
+        const fieldsCount = state.quickFillState?.fields?.length || 0;
+        const exportRunning = state.exportState.exportStatus === 'running';
+        const shouldDisable = isLocked || exportRunning || !hasPdf || fieldsCount === 0;
         button.classList.toggle('is-disabled', shouldDisable);
         button.setAttribute('aria-disabled', shouldDisable ? 'true' : 'false');
     }

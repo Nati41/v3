@@ -61,6 +61,63 @@ body.mobilefill-portrait {
     cursor: pointer;
 }
 
+#mobilefill-upload-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.92);
+    z-index: 2500;
+    padding: 24px;
+}
+
+#mobilefill-upload-overlay.is-hidden {
+    display: none;
+}
+
+.mobilefill-upload-card {
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 16px;
+    padding: 20px 24px;
+    text-align: center;
+    width: min(320px, 90vw);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.mobilefill-upload-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.mobilefill-upload-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    background: #0ea5e9;
+    color: #ffffff;
+    border-radius: 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.mobilefill-upload-button input {
+    display: none;
+}
+
+.mobilefill-form-button {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    text-align: right;
+    font-size: 14px;
+    cursor: pointer;
+}
+
 #export-blocked-banner {
     padding: 10px 12px;
     border: 1px solid #b91c1c;
@@ -90,6 +147,14 @@ body.mobilefill-portrait {
     margin: 0;
     position: relative;
     width: 100%;
+}
+
+.mobilefill-draw-rect {
+    position: absolute;
+    border: 2px solid rgba(14, 165, 233, 0.9);
+    background: rgba(14, 165, 233, 0.12);
+    pointer-events: none;
+    z-index: 3;
 }
 
 .mobilefill-page canvas {
@@ -152,6 +217,27 @@ body.mobilefill-portrait {
 .mobilefill-inline-btn.cancel {
     background: rgba(148, 163, 184, 0.95);
     color: #0f172a;
+}
+
+.mobilefill-type-picker {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    display: flex;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.85);
+    padding: 4px 6px;
+    border-radius: 6px;
+    z-index: 5;
+}
+
+.mobilefill-type-btn {
+    border: none;
+    background: transparent;
+    color: #f8fafc;
+    font-size: 14px;
+    padding: 2px 4px;
+    cursor: pointer;
 }
 
 .field-input-popover {

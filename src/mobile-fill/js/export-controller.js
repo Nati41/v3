@@ -45,7 +45,7 @@
                 return;
             }
 
-            const fieldsMapping = cloneExportData(state.mappingState.fieldsMapping);
+            const fieldsMapping = buildFieldsMapping(state.quickFillState?.fields || []);
             const liveFillData = cloneExportData(state.liveFillState.liveFillData);
             if (!fieldsMapping || !liveFillData) {
                 logExportBlocked('Export data unavailable');
@@ -191,6 +191,55 @@
         }
     }
 
+    function buildFieldsMapping(fields) {
+        if (!Array.isArray(fields)) return { fields: [] };
+
+        const mapped = fields.map((field) => {
+            const fieldId = field.id || field.fieldId;
+            const type = field.type || 'text';
+            const page = field.page || 1;
+
+            const pdfX = field.pdfX;
+            const pdfY = field.pdfY;
+            const pdfWidth = field.pdfWidth;
+            const pdfHeight = field.pdfHeight;
+            const bbox = Array.isArray(field.bbox) ? field.bbox : null;
+
+            if (type === 'checkbox' || type === 'radio') {
+                let anchor = field.anchor;
+                if (!anchor && bbox) {
+                    const [xPct, yPct, wPct, hPct] = bbox;
+                    anchor = [xPct + (wPct / 2), yPct + (hPct / 2)];
+                }
+
+                return {
+                    id: fieldId,
+                    type,
+                    page,
+                    anchor,
+                    pdfX,
+                    pdfY,
+                    pdfWidth,
+                    pdfHeight
+                };
+            }
+
+            return {
+                id: fieldId,
+                type: 'text',
+                page,
+                bbox: bbox || undefined,
+                pdfX,
+                pdfY,
+                pdfWidth,
+                pdfHeight,
+                isQuickFill: true
+            };
+        });
+
+        return { fields: mapped };
+    }
+
     function downloadPdfBytes(pdfBytes, sourceType) {
         try {
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -254,13 +303,22 @@
     }
 
     function logExportTrace(state) {
-        const gateResult = window.MobileFillExportGate?.canExport
-            ? window.MobileFillExportGate.canExport(state)
-            : { allowed: false, reason: 'Export gate unavailable' };
-        const mappingCount = Array.isArray(state.mappingState?.fieldsMapping?.fields)
-            ? state.mappingState.fieldsMapping.fields.length
+        const hasPdf = state.documentState?.pdfLoadStatus === 'ready';
+        const mappingCount = Array.isArray(state.quickFillState?.fields)
+            ? state.quickFillState.fields.length
             : 0;
+        const exportRunning = state.exportState?.exportStatus === 'running';
         const filledCount = countFilledValues(state.liveFillState?.liveFillData);
+        const gateResult = {
+            allowed: hasPdf && mappingCount > 0 && !exportRunning,
+            reason: !hasPdf
+                ? 'PDF not ready'
+                : mappingCount === 0
+                    ? 'No fields'
+                    : exportRunning
+                        ? 'Export already running'
+                        : undefined
+        };
         const activeEditField = Boolean(document.querySelector('.mobilefill-inline-input'));
 
         console.log('[ExportTrace]', {
@@ -278,9 +336,9 @@
     function countFilledValues(liveFillData) {
         if (!liveFillData) return 0;
         let count = 0;
-        const fields = liveFillData.fields || {};
-        Object.keys(fields).forEach((key) => {
-            const entry = fields[key] || {};
+        Object.keys(liveFillData).forEach((key) => {
+            if (key === 'tables') return;
+            const entry = liveFillData[key] || {};
             if (entry.checked === true) {
                 count += 1;
                 return;
@@ -289,20 +347,6 @@
             if (value !== null && value !== undefined && String(value).trim() !== '') {
                 count += 1;
             }
-        });
-
-        const tables = liveFillData.tables || {};
-        Object.keys(tables).forEach((tableId) => {
-            const rows = tables[tableId] || [];
-            rows.forEach((row) => {
-                if (!row) return;
-                Object.keys(row).forEach((cellKey) => {
-                    const value = row[cellKey];
-                    if (value !== null && value !== undefined && String(value).trim() !== '') {
-                        count += 1;
-                    }
-                });
-            });
         });
 
         return count;

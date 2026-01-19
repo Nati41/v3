@@ -31,8 +31,15 @@
         Rotate to landscape for best experience
     </div>
     <main id="mobilefill-root">
-        <div id="export-blocked-banner" role="status" aria-live="polite"></div>
-        <div id="mobilefill-form-list"></div>
+        <div id="mobilefill-upload-overlay">
+            <div class="mobilefill-upload-card">
+                <div class="mobilefill-upload-title">Upload PDF to start</div>
+                <label class="mobilefill-upload-button">
+                    Choose PDF
+                    <input id="mobilefill-pdf-input" type="file" accept="application/pdf">
+                </label>
+            </div>
+        </div>
         <div id="mobilefill-pdf-container"></div>
         <pre id="mobilefill-status">MobileFill bootstrap loaded</pre>
     </main>
@@ -42,26 +49,18 @@
 
     <script src="js/event-bus.js"></script>
     <script src="js/state-store.js"></script>
-    <script src="../shared/normalizeField.js"></script>
-    <script src="../shared/migrateV1toV2.js"></script>
     <script src="../livefill/js/preview-text-renderer.js"></script>
     <script src="../livefill/js/export-engine.js"></script>
     <script src="js/mobile-debug-console.js"></script>
     <script src="js/event-logger.js"></script>
-    <script src="js/demo-form-selector.js"></script>
-    <script src="js/form-catalog-service.js"></script>
-    <script src="js/pdf-loader.js"></script>
-    <script src="js/mapping-loader.js"></script>
+    <script src="js/pdf-upload.js"></script>
     <script src="js/mobile-pdf-viewer.js"></script>
-    <script src="js/hotspot-overlay.js"></script>
+    <script src="js/quickfill-editor.js"></script>
     <script src="js/ui-status.js"></script>
     <script src="js/landscape-gate.js"></script>
-    <script src="js/export-gate.js"></script>
-    <script src="js/export-blocked-banner.js"></script>
     <script src="js/export-button.js"></script>
     <script src="js/live-preview-renderer.js"></script>
     <script src="js/export-controller.js"></script>
-    <script src="js/form-list-ui.js"></script>
     <script src="js/mobile-flow-controller.js"></script>
     <script src="js/bootstrap.js"></script>
 </body>
