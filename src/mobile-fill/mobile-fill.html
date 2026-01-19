@@ -49,6 +49,9 @@
 
     <script src="js/event-bus.js"></script>
     <script src="js/state-store.js"></script>
+    <!-- CRITICAL: Export dependencies must load BEFORE export-engine.js -->
+    <script src="../shared/normalizeField.js"></script>
+    <script src="../shared/UnifiedCoordinateSystem.js"></script>
     <script src="../livefill/js/preview-text-renderer.js"></script>
     <script src="../livefill/js/export-engine.js"></script>
     <script src="js/mobile-debug-console.js"></script>

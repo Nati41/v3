@@ -62,6 +62,24 @@
 
             logExportTrace(state);
 
+            // CRITICAL: Validate export dependencies are loaded
+            console.log('EXPORT DEPS', {
+                normalizeField: typeof window.normalizeField,
+                UnifiedCoordinateSystem: typeof window.UnifiedCoordinateSystem,
+                ExportEngine: typeof window.ExportEngine
+            });
+
+            // Verify fieldsMapping contains NEW arrays (not state references)
+            const firstField = fieldsMapping.fields[0];
+            const originalFirstField = state.quickFillState?.fields?.[0];
+            console.log('EXPORT REFS CHECK', {
+                fieldsMappingIsNewArray: fieldsMapping.fields !== state.quickFillState?.fields,
+                bboxIsNewArray: firstField?.bbox !== originalFirstField?.bbox,
+                anchorIsNewArray: firstField?.anchor !== originalFirstField?.anchor,
+                firstFieldBbox: firstField?.bbox,
+                firstFieldAnchor: firstField?.anchor
+            });
+
             // Debug logs before ExportEngine call
             console.log('EXPORT DEBUG', {
                 isFrozen: Object.isFrozen(liveFillData),
@@ -287,25 +305,38 @@
         return rebuilt;
     }
 
+    /**
+     * Build fieldsMapping with DEEP COPIES - no references to state!
+     * All arrays (bbox, anchor) are spread into new arrays.
+     * All primitives are explicitly converted with Number()/String().
+     */
     function buildFieldsMapping(fields) {
         if (!Array.isArray(fields)) return { fields: [] };
 
         const mapped = fields.map((field) => {
-            const fieldId = field.id || field.fieldId;
-            const type = field.type || 'text';
-            const page = field.page || 1;
+            // Extract primitives with explicit type conversion
+            const fieldId = String(field.id || field.fieldId || '');
+            const type = String(field.type || 'text');
+            const page = Number(field.page) || 1;
 
-            const pdfX = field.pdfX;
-            const pdfY = field.pdfY;
-            const pdfWidth = field.pdfWidth;
-            const pdfHeight = field.pdfHeight;
-            const bbox = Array.isArray(field.bbox) ? field.bbox : null;
+            // Numbers with explicit conversion (NaN becomes undefined)
+            const pdfX = typeof field.pdfX === 'number' ? Number(field.pdfX) : undefined;
+            const pdfY = typeof field.pdfY === 'number' ? Number(field.pdfY) : undefined;
+            const pdfWidth = typeof field.pdfWidth === 'number' ? Number(field.pdfWidth) : undefined;
+            const pdfHeight = typeof field.pdfHeight === 'number' ? Number(field.pdfHeight) : undefined;
+
+            // CRITICAL: Create NEW array copies - never pass state references!
+            const bbox = Array.isArray(field.bbox) ? [...field.bbox] : undefined;
 
             if (type === 'checkbox' || type === 'radio') {
-                let anchor = field.anchor;
-                if (!anchor && bbox) {
+                // CRITICAL: Create NEW anchor array - never pass state reference!
+                let anchor;
+                if (Array.isArray(field.anchor) && field.anchor.length === 2) {
+                    anchor = [...field.anchor];  // NEW array copy!
+                } else if (bbox && bbox.length === 4) {
+                    // Compute anchor from bbox center
                     const [xPct, yPct, wPct, hPct] = bbox;
-                    anchor = [xPct + (wPct / 2), yPct + (hPct / 2)];
+                    anchor = [xPct + (wPct / 2), yPct + (hPct / 2)];  // NEW array!
                 }
 
                 return {
@@ -324,7 +355,7 @@
                 id: fieldId,
                 type: 'text',
                 page,
-                bbox: bbox || undefined,
+                bbox,  // Already a NEW array copy from spread above
                 pdfX,
                 pdfY,
                 pdfWidth,
