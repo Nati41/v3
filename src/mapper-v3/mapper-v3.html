@@ -194,6 +194,22 @@
             <!-- PDF Viewer - EXACT structure from legacy mapper -->
             <section id="pdf-section" class="canvas-area">
                 <div id="canvas-viewport" class="canvas-viewport">
+                    <!-- V3.11: PDF Drop Zone - shown when no PDF is loaded -->
+                    <div id="pdf-drop-zone" class="pdf-drop-zone">
+                        <div class="drop-zone-content">
+                            <div class="drop-zone-icon">
+                                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="12" y1="18" x2="12" y2="12"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                </svg>
+                            </div>
+                            <h2 class="drop-zone-title">טען קובץ PDF</h2>
+                            <p class="drop-zone-subtitle">גרור לכאן או לחץ לבחירה</p>
+                            <div class="drop-zone-hint">תומך בקבצי PDF בלבד</div>
+                        </div>
+                    </div>
                     <div id="transform-container" class="transform-container">
                         <div id="canvas-container" class="canvas-container">
                             <!-- PDF Container - holds the <img> element (PNG of PDF) -->
@@ -441,8 +457,8 @@
         // Import overlay modules
         import { labelOverlay } from './overlay/LabelOverlay.js';
 
-        // Import word selector (new word-based selection)
-        import { wordSelector } from './engines/WordSelector.js';
+        // Import word selector (new word-based selection) - gated for QuickFill
+        let wordSelector = null;
 
         // Import text extraction (for name capture)
         import { textExtractor } from './engines/TextExtractor.js';
@@ -488,7 +504,19 @@
         window.tableRegionManager = tableRegionManager;
         window.tableSelectMode = tableSelectMode;
         window.labelOverlay = labelOverlay;
-        window.wordSelector = wordSelector;
+        const urlParams = new URLSearchParams(window.location.search);
+        const modeParam = urlParams.get('mode');
+        const isQuickFillMode = modeParam === 'quickfill' || modeParam === 'quick_fill' || modeParam === 'quick-fill';
+        if (!isQuickFillMode) {
+            import('./engines/WordSelector.js').then((module) => {
+                wordSelector = module.wordSelector;
+                window.wordSelector = wordSelector;
+            }).catch((err) => {
+                console.error('[Mapper] Failed to load WordSelector:', err);
+            });
+        } else {
+            window.wordSelector = null;
+        }
         window.templateImportDialog = templateImportDialog;
         window.exceptionReviewPanel = exceptionReviewPanel;
         window.guidedMappingUI = guidedMappingUI;
@@ -564,7 +592,9 @@
 
                 // Initialize overlay modules
                 labelOverlay.init();
-                wordSelector.init();
+                if (wordSelector && typeof wordSelector.init === 'function') {
+                    wordSelector.init();
+                }
 
                 // V3.9: Initialize auto-advance controller
                 autoAdvanceController.init();
@@ -1005,6 +1035,74 @@
         }
 
         /**
+         * V3.11: Setup PDF drop zone with drag & drop support
+         */
+        function setupPdfDropZone() {
+            const dropZone = document.getElementById('pdf-drop-zone');
+            const fileInput = document.getElementById('pdf-file-input');
+            if (!dropZone || !fileInput) return;
+
+            // Click to open file picker
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Drag enter - show visual feedback
+            dropZone.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+
+            // Drag over - required for drop to work
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+
+            // Drag leave - remove visual feedback
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                // Only remove if leaving the drop zone entirely
+                if (!dropZone.contains(e.relatedTarget)) {
+                    dropZone.classList.remove('drag-over');
+                }
+            });
+
+            // Drop - handle the file
+            dropZone.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+                        try {
+                            await pdfEngine.load(file);
+                            showToast('PDF נטען בהצלחה', 'success');
+                        } catch (error) {
+                            console.error('Failed to load PDF:', error);
+                            showToast('שגיאה בטעינת PDF: ' + error.message, 'error');
+                        }
+                    } else {
+                        showToast('נא לבחור קובץ PDF בלבד', 'warning');
+                    }
+                }
+            });
+
+            // Hide drop zone when PDF is loaded
+            eventBus.on(Events.PDF_LOADED, () => {
+                dropZone.classList.add('hidden');
+            });
+
+            console.log('[Mapper] PDF drop zone initialized');
+        }
+
+        /**
          * Setup file input handlers
          */
         function setupFileInputs() {
@@ -1022,6 +1120,9 @@
                 }
                 e.target.value = ''; // Reset for re-selection
             });
+
+            // V3.11: Setup PDF drop zone
+            setupPdfDropZone();
 
             // JSON file input - supports Mapper JSON and Unified Schema (AI templates)
             document.getElementById('json-file-input').addEventListener('change', async (e) => {
@@ -1056,11 +1157,23 @@
         /**
          * Show toast notification
          * V3.2: Extended to support action button
+         * V3.11: Filter irrelevant toasts in QuickFill mode
          * @param {string} message - Toast message
          * @param {string} type - Toast type (info, success, warning, error)
          * @param {Object} options - Optional { duration, action: { label, callback } }
          */
         function showToast(message, type = 'info', options = {}) {
+            // V3.11: In QuickFill mode, only show critical toasts (PDF, export, errors)
+            if (document.body.classList.contains('quick-fill-mode')) {
+                const allowedPatterns = ['PDF', 'יוצא', 'שגיאה', 'נטען', 'error', 'success', 'הורד'];
+                const isAllowed = type === 'error' || type === 'success' ||
+                                  allowedPatterns.some(p => message.includes(p));
+                if (!isAllowed) {
+                    console.log('[Toast] Filtered in QuickFill mode:', message);
+                    return; // Block irrelevant toasts
+                }
+            }
+
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;

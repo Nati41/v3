@@ -94,17 +94,37 @@ class QuickFillOverlay {
         this._toolbarGroup.id = 'quick-fill-toolbar';
         this._toolbarGroup.className = 'toolbar-group quick-fill-tools hidden';
         this._toolbarGroup.innerHTML = `
-            <button class="toolbar-btn tool-btn qf-tool-btn active" data-tool="draw_text" title="שדה טקסט (T)">
+            <button class="toolbar-btn tool-btn qf-tool-btn active" data-tool="draw_text" title="מילוי טקסט">
+                <span class="qf-step">שלב 2</span>
                 <span class="icon">📝</span>
+                <span class="qf-text">
+                    <span class="qf-title">מילוי טקסט</span>
+                    <span class="qf-subtitle">שם, מספרים, ת"ז, תאריך, כתובת | בחר ואז לחץ על המקום בטופס</span>
+                </span>
             </button>
-            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_checkbox" title="צ'קבוקס (C)">
+            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_checkbox" title="סימון ✓">
+                <span class="qf-step">שלב 3</span>
                 <span class="icon">☑️</span>
+                <span class="qf-text">
+                    <span class="qf-title">סימון ✓</span>
+                    <span class="qf-subtitle">למשבצות שבהן צריך וי | בחר ואז לחץ על המשבצת</span>
+                </span>
             </button>
-            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_radio" title="רדיו (R)">
+            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_radio" title="סימון ●">
+                <span class="qf-step">שלב 4</span>
                 <span class="icon">🔘</span>
+                <span class="qf-text">
+                    <span class="qf-title">סימון ●</span>
+                    <span class="qf-subtitle">לבחירה מתוך אפשרויות | בחר ואז לחץ על העיגול המתאים</span>
+                </span>
             </button>
-            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_signature" title="חתימה (S)">
+            <button class="toolbar-btn tool-btn qf-tool-btn" data-tool="draw_signature" title="חתימה">
+                <span class="qf-step">שלב 5</span>
                 <span class="icon">✍️</span>
+                <span class="qf-text">
+                    <span class="qf-title">חתימה</span>
+                    <span class="qf-subtitle">הוסף חתימה במקום המתאים בטופס</span>
+                </span>
             </button>
         `;
 
@@ -120,21 +140,39 @@ class QuickFillOverlay {
             </button>
         `;
 
-        // Create QuickFill actions group (load, export, clear, count)
+        // Create QuickFill actions group (load JSON, export, clear, count)
         this._actionsGroup = document.createElement('div');
         this._actionsGroup.className = 'toolbar-group quick-fill-tools hidden';
         this._actionsGroup.innerHTML = `
             <span class="box-count qf-box-count">0 שדות</span>
-            <button class="toolbar-btn load-mapping-btn" title="טען מיפוי מקובץ JSON">
-                <span class="icon">📂</span>
+            <button class="toolbar-btn load-json-btn" title="טען מיפוי">
+                <span class="icon">📋</span>
+                <span class="qf-text">
+                    <span class="qf-title">טען מיפוי</span>
+                    <span class="qf-subtitle">טען קובץ JSON עם הגדרות שדות</span>
+                </span>
             </button>
-            <button class="toolbar-btn export-pdf-btn" title="ייצא PDF ממולא">
-                <span class="icon">↗</span>
-                <span class="label">ייצא PDF</span>
+            <button class="toolbar-btn export-pdf-btn" title="הורד PDF">
+                <span class="qf-step">שלב 6</span>
+                <span class="icon">⬇️</span>
+                <span class="qf-text">
+                    <span class="qf-title">הורד PDF</span>
+                    <span class="qf-subtitle">קבל את הטופס המלא כקובץ להורדה</span>
+                </span>
             </button>
             <button class="toolbar-btn clear-all-btn" title="נקה הכל">
                 <span class="icon">🗑️</span>
+                <span class="qf-text">
+                    <span class="qf-title">ניקוי טופס</span>
+                    <span class="qf-subtitle">מחק את הסימונים והטקסט שהזנת</span>
+                </span>
             </button>
+        `;
+
+        this._instructionBar = document.createElement('div');
+        this._instructionBar.className = 'quick-fill-instructions quick-fill-tools hidden';
+        this._instructionBar.innerHTML = `
+            <span class="qf-instruction-text">איך משתמשים? בחר פעולה למעלה → לחץ על המקום בטופס → מלא → בסיום הורד PDF</span>
         `;
 
         // Create separators for QuickFill groups
@@ -162,6 +200,10 @@ class QuickFillOverlay {
             toolbar.appendChild(sep2);
             toolbar.appendChild(this._actionsGroup);
             toolbar.appendChild(sep3);
+        }
+
+        if (toolbar && toolbar.parentElement) {
+            toolbar.parentElement.insertBefore(this._instructionBar, toolbar.nextSibling);
         }
 
         // Attach event handlers to toolbar buttons
@@ -196,12 +238,23 @@ class QuickFillOverlay {
             this._updateUndoRedoButtons();
         });
 
-        // Action buttons
+        // Action buttons - Load JSON triggers file picker
+        this._actionsGroup.querySelector('.load-json-btn').addEventListener('click', () => {
+            this._setInstructionText('טען מיפוי: בחר קובץ JSON עם הגדרות שדות');
+            // Trigger JSON file input
+            const jsonInput = document.getElementById('json-file-input');
+            if (jsonInput) {
+                jsonInput.click();
+            }
+        });
+
         this._actionsGroup.querySelector('.clear-all-btn').addEventListener('click', () => {
+            this._setInstructionText('ניקוי טופס: מחק את הסימונים והטקסט שהזנת');
             this.clearAll();
         });
 
         this._actionsGroup.querySelector('.export-pdf-btn').addEventListener('click', () => {
+            this._setInstructionText('סיום: הורד את הקובץ המלא ושמור אותו אצלך');
             this.exportPDF();
         });
     }
@@ -282,6 +335,8 @@ class QuickFillOverlay {
             setTimeout(() => {
                 this._updateAllBoxPositions();
             }, 200);
+            this._updateToolbarAvailability();
+            this._updateInstructionDefault();
         });
 
         // V3.10: Listen for mapping loaded from JSON - recalculate all positions
@@ -313,6 +368,8 @@ class QuickFillOverlay {
             });
 
             this._updateStatusBar();
+            this._updateInstructionDefault();
+            this._updateToolbarAvailability();
 
             // V3.10: Switch to DRAW_TEXT tool for drawing boxes
             // Save previous tool to restore when exiting
@@ -376,6 +433,8 @@ class QuickFillOverlay {
             });
         }
 
+        this._updateInstructionForTool(toolName);
+
         console.log('[QuickFillOverlay] Tool changed to:', toolName);
     }
 
@@ -389,7 +448,8 @@ class QuickFillOverlay {
         const toolToName = {
             [Tools.DRAW_TEXT]: 'draw_text',
             [Tools.DRAW_CHECKBOX]: 'draw_checkbox',
-            [Tools.DRAW_RADIO]: 'draw_radio'
+            [Tools.DRAW_RADIO]: 'draw_radio',
+            [Tools.DRAW_SIGNATURE]: 'draw_signature'
         };
 
         const toolName = toolToName[tool];
@@ -400,6 +460,81 @@ class QuickFillOverlay {
             this._toolbarGroup.querySelectorAll('.qf-tool-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.tool === toolName);
             });
+        }
+
+        this._updateInstructionForTool(toolName);
+    }
+
+    _updateInstructionDefault() {
+        if (!this._instructionBar) return;
+
+        const hasPdf = Boolean(pdfEngine?.getPdfData?.());
+        if (!hasPdf) {
+            this._instructionBar.textContent = 'קודם פתח טופס כדי להתחיל למלא';
+            return;
+        }
+
+        this._instructionBar.textContent = 'איך משתמשים? בחר פעולה למעלה → לחץ על המקום בטופס → מלא → בסיום הורד PDF';
+    }
+
+    _updateInstructionForTool(toolName) {
+        if (!this._instructionBar) return;
+
+        const hasPdf = Boolean(pdfEngine?.getPdfData?.());
+        if (!hasPdf) {
+            this._instructionBar.textContent = 'קודם פתח טופס כדי להתחיל למלא';
+            return;
+        }
+
+        const textMap = {
+            draw_text: 'מילוי טקסט: לחץ על המקום בטופס שבו צריך לכתוב → הקלד → אשר',
+            draw_checkbox: 'סימון ✓: לחץ על משבצת כדי להוסיף/להסיר וי',
+            draw_radio: 'סימון ●: לחץ על העיגול המתאים כדי לבחור אפשרות אחת',
+            draw_signature: 'חתימה: לחץ במקום החתימה → צייר/הוסף חתימה → שמור'
+        };
+
+        this._instructionBar.textContent = textMap[toolName] || 'איך משתמשים? בחר פעולה למעלה → לחץ על המקום בטופס → מלא → בסיום הורד PDF';
+    }
+
+    _setInstructionText(text) {
+        if (!this._instructionBar) return;
+        if (!text) return;
+        this._instructionBar.textContent = text;
+    }
+
+    /**
+     * Set instruction state for different QuickFill phases
+     * Called externally (e.g., from DrawController) to update instructions dynamically
+     * @param {string} state - 'refiner' | 'typing' | 'default'
+     * @param {string} toolName - Optional tool name for default state
+     */
+    setInstructionState(state, toolName = null) {
+        if (!this._instructionBar) return;
+
+        const states = {
+            refiner: '📦 Enter לאישור המלבן | קליק בקצוות לכיוונון | Esc לביטול',
+            typing: '✏️ הקלד את הטקסט | לחץ במקום אחר להמשיך'
+        };
+
+        if (states[state]) {
+            this._instructionBar.textContent = states[state];
+        } else if (toolName) {
+            this._updateInstructionForTool(toolName);
+        } else {
+            this._updateInstructionDefault();
+        }
+    }
+
+    _updateToolbarAvailability() {
+        const hasPdf = Boolean(pdfEngine?.getPdfData?.());
+        const toolButtons = this._toolbarGroup?.querySelectorAll('.qf-tool-btn') || [];
+        toolButtons.forEach(btn => {
+            btn.disabled = !hasPdf;
+        });
+
+        const exportBtn = this._actionsGroup?.querySelector('.export-pdf-btn');
+        if (exportBtn) {
+            exportBtn.disabled = !hasPdf;
         }
     }
 
@@ -1613,6 +1748,12 @@ class QuickFillOverlay {
             const countEl = this._actionsGroup.querySelector('.qf-box-count');
             if (countEl) {
                 countEl.textContent = `${this._boxes.length} שדות`;
+            }
+
+            const exportBtn = this._actionsGroup.querySelector('.export-pdf-btn');
+            if (exportBtn) {
+                const hasPdf = Boolean(pdfEngine?.getPdfData?.());
+                exportBtn.disabled = !hasPdf || this._boxes.length === 0;
             }
         }
     }

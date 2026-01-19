@@ -427,6 +427,107 @@ input, textarea {
     cursor: grabbing;
 }
 
+/* ============ PDF Drop Zone ============ */
+/* V3.11: Attractive drop zone for PDF loading */
+.pdf-drop-zone {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.pdf-drop-zone.hidden {
+    display: none !important;
+}
+
+.drop-zone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 80px;
+    border: 3px dashed #94a3b8;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+    text-align: center;
+    animation: borderPulse 3s ease-in-out infinite;
+}
+
+.pdf-drop-zone:hover .drop-zone-content,
+.pdf-drop-zone.drag-over .drop-zone-content {
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.95);
+    transform: scale(1.02);
+    box-shadow: 0 20px 60px rgba(37, 99, 235, 0.15);
+}
+
+.pdf-drop-zone.drag-over .drop-zone-content {
+    border-color: var(--success-color);
+    border-style: solid;
+    background: rgba(22, 163, 74, 0.05);
+}
+
+.drop-zone-icon {
+    margin-bottom: 24px;
+    color: #64748b;
+    transition: all 0.3s ease;
+}
+
+.pdf-drop-zone:hover .drop-zone-icon,
+.pdf-drop-zone.drag-over .drop-zone-icon {
+    color: var(--primary-color);
+    transform: translateY(-4px);
+}
+
+.pdf-drop-zone.drag-over .drop-zone-icon {
+    color: var(--success-color);
+    animation: bounce 0.6s ease infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(-4px); }
+    50% { transform: translateY(-12px); }
+}
+
+.drop-zone-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.drop-zone-subtitle {
+    font-size: 18px;
+    color: #64748b;
+    margin-bottom: 20px;
+}
+
+.drop-zone-hint {
+    font-size: 13px;
+    color: #94a3b8;
+    padding: 8px 16px;
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 20px;
+}
+
+/* Subtle pulsing glow animation for the border */
+@keyframes borderPulse {
+    0%, 100% { border-color: #94a3b8; }
+    50% { border-color: #cbd5e1; }
+}
+
+.pdf-drop-zone:hover .drop-zone-content {
+    animation: none;
+}
+
 /* EXACT from legacy: transform-origin: 0 0 */
 .transform-container {
     transform-origin: 0 0;
@@ -4436,13 +4537,27 @@ input, textarea {
 }
 
 /* ============ QuickFill Toolbar Integration ============ */
-/* QuickFill buttons - same style as existing toolbar buttons */
+/* Vertical card-based toolbar layout for QuickFill mode */
 
-/* QuickFill toolbar groups - hidden by default, shown in QuickFill mode */
+/* QuickFill toolbar groups - horizontal scrollable container */
 .toolbar-group.quick-fill-tools {
     display: flex;
-    align-items: center;
-    gap: 4px;
+    align-items: stretch;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0;
+    scrollbar-width: thin;
+}
+
+.toolbar-group.quick-fill-tools::-webkit-scrollbar {
+    height: 4px;
+}
+
+.toolbar-group.quick-fill-tools::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 2px;
 }
 
 .toolbar-group.quick-fill-tools.hidden {
@@ -4453,115 +4568,183 @@ input, textarea {
     display: none;
 }
 
-/* QuickFill tool buttons - identical to .toolbar-btn.tool-btn */
-.quick-fill-tools .qf-tool-btn {
+/* QuickFill separators - subtle vertical line */
+.toolbar-separator.quick-fill-tools:not(.hidden) {
+    width: 1px;
+    height: 50px;
+    background: var(--border-color);
+    margin: 0 4px;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QuickFill Card Buttons - Vertical layout with icon on top
+   ═══════════════════════════════════════════════════════════ */
+.quick-fill-tools .qf-tool-btn,
+.quick-fill-tools .load-json-btn,
+.quick-fill-tools .export-pdf-btn,
+.quick-fill-tools .clear-all-btn {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 8px;
-    border: none;
-    background: transparent;
-    border-radius: var(--border-radius);
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 8px 12px;
+    min-width: 90px;
+    max-width: 130px;
+    height: auto;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 16px;
     color: var(--text-primary);
-    transition: background 0.15s, color 0.15s;
+    transition: all 0.15s ease;
+    text-align: center;
+    flex-shrink: 0;
 }
 
-.quick-fill-tools .qf-tool-btn:hover {
+/* Icon - centered on top */
+.quick-fill-tools .qf-tool-btn .icon,
+.quick-fill-tools .load-json-btn .icon,
+.quick-fill-tools .export-pdf-btn .icon,
+.quick-fill-tools .clear-all-btn .icon {
+    font-size: 22px;
+    line-height: 1;
+    order: 1;
+}
+
+/* Step badge - small indicator */
+.quick-fill-tools .qf-step {
+    font-size: 9px;
+    color: var(--text-tertiary, #999);
     background: var(--bg-secondary);
+    padding: 1px 6px;
+    border-radius: 8px;
+    white-space: nowrap;
+    order: 0;
+    margin-bottom: 2px;
 }
 
+/* Text container - below icon */
+.quick-fill-tools .qf-text {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    width: 100%;
+    order: 2;
+}
+
+/* Title - single line, bold */
+.quick-fill-tools .qf-title {
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
+}
+
+/* Subtitle - single line, secondary color */
+.quick-fill-tools .qf-subtitle {
+    font-size: 10px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.2;
+}
+
+/* Hover state */
+.quick-fill-tools .qf-tool-btn:hover,
+.quick-fill-tools .load-json-btn:hover,
+.quick-fill-tools .export-pdf-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Active/Selected state */
 .quick-fill-tools .qf-tool-btn.active {
     background: var(--primary-color);
+    border-color: var(--primary-color);
     color: white;
+}
+
+.quick-fill-tools .qf-tool-btn.active .qf-step {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.quick-fill-tools .qf-tool-btn.active .qf-subtitle {
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .quick-fill-tools .qf-tool-btn.active:hover {
     background: var(--primary-hover);
 }
 
-/* Box Count in toolbar */
-.quick-fill-tools .qf-box-count {
-    font-size: 13px;
-    color: var(--text-secondary);
-    min-width: 50px;
-    text-align: center;
-    font-weight: 500;
-    padding: 0 8px;
-}
-
-/* Export Button - text with icon */
-.quick-fill-tools .export-pdf-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: transparent;
-    color: var(--text-primary);
-    padding: 6px 12px;
-    border-radius: var(--border-radius);
-    font-size: 13px;
-    font-weight: 500;
-    transition: background 0.15s;
-}
-
-.quick-fill-tools .export-pdf-btn .icon {
-    font-size: 14px;
-}
-
-.quick-fill-tools .export-pdf-btn:hover {
-    background: var(--bg-secondary);
-}
-
+/* Disabled state */
+.quick-fill-tools .qf-tool-btn:disabled,
 .quick-fill-tools .export-pdf-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
-/* Load Mapping & Clear Buttons - standard toolbar style */
-.quick-fill-tools .load-mapping-btn,
-.quick-fill-tools .clear-all-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px;
-    border: none;
-    background: transparent;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--text-primary);
-    transition: background 0.15s;
-}
-
-.quick-fill-tools .load-mapping-btn:hover {
-    background: var(--bg-secondary);
-}
-
+/* Clear button - danger hover */
 .quick-fill-tools .clear-all-btn:hover {
-    background: rgba(220, 38, 38, 0.1);
+    background: rgba(220, 38, 38, 0.08);
+    border-color: var(--error-color);
     color: var(--error-color);
 }
 
-/* QuickFill undo/redo buttons - standard toolbar style */
+/* ═══════════════════════════════════════════════════════════
+   Box Count - compact display
+   ═══════════════════════════════════════════════════════════ */
+.quick-fill-tools .qf-box-count {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    white-space: nowrap;
+    font-weight: 500;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Undo/Redo Buttons - compact square
+   ═══════════════════════════════════════════════════════════ */
 .quick-fill-tools .qf-undo-btn,
 .quick-fill-tools .qf-redo-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px;
-    border: none;
-    background: transparent;
-    border-radius: var(--border-radius);
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    border-radius: 8px;
     cursor: pointer;
     font-size: 16px;
     color: var(--text-primary);
-    transition: background 0.15s;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    align-self: center;
 }
 
 .quick-fill-tools .qf-undo-btn:hover:not(:disabled),
 .quick-fill-tools .qf-redo-btn:hover:not(:disabled) {
     background: var(--bg-secondary);
+    border-color: var(--primary-color);
 }
 
 .quick-fill-tools .qf-undo-btn:disabled,
@@ -4570,9 +4753,46 @@ input, textarea {
     cursor: not-allowed;
 }
 
-/* Quick Fill Mode - subtle indicator on toolbar */
+/* ═══════════════════════════════════════════════════════════
+   Instructions Bar - clean and minimal
+   ═══════════════════════════════════════════════════════════ */
+.quick-fill-instructions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.quick-fill-instructions.hidden {
+    display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Quick Fill Mode - Toolbar adjustments for card layout
+   ═══════════════════════════════════════════════════════════ */
 body.quick-fill-mode .toolbar {
     border-bottom-color: var(--primary-color);
+    min-height: auto;
+    height: auto;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Hide non-QuickFill elements in QuickFill mode */
+body.quick-fill-mode .toolbar > .toolbar-group:not(.quick-fill-tools),
+body.quick-fill-mode .toolbar > .toolbar-separator:not(.quick-fill-tools) {
+    display: none;
+}
+
+/* Ensure QuickFill groups are visible and properly laid out */
+body.quick-fill-mode .toolbar-group.quick-fill-tools:not(.hidden) {
+    display: flex;
 }
 
 body.quick-fill-mode #overlay-layer {

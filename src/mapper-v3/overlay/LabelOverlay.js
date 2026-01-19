@@ -11,8 +11,29 @@
 import { state } from '../core/StateManager.js';
 import { eventBus, Events } from '../core/EventBus.js';
 import { pdfEngine } from '../engines/PDFEngine.js';
-import { wordSelector } from '../engines/WordSelector.js';
 import { fieldNamer } from '../engines/FieldNamer.js';
+
+const urlParams = new URLSearchParams(window.location.search);
+const modeParam = urlParams.get('mode');
+const isQuickFillMode = modeParam === 'quickfill' || modeParam === 'quick_fill' || modeParam === 'quick-fill';
+let wordSelectorPromise = null;
+
+async function getWordSelector() {
+    if (isQuickFillMode) {
+        return null;
+    }
+
+    if (!wordSelectorPromise) {
+        wordSelectorPromise = import('../engines/WordSelector.js')
+            .then((module) => module.wordSelector)
+            .catch((err) => {
+                console.error('[LabelOverlay] Failed to load WordSelector:', err);
+                return null;
+            });
+    }
+
+    return wordSelectorPromise;
+}
 
 export class LabelOverlay {
     constructor() {
@@ -74,28 +95,37 @@ export class LabelOverlay {
      * Start label selection for a field
      */
     async startClickSelectMode(fieldId) {
-        await wordSelector.startLabelSelection(fieldId);
+        const selector = await getWordSelector();
+        if (!selector) return;
+        await selector.startLabelSelection(fieldId);
     }
 
     /**
      * Start title selection (for groups)
      */
     async startTitleSelection(callback) {
-        await wordSelector.startTitleSelection(callback);
+        const selector = await getWordSelector();
+        if (!selector) return;
+        await selector.startTitleSelection(callback);
     }
 
     /**
      * Start field name selection
      */
     async startFieldNameSelection(callback) {
-        await wordSelector.startFieldNameSelection(callback);
+        const selector = await getWordSelector();
+        if (!selector) return;
+        await selector.startFieldNameSelection(callback);
     }
 
     /**
      * Exit selection mode
      */
     exitClickSelectMode() {
-        wordSelector.cancelSelection();
+        if (!wordSelectorPromise) return;
+        wordSelectorPromise.then((selector) => {
+            selector?.cancelSelection();
+        });
     }
 
     // ============ RENDERING ============

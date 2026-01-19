@@ -1,6 +1,8 @@
 (function() {
     'use strict';
 
+    const MOBILE_HOTSPOT_Y_OFFSET_PX = 3;
+
     let currentMapping = null;
     let pageViewports = null;
     let canvasSize = null;
@@ -124,7 +126,7 @@
         if (field.pdfX !== undefined && field.pdfY !== undefined &&
             field.pdfWidth !== undefined && field.pdfHeight !== undefined) {
             const x = field.pdfX * scaleX;
-            const y = (baseHeight - field.pdfY - field.pdfHeight) * scaleY;
+            const y = (baseHeight - field.pdfY - field.pdfHeight) * scaleY - MOBILE_HOTSPOT_Y_OFFSET_PX;
             const width = field.pdfWidth * scaleX;
             const height = field.pdfHeight * scaleY;
             return { x, y, width, height };
@@ -142,7 +144,7 @@
             if (height <= 1) height = height * pageCanvasSize.height;
 
             const x = centerX - width / 2;
-            const y = centerY - height / 2;
+            const y = centerY - height / 2 - MOBILE_HOTSPOT_Y_OFFSET_PX;
 
             return { x, y, width, height };
         }

@@ -42,8 +42,14 @@
                 return;
             }
 
-            const fieldsMapping = state.mappingState.fieldsMapping;
-            const liveFillData = state.liveFillState.liveFillData;
+            const fieldsMapping = cloneExportData(state.mappingState.fieldsMapping);
+            const liveFillData = cloneExportData(state.liveFillState.liveFillData);
+            if (!fieldsMapping || !liveFillData) {
+                window.MobileFillEventBus.emit('EXPORT_ERROR', {
+                    error: 'Export data unavailable'
+                });
+                return;
+            }
 
             console.log('[MobileFill] About to call ExportEngine.export');
             const { exportResult, capturedBlob, capturedBlobUrl } = await runExportWithCapture(() => {
@@ -164,6 +170,20 @@
         }
 
         return null;
+    }
+
+    function cloneExportData(original) {
+        if (!original) return null;
+
+        if (typeof structuredClone === 'function') {
+            return structuredClone(original);
+        }
+
+        try {
+            return JSON.parse(JSON.stringify(original));
+        } catch (error) {
+            return null;
+        }
     }
 
     function downloadPdfBytes(pdfBytes, sourceType) {

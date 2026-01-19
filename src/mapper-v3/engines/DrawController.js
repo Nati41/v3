@@ -718,15 +718,21 @@ export class DrawController {
         // Create preview element
         this._createRefinerPreview(bbox);
 
-        // Show guidance based on problem type
-        const problemMessages = {
-            'SLASHES': 'זוהו לוכסנים - לחץ מעבר להם להרחבה',
-            'DASHED_FLOOR': 'ריצפה מקווקווית - לחץ להרחבה',
-            'NO_WALLS': 'אין קירות ברורים - לחץ לקבוע גבולות',
-            'NORMAL': 'לחץ באמצע לאישור, או בחוץ להרחבה'
-        };
-        const message = problemMessages[initResult.problemType] || problemMessages['NORMAL'];
-        this._showToast(message, 'info');
+        // V3.11: In QuickFill mode, update instruction bar instead of toast
+        // Note: isQuickFillMode already declared above at line 689
+        if (isQuickFillMode && quickFillOverlay) {
+            quickFillOverlay.setInstructionState('refiner');
+        } else {
+            // Show guidance based on problem type (Mapper mode)
+            const problemMessages = {
+                'SLASHES': 'זוהו לוכסנים - לחץ מעבר להם להרחבה',
+                'DASHED_FLOOR': 'ריצפה מקווקווית - לחץ להרחבה',
+                'NO_WALLS': 'אין קירות ברורים - לחץ לקבוע גבולות',
+                'NORMAL': 'לחץ באמצע לאישור, או בחוץ להרחבה'
+            };
+            const message = problemMessages[initResult.problemType] || problemMessages['NORMAL'];
+            this._showToast(message, 'info');
+        }
     }
 
     /**
@@ -1201,6 +1207,12 @@ export class DrawController {
         this._refinerClickCount = 0;
         bboxRefiner.reset();
 
+        // V3.11: In QuickFill mode, update instruction bar to "typing" state
+        const isQuickFillMode = state.get('flowMode') === FlowModes.QUICK_FILL;
+        if (isQuickFillMode && quickFillOverlay) {
+            quickFillOverlay.setInstructionState('typing');
+        }
+
         // Create the field using existing flow
         this.startX = bbox.x;
         this.startY = bbox.y;
@@ -1240,7 +1252,14 @@ export class DrawController {
         this._refinerActive = false;
         this._refinerClickCount = 0;
         bboxRefiner.reset();
-        this._showToast('בוטל', 'warning');
+
+        // V3.11: In QuickFill mode, reset instruction bar; otherwise show toast
+        const isQuickFillMode = state.get('flowMode') === FlowModes.QUICK_FILL;
+        if (isQuickFillMode && quickFillOverlay) {
+            quickFillOverlay.setInstructionState('default', 'draw_text');
+        } else {
+            this._showToast('בוטל', 'warning');
+        }
     }
 
     /**
