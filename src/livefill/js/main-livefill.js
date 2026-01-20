@@ -2123,40 +2123,52 @@ function openSignatureModal(fieldId, editorEl, fieldWidth, fieldHeight) {
     const existing = document.getElementById('signature-modal');
     if (existing) existing.remove();
 
-    // Create modal
+    // Create modal with inline styles to ensure visibility
     const modal = document.createElement('div');
     modal.id = 'signature-modal';
     modal.className = 'signature-modal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+    `;
     modal.innerHTML = `
-        <div class="signature-modal-content">
-            <div class="signature-modal-header">
-                <h3>הוספת חתימה</h3>
-                <button class="signature-modal-close">×</button>
+        <div class="signature-modal-content" style="background: white; border-radius: 12px; width: 450px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); direction: rtl; padding: 0;">
+            <div class="signature-modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e5e7eb;">
+                <h3 style="margin: 0; font-size: 18px; font-weight: 600;">הוספת חתימה</h3>
+                <button class="signature-modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; padding: 4px; line-height: 1;">×</button>
             </div>
-            <div class="signature-tabs">
-                <button class="signature-tab active" data-tab="draw">✍️ ציור</button>
-                <button class="signature-tab" data-tab="type">⌨️ הקלדה</button>
+            <div class="signature-tabs" style="display: flex; border-bottom: 1px solid #e5e7eb;">
+                <button class="signature-tab active" data-tab="draw" style="flex: 1; padding: 12px; border: none; background: white; cursor: pointer; font-size: 14px; font-weight: 600; color: #2563eb; border-bottom: 2px solid #2563eb;">✍️ ציור</button>
+                <button class="signature-tab" data-tab="type" style="flex: 1; padding: 12px; border: none; background: #f9fafb; cursor: pointer; font-size: 14px;">⌨️ הקלדה</button>
             </div>
-            <div class="signature-tab-content">
-                <div class="signature-panel active" data-panel="draw">
-                    <canvas id="signature-canvas" width="400" height="150"></canvas>
-                    <div class="signature-draw-actions">
-                        <button class="signature-clear-btn">🗑️ נקה</button>
+            <div class="signature-tab-content" style="padding: 20px;">
+                <div class="signature-panel active" data-panel="draw" style="display: block;">
+                    <canvas id="signature-canvas" width="400" height="150" style="width: 100%; height: 150px; border: 2px dashed #e5e7eb; border-radius: 8px; cursor: crosshair; touch-action: none;"></canvas>
+                    <div class="signature-draw-actions" style="margin-top: 12px; text-align: center;">
+                        <button class="signature-clear-btn" style="padding: 8px 16px; border: 1px solid #e5e7eb; background: white; border-radius: 6px; cursor: pointer; font-size: 14px;">🗑️ נקה</button>
                     </div>
                 </div>
-                <div class="signature-panel" data-panel="type">
-                    <input type="text" id="signature-text-input" placeholder="הקלד את שמך..." dir="rtl">
-                    <div class="signature-preview" id="signature-type-preview"></div>
-                    <div class="signature-font-options">
-                        <button class="signature-font-btn active" data-font="cursive1">כתב יד 1</button>
-                        <button class="signature-font-btn" data-font="cursive2">כתב יד 2</button>
-                        <button class="signature-font-btn" data-font="cursive3">כתב יד 3</button>
+                <div class="signature-panel" data-panel="type" style="display: none;">
+                    <input type="text" id="signature-text-input" placeholder="הקלד את שמך..." dir="rtl" style="width: 100%; padding: 12px; font-size: 16px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 16px; box-sizing: border-box;">
+                    <div class="signature-preview" id="signature-type-preview" style="height: 60px; display: flex; align-items: center; justify-content: center; font-size: 32px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 16px; background: #f9fafb;"></div>
+                    <div class="signature-font-options" style="display: flex; gap: 8px;">
+                        <button class="signature-font-btn active" data-font="cursive1" style="flex: 1; padding: 8px; border: 1px solid #2563eb; background: rgba(37, 99, 235, 0.1); border-radius: 6px; cursor: pointer; font-size: 14px; color: #2563eb;">כתב יד 1</button>
+                        <button class="signature-font-btn" data-font="cursive2" style="flex: 1; padding: 8px; border: 1px solid #e5e7eb; background: white; border-radius: 6px; cursor: pointer; font-size: 14px;">כתב יד 2</button>
+                        <button class="signature-font-btn" data-font="cursive3" style="flex: 1; padding: 8px; border: 1px solid #e5e7eb; background: white; border-radius: 6px; cursor: pointer; font-size: 14px;">כתב יד 3</button>
                     </div>
                 </div>
             </div>
-            <div class="signature-modal-footer">
-                <button class="signature-cancel-btn">ביטול</button>
-                <button class="signature-confirm-btn">הוסף חתימה</button>
+            <div class="signature-modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; padding: 16px 20px; border-top: 1px solid #e5e7eb;">
+                <button class="signature-cancel-btn" style="padding: 10px 20px; border: 1px solid #e5e7eb; background: white; border-radius: 6px; cursor: pointer; font-size: 14px;">ביטול</button>
+                <button class="signature-confirm-btn" style="padding: 10px 20px; border: none; background: #2563eb; color: white; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;">הוסף חתימה</button>
             </div>
         </div>
     `;
