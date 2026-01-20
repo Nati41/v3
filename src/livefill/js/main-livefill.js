@@ -2115,6 +2115,7 @@ let _getSignatureCanvasData = null;
  * @param {number} fieldHeight - Field height in px
  */
 function openSignatureModal(fieldId, editorEl, fieldWidth, fieldHeight) {
+    console.log(`✍️ openSignatureModal called for ${fieldId}`);
     _signatureFieldId = fieldId;
     _signatureEditorEl = editorEl;
 
@@ -2161,12 +2162,14 @@ function openSignatureModal(fieldId, editorEl, fieldWidth, fieldHeight) {
     `;
 
     document.body.appendChild(modal);
+    console.log(`✍️ Modal appended to body, modal visible:`, modal, getComputedStyle(modal).display, getComputedStyle(modal).visibility);
 
     // Initialize signature pad
     initSignaturePad();
 
     // Attach modal event handlers
     attachSignatureModalHandlers(modal);
+    console.log(`✍️ Signature modal setup complete`);
 }
 
 /**
