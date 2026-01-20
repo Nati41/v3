@@ -1439,6 +1439,7 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
         }
         // ===== SIGNATURE FIELD =====
         else if (field.type === 'signature') {
+            console.log(`✍️ Creating signature field: ${fieldId}`);
             editor.classList.add('signature-editor');
 
             // Get current signature data if any
@@ -1477,10 +1478,12 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
 
             editor.style.cursor = 'pointer';
             editor.addEventListener('click', (e) => {
+                console.log(`✍️ Signature field clicked: ${fieldId}`);
                 e.stopPropagation();
                 selectField(fieldId);
                 openSignatureModal(fieldId, editor, w, h);
             });
+            console.log(`✍️ Signature field click handler attached: ${fieldId}`);
 
             overlay.appendChild(editor);
         }
