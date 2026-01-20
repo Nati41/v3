@@ -265,11 +265,19 @@
     // ============ MULTI-TIER COLUMN MATCHING ============
 
     /**
-     * Match Excel headers to table columns using 3-tier strategy
+     * Match Excel headers to table columns using multi-tier strategy
      * WITH CONTEXT ENFORCEMENT: employee ↔ employer matches are blocked
      *
+     * Matching Tiers (highest to lowest priority):
+     * - Tier 0.5: HeaderHints exact match (confidence: 1.0)
+     * - Tier 0.6: HeaderHints partial match (confidence: 0.95)
+     * - Tier 1:   Exact name match (confidence: 1.0)
+     * - Tier 1.5: Semantic/Alias match (confidence: 0.9)
+     * - Tier 2:   Normalized/Soft match (confidence: 0.85-0.7)
+     * - Tier 3:   Type-based fallback (confidence: 0.5)
+     *
      * @param {string[]} excelHeaders - Headers from Excel
-     * @param {Object[]} tableColumns - Columns from table mapping
+     * @param {Object[]} tableColumns - Columns from table mapping (may include headerHints)
      * @param {any[][]} sampleRows - First few rows for type detection
      * @returns {Object} { matches: { excelIndex: { columnId, confidence, tier } }, unmatched: [] }
      */
@@ -295,6 +303,110 @@
         const excelColumnTypes = excelHeaders.map((_, idx) => {
             const colValues = sampleRows.map(row => row[idx]);
             return detectColumnType(colValues);
+        });
+
+        // ============ TIER 0.5: HeaderHints Match (Highest Priority) ============
+        // Uses headerHints from mapping JSON for best Excel column matching
+        excelHeaders.forEach((header, excelIdx) => {
+            if (matches[excelIdx]) return;
+
+            const headerLower = header.toLowerCase().trim();
+            const excelContext = headerContexts[excelIdx];
+
+            for (const col of normalizedColumns) {
+                if (usedColumnIds.has(col.columnId)) continue;
+
+                // Check if header matches any of the headerHints
+                if (col.headerHints && Array.isArray(col.headerHints)) {
+                    const hintMatch = col.headerHints.some(hint => {
+                        if (!hint) return false;
+                        const hintLower = hint.toLowerCase().trim();
+                        // Exact match with hint
+                        return headerLower === hintLower;
+                    });
+
+                    if (hintMatch) {
+                        // CONTEXT CHECK: Block incompatible contexts
+                        if (RESOLVER_CONFIG.STRICT_CONTEXT_MATCHING &&
+                            !areContextsCompatible(excelContext, col.detectedContext)) {
+                            contextRejections.push({
+                                header,
+                                columnId: col.columnId,
+                                excelContext,
+                                fieldContext: col.detectedContext,
+                                tier: 0.5
+                            });
+                            console.warn(`[Tier0.5] CONTEXT BLOCKED: "${header}" (${excelContext}) → ${col.columnId} (${col.detectedContext})`);
+                            continue;
+                        }
+
+                        matches[excelIdx] = {
+                            columnId: col.columnId,
+                            hebrewName: col.hebrewName,
+                            englishId: col.englishId,
+                            confidence: 1.0,
+                            tier: 0.5,
+                            matchType: 'headerHint',
+                            context: col.detectedContext
+                        };
+                        usedColumnIds.add(col.columnId);
+                        console.log(`[Tier0.5] HeaderHint: "${header}" → ${col.columnId} (via headerHints)`);
+                        break;
+                    }
+                }
+            }
+        });
+
+        // ============ TIER 0.6: Partial HeaderHints Match ============
+        // Header contains hint OR hint contains header (for longer compound headers)
+        excelHeaders.forEach((header, excelIdx) => {
+            if (matches[excelIdx]) return;
+
+            const headerLower = header.toLowerCase().trim();
+            const excelContext = headerContexts[excelIdx];
+
+            for (const col of normalizedColumns) {
+                if (usedColumnIds.has(col.columnId)) continue;
+
+                if (col.headerHints && Array.isArray(col.headerHints)) {
+                    const partialMatch = col.headerHints.find(hint => {
+                        if (!hint || hint.length < 3) return false;
+                        const hintLower = hint.toLowerCase().trim();
+                        // Partial match: header contains hint OR hint contains header
+                        return (headerLower.includes(hintLower) || hintLower.includes(headerLower));
+                    });
+
+                    if (partialMatch) {
+                        // CONTEXT CHECK
+                        if (RESOLVER_CONFIG.STRICT_CONTEXT_MATCHING &&
+                            !areContextsCompatible(excelContext, col.detectedContext)) {
+                            contextRejections.push({
+                                header,
+                                columnId: col.columnId,
+                                excelContext,
+                                fieldContext: col.detectedContext,
+                                tier: 0.6
+                            });
+                            console.warn(`[Tier0.6] CONTEXT BLOCKED: "${header}" (${excelContext}) → ${col.columnId} (${col.detectedContext})`);
+                            continue;
+                        }
+
+                        matches[excelIdx] = {
+                            columnId: col.columnId,
+                            hebrewName: col.hebrewName,
+                            englishId: col.englishId,
+                            confidence: 0.95,
+                            tier: 0.6,
+                            matchType: 'headerHint-partial',
+                            matchedHint: partialMatch,
+                            context: col.detectedContext
+                        };
+                        usedColumnIds.add(col.columnId);
+                        console.log(`[Tier0.6] HeaderHint-Partial: "${header}" → ${col.columnId} (via "${partialMatch}")`);
+                        break;
+                    }
+                }
+            }
         });
 
         // ============ TIER 1: Exact Match ============

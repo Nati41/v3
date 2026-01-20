@@ -1,5 +1,12 @@
 /**
- * ScaffoldAvoidance.js
+ * ╔════════════════════════════════════════════════════════════════════════════╗
+ * ║                    🔒 LOCKED MODULE - DO NOT MODIFY 🔒                      ║
+ * ╠════════════════════════════════════════════════════════════════════════════╣
+ * ║  ScaffoldAvoidance.js - Pixel-based detection of printed scaffolding       ║
+ * ║                                                                            ║
+ * ║  STATUS: WORKING & TESTED (2026-01-20)                                     ║
+ * ║  USED BY: QuickFill (Mapper) + LiveFill                                    ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
  *
  * Pixel-based detection and HORIZONTAL avoidance of printed scaffolding
  * (slashes, lines, separators) within text field bboxes in Quick Fill mode.
@@ -13,9 +20,9 @@
  * 6. Isolated module - no dependencies on core rendering logic
  * 7. Additive only - returns original placement if no safe solution
  * 8. Feature-flagged - can be disabled via FEATURES.SCAFFOLD_AVOIDANCE
- * 9. QuickFill only - does not affect mapped-fill export
+ * 9. Works with both QuickFill AND LiveFill (v2.2.0)
  *
- * @version 2.1.0 - Added structured placement for date fields
+ * @version 2.2.0 - Added LiveFill support (canvas scaling + multi-page)
  */
 
 (function() {
@@ -65,9 +72,14 @@
     // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Get ImageData for a bbox region from the PDF image or canvas
+     * 🔒 LOCKED FUNCTION - Get ImageData for a bbox region from the PDF image or canvas
+     *
+     * CRITICAL: Handles both IMG and CANVAS elements with proper scaling
+     * CRITICAL: Uses window.__LIVEFILL_CURRENT_CANVAS__ for multi-page PDF support
+     *
      * Note: PDFEngine renders PDF to a temporary canvas, converts to PNG,
-     * and displays as <img>. So we need to read from the img element.
+     * and displays as <img>. LiveFill uses direct canvas rendering.
+     *
      * @param {Object} screenRect - { x, y, width, height } in screen coordinates
      * @returns {ImageData|null} - ImageData for the region, or null if unavailable
      */
@@ -79,9 +91,14 @@
         }
 
         // PDFEngine displays the PDF as an <img> element (not a canvas)
+        // For multi-page PDFs, check for specific page canvas reference first
+        // (set by LiveFill's renderPreviewText for the current field's page)
+        const specificCanvas = window.__LIVEFILL_CURRENT_CANVAS__;
+
         // Try to find the PDF image first, then fall back to canvas
         const pdfImage = document.querySelector('#pdf-container img');
-        const pdfCanvas = document.querySelector('#pdf-container canvas') ||
+        const pdfCanvas = specificCanvas ||
+                          document.querySelector('#pdf-container canvas') ||
                           document.querySelector('.pdf-canvas') ||
                           document.querySelector('canvas[id*="pdf"]');
 
@@ -101,9 +118,9 @@
             tempCanvas.height = Math.ceil(screenRect.height);
             const ctx = tempCanvas.getContext('2d');
 
-            // For img elements, we need to account for the displayed size vs natural size
-            // The screenRect is in screen coordinates (displayed size)
-            // But the img's natural size might be different (high DPI rendering)
+            // For img/canvas elements, we need to account for the displayed size vs actual size
+            // The screenRect is in screen coordinates (displayed CSS size)
+            // But the actual element size might be different (high DPI rendering)
             let scaleX = 1, scaleY = 1;
             if (sourceElement.tagName === 'IMG') {
                 const displayedWidth = sourceElement.offsetWidth || sourceElement.width;
@@ -116,6 +133,19 @@
                     scaleY = naturalHeight / displayedHeight;
                 }
                 console.log('[ScaffoldAvoidance] Image scale:', scaleX.toFixed(2), 'x', scaleY.toFixed(2));
+            } else if (sourceElement.tagName === 'CANVAS') {
+                // Canvas may be rendered at higher resolution than CSS display size
+                // (e.g., RENDER_SCALE * devicePixelRatio for crisp rendering)
+                const displayedWidth = sourceElement.clientWidth || sourceElement.offsetWidth;
+                const displayedHeight = sourceElement.clientHeight || sourceElement.offsetHeight;
+                const actualWidth = sourceElement.width;
+                const actualHeight = sourceElement.height;
+
+                if (actualWidth && displayedWidth) {
+                    scaleX = actualWidth / displayedWidth;
+                    scaleY = actualHeight / displayedHeight;
+                }
+                console.log('[ScaffoldAvoidance] Canvas scale:', scaleX.toFixed(2), 'x', scaleY.toFixed(2));
             }
 
             // Scale the coordinates from screen space to image space
@@ -667,11 +697,53 @@
         }
 
         // ═══════════════════════════════════════════════════
-        // COMPUTE: Sort slashes left→right, build zones
+        // VALIDATE: Check if these look like real slashes vs box borders
+        // Real slashes for DD/MM/YYYY:
+        // - First slash at ~25-40% of width (after DD)
+        // - Second slash at ~50-70% of width (after MM)
+        // - Both should be relatively thin (< 15% of width each)
         // ═══════════════════════════════════════════════════
         const sortedSlashes = [...inkRegions].sort((a, b) => a.x - b.x);
         const slash1 = sortedSlashes[0];  // First slash (after DD)
         const slash2 = sortedSlashes[1];  // Second slash (after MM)
+
+        const slash1Pct = slash1.x / rect.width;
+        const slash2Pct = slash2.x / rect.width;
+        const slash1WidthPct = slash1.width / rect.width;
+        const slash2WidthPct = slash2.width / rect.width;
+
+        console.log('[StructuredPlacement] Slash validation:', {
+            slash1: { x: slash1.x, pct: (slash1Pct * 100).toFixed(1) + '%', width: slash1.width },
+            slash2: { x: slash2.x, pct: (slash2Pct * 100).toFixed(1) + '%', width: slash2.width }
+        });
+
+        // Validation: slashes should be thin and in expected positions
+        // For DD/MM/YYYY: first slash after DD (~27-38%), second after MM (~52-65%)
+        // Being strict to avoid false positives from box borders
+        const isSlash1Valid = slash1Pct >= 0.27 && slash1Pct <= 0.38 && slash1WidthPct < 0.10;
+        const isSlash2Valid = slash2Pct >= 0.52 && slash2Pct <= 0.65 && slash2WidthPct < 0.10;
+
+        // Additional check: there should be reasonable space between slashes
+        const gapBetweenSlashes = (slash2.x - (slash1.x + slash1.width)) / rect.width;
+        const hasReasonableGap = gapBetweenSlashes >= 0.15 && gapBetweenSlashes <= 0.35;
+
+        if (!isSlash1Valid || !isSlash2Valid || !hasReasonableGap) {
+            console.log('[StructuredPlacement] Slash validation FAILED:', {
+                isSlash1Valid, isSlash2Valid, hasReasonableGap,
+                gapBetweenSlashes: (gapBetweenSlashes * 100).toFixed(1) + '%'
+            });
+            return {
+                ...FALLBACK,
+                reason: 'invalid_slash_positions',
+                debug: {
+                    slash1Pct: (slash1Pct * 100).toFixed(1) + '%',
+                    slash2Pct: (slash2Pct * 100).toFixed(1) + '%',
+                    gapBetweenSlashes: (gapBetweenSlashes * 100).toFixed(1) + '%'
+                }
+            };
+        }
+
+        console.log('[StructuredPlacement] Slash validation PASSED');
 
         // Define zones:
         // Zone 1: 0 → slash1.x (for DD)

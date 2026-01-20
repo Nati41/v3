@@ -60,6 +60,10 @@
                     <span class="icon">📤</span>
                     <span class="label">Export</span>
                 </button>
+                <button id="btn-continue-to-livefill" class="toolbar-btn" title="Continue to LiveFill">
+                    <span class="icon">▶️</span>
+                    <span class="label">המשך למילוי</span>
+                </button>
                 <button id="btn-load-template" class="toolbar-btn" title="Load AI Template">
                     <span class="icon">📋</span>
                     <span class="label">תבנית</span>
@@ -1091,6 +1095,49 @@
                 if (hasFields) parts.push(`${data.fields.length} fields`);
                 if (hasTables) parts.push(`${data.tables.length} tables`);
                 showToast(`Exported ${parts.join(' + ')}`, 'success');
+            });
+
+            // ============ CONTINUE TO LIVEFILL ============
+            document.getElementById('btn-continue-to-livefill')?.addEventListener('click', () => {
+                console.log('[Mapper] Continue to LiveFill clicked');
+
+                // 1. Use existing Export API - same validation + pipeline
+                const exportData = mapper.exportMappedFields();
+
+                // 2. If validation failed (null), errors already shown via Toast
+                if (!exportData) {
+                    console.log('[Mapper] Export validation failed, aborting');
+                    return;
+                }
+
+                // 3. Check if there's actual content
+                const hasFields = exportData.fields && exportData.fields.length > 0;
+                const hasTables = exportData.tables && exportData.tables.length > 0;
+
+                if (!hasFields && !hasTables) {
+                    ToastManager.warning('אין שדות או טבלאות לייצוא');
+                    return;
+                }
+
+                // 4. Save to sessionStorage
+                try {
+                    const payload = {
+                        v: 1,
+                        createdAt: Date.now(),
+                        fileName: state.get('document.fileName') || null,
+                        mapping: exportData
+                    };
+                    sessionStorage.setItem('tofesly.mapperToLiveFill.v1', JSON.stringify(payload));
+                    console.log('[Mapper] Saved mapping to sessionStorage:', payload.fileName);
+                } catch (e) {
+                    console.error('[Mapper] sessionStorage error:', e);
+                    ToastManager.error('שגיאה בשמירת המיפוי');
+                    return;
+                }
+
+                // 5. Navigate to LiveFill
+                const liveFillUrl = '../livefill/livefill.html?from=mapper';
+                window.location.href = liveFillUrl;
             });
 
         }

@@ -41,6 +41,9 @@ const AUTO_SAVE_DELAY = 3000; // 3 seconds after last change
 // Initialize toast system on page load
 window.addEventListener('DOMContentLoaded', () => {
     ToastManager.init();
+
+    // Check for pending mapping from Mapper (Session Bridge)
+    readPendingMapperMapping();
 });
 
 // ========================================
@@ -109,10 +112,12 @@ function tryRestoreAutoSave() {
 
         if (confirmed) {
             liveFillData = autoSaveData.liveFillData;
+            window.liveFillData = liveFillData;  // Update window reference
             lastSavedData = JSON.stringify(liveFillData);
 
             if (autoSaveData.fieldsMapping) {
                 fieldsMapping = autoSaveData.fieldsMapping;
+                window.fieldsMapping = fieldsMapping;  // Expose to window for Excel import
             }
 
             debugLog('✅ Auto-save restored', 'success');
@@ -209,18 +214,18 @@ function openFieldPopover(anchorElement, fieldMeta, fieldId) {
             }
             liveFillData[fieldId].value = value;
 
-            // Re-render using Export-matching renderer
+            // Re-render using Export-matching renderer (pass fieldMeta for structured segment caching)
             const fieldPt = JSON.parse(anchorElement.dataset.fieldPt || '{"width":100,"height":20}');
             const ptToPxScale = parseFloat(anchorElement.dataset.ptToPxScale || '1');
             const fieldStyle = liveFillData[fieldId]?.style || {};
-            renderPreviewText(anchorElement, value, fieldPt, ptToPxScale, fieldStyle);
+            renderPreviewText(anchorElement, value, fieldPt, ptToPxScale, fieldStyle, fieldMeta);
 
             // Trigger auto-save
             triggerAutoSave();
 
             // Use DataStoreManager if available
             if (window.DataStoreManager) {
-                window.DataStoreManager.writeManual(fieldId, value);
+                window.DataStoreManager.setFieldValue(fieldId, value);
             }
         },
         onCancel: () => {
@@ -273,7 +278,7 @@ function openTableCellPopover(anchorElement, col, tableId, rowIndex) {
 
             // Use DataStoreManager if available
             if (window.DataStoreManager) {
-                window.DataStoreManager.writeManual(`${tableId}[${rowIndex}][${colId}]`, value);
+                window.DataStoreManager.setTableCellValue(tableId, rowIndex, colId, value);
             }
         },
         onCancel: () => {
@@ -298,7 +303,9 @@ function cleanAllState() {
 
     pdfBytesSafe = null;
     fieldsMapping = null;
+    window.fieldsMapping = null;  // Clear window reference
     liveFillData = {};
+    window.liveFillData = liveFillData;  // Update window reference
     selectedFieldId = null;
     undoStack = [];
     redoStack = [];
@@ -567,6 +574,40 @@ async function handlePDFUpload(event) {
         debugLog('✅ PDF upload completed successfully', 'success');
         ToastManager.success(`PDF נטען בהצלחה (${pdfJsDoc.numPages} עמודים)`);
 
+        // ============ AUTO-LOAD PENDING MAPPING FROM MAPPER ============
+        if (window.__PENDING_MAPPING_FROM_MAPPER__) {
+            const pendingMapping = window.__PENDING_MAPPING_FROM_MAPPER__;
+            const pendingPdfName = window.__PENDING_PDF_NAME_FROM_MAPPER__;
+
+            // Clear globals
+            window.__PENDING_MAPPING_FROM_MAPPER__ = null;
+            window.__PENDING_PDF_NAME_FROM_MAPPER__ = null;
+
+            console.log('[LiveFill] Auto-loading pending mapping from Mapper');
+
+            // Warning if PDF name doesn't match (but don't block)
+            const uploadedName = file?.name?.replace(/\.pdf$/i, '') || '';
+            if (pendingPdfName && uploadedName &&
+                uploadedName.toLowerCase() !== pendingPdfName.toLowerCase()) {
+                ToastManager.warning(`שם הקובץ (${uploadedName}) שונה מהמיפוי (${pendingPdfName})`);
+            }
+
+            // Small delay to ensure PDF is fully ready
+            setTimeout(async () => {
+                try {
+                    const success = await applyMappingObject(pendingMapping);
+                    if (success) {
+                        ToastManager.success(`מיפוי נטען אוטומטית (${fieldsMapping.fields.length} שדות)`);
+                    } else {
+                        ToastManager.error('שגיאה בטעינת המיפוי האוטומטית');
+                    }
+                } catch (e) {
+                    console.error('[LiveFill] Auto-load mapping error:', e);
+                    ToastManager.error('שגיאה בטעינת המיפוי האוטומטית');
+                }
+            }, 300);
+        }
+
     } catch (err) {
         // ✅ Task B: Improved PDF loading error messages
         console.error('PDF loading error:', err);
@@ -586,41 +627,65 @@ async function handlePDFUpload(event) {
     }
 }
 
-// JSON Upload Handler
-/**
- * Loads field mapping from JSON file and initializes field overlays
- * @param {Event} event - File input change event
- */
-async function handleJSONUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
+// ============ MAPPER → LIVEFILL SESSION BRIDGE ============
 
-    debugLog(`📋 Starting JSON upload: ${file.name}`, 'info');
+/**
+ * Read pending mapping from Mapper (via sessionStorage)
+ * Called on page load, stores in globals for later use
+ */
+function readPendingMapperMapping() {
+    const STORAGE_KEY = 'tofesly.mapperToLiveFill.v1';
+    const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
     try {
-        document.querySelectorAll('.field-editor').forEach(el => el.remove());
+        const raw = sessionStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
 
-        // ✅ FIX: Clear old liveFillData when loading new JSON mapping
-        // This ensures fields start empty and don't retain values from previous sessions
-        liveFillData = {};
-        localStorage.removeItem('liveFillData');  // Also clear from localStorage
-        debugLog('🧹 Cleared previous liveFillData (memory + localStorage)', 'info');
+        const parsed = JSON.parse(raw);
 
-        const text = await file.text();
-
-        // ✅ Task B: Protected JSON parsing with clear error messages
-        let parsed;
-        try {
-            parsed = JSON.parse(text);
-        } catch (parseError) {
-            throw new Error('הקובץ אינו JSON תקין - יש לבדוק את תקינות המבנה');
+        // Check version
+        if (parsed.v !== 1) {
+            console.warn('[LiveFill] Unknown pending mapping version:', parsed.v);
+            sessionStorage.removeItem(STORAGE_KEY);
+            return;
         }
 
-        // --- FIX: Accept both formats (flat array OR { fields: [] }) ---
-        let mappingData = parsed;
+        // Check age
+        const age = Date.now() - (parsed.createdAt || 0);
+        if (age > MAX_AGE_MS) {
+            console.log('[LiveFill] Pending mapping expired (age:', Math.round(age / 1000), 'sec)');
+            sessionStorage.removeItem(STORAGE_KEY);
+            return;
+        }
 
+        // Clear immediately (one-shot)
+        sessionStorage.removeItem(STORAGE_KEY);
+
+        // Store in globals
+        window.__PENDING_MAPPING_FROM_MAPPER__ = parsed.mapping;
+        window.__PENDING_PDF_NAME_FROM_MAPPER__ = parsed.fileName;
+
+        console.log('[LiveFill] Found pending mapping from Mapper:', parsed.fileName);
+        ToastManager.info(`מיפוי מוכן לטעינה: ${parsed.fileName || 'document'}`);
+
+    } catch (e) {
+        console.error('[LiveFill] Error reading pending mapping:', e);
+        sessionStorage.removeItem(STORAGE_KEY);
+    }
+}
+
+/**
+ * Apply mapping data to LiveFill
+ * Used by both handleJSONUpload and auto-load from Mapper
+ * @param {Object} rawData - The mapping data (fill-engine-v2.0 format or legacy)
+ * @returns {Promise<boolean>} Success
+ */
+async function applyMappingObject(rawData) {
+    try {
+        let mappingData = rawData;
+
+        // Normalize format (legacy support)
         if (Array.isArray(mappingData)) {
-            // Mapping is directly an array (mapper output)
             mappingData = { fields: mappingData };
             debugLog('✅ JSON array wrapped into { fields: [...] } format');
         } else if (!Array.isArray(mappingData.fields)) {
@@ -630,13 +695,12 @@ async function handleJSONUpload(event) {
         // Load pre-filled data if present
         if (mappingData.data) {
             liveFillData = mappingData.data;
+            window.liveFillData = liveFillData;  // Update window reference
             debugLog(`✅ Loaded pre-filled data for ${Object.keys(liveFillData).length} fields`);
         }
 
-        parsed = mappingData;
-
-        // ✅ Normalize all fields before loading
-        parsed.fields = parsed.fields.map(field => {
+        // Normalize fields
+        mappingData.fields = (mappingData.fields || []).map(field => {
             const normalized = normalizeField(field);
             if (!normalized) {
                 debugLog(`⚠️ Skipping invalid field: ${field.id || 'unknown'}`, 'warning');
@@ -645,40 +709,38 @@ async function handleJSONUpload(event) {
             return normalized;
         }).filter(f => f !== null);
 
-        // ============ V1 → V2 MIGRATION ============
-        // Get PDF page dimensions for migration (default to A4 if PDF not loaded yet)
-        let pageWidth = 595;  // A4 default
-        let pageHeight = 842; // A4 default
-
+        // V1→V2 migration if needed
         if (pdfJsDoc) {
             try {
                 const firstPage = await pdfJsDoc.getPage(1);
                 const baseViewport = firstPage.getViewport({ scale: 1.0 });
-                pageWidth = baseViewport.width;
-                pageHeight = baseViewport.height;
+                const pageWidth = baseViewport.width;
+                const pageHeight = baseViewport.height;
                 debugLog(`📏 Using PDF page dimensions: ${pageWidth}x${pageHeight} points`, 'info');
+
+                const migrationResult = migrateV1toV2(mappingData.fields, pageWidth, pageHeight);
+                if (migrationResult.migrationCount > 0) {
+                    mappingData.fields = migrationResult.fields;
+                    showStatus(`המרת ${migrationResult.migrationCount} שדות לפורמט V2`, 'success');
+                }
             } catch (error) {
                 console.warn('⚠️ Could not get PDF page dimensions, using A4 defaults');
+                const migrationResult = migrateV1toV2(mappingData.fields, 595, 842);
+                mappingData.fields = migrationResult.fields;
             }
         }
 
-        // Auto-migrate V1 fields (bbox percentages) to V2 (PDF points)
-        const migrationResult = migrateV1toV2(parsed.fields, pageWidth, pageHeight);
-        if (migrationResult.migrationCount > 0) {
-            parsed.fields = migrationResult.fields;
-            showStatus(`המרת ${migrationResult.migrationCount} שדות לפורמט V2`, 'success');
-        }
+        // Set global state
+        fieldsMapping = mappingData;
+        window.fieldsMapping = mappingData;  // Expose to window for Excel import
+        debugLog(`✅ Mapping loaded: ${fieldsMapping.fields.length} fields`, 'success');
 
-        fieldsMapping = parsed;
-        debugLog(`✅ JSON loaded: ${fieldsMapping.fields.length} fields`, 'success');
-
-        // ============ TABLES: Copy to liveFillData.tables ============
-        if (fieldsMapping.tables && fieldsMapping.tables.length > 0) {
+        // Initialize tables if present
+        if (mappingData.tables && mappingData.tables.length > 0) {
             liveFillData.tables = {};
-            fieldsMapping.tables.forEach(table => {
+            mappingData.tables.forEach(table => {
                 const tableId = table.tableId || table.id;
                 if (tableId) {
-                    // Initialize empty rows array for this table
                     liveFillData.tables[tableId] = [];
                     const rowCount = table.rowCount || 0;
                     for (let i = 0; i < rowCount; i++) {
@@ -691,26 +753,72 @@ async function handleJSONUpload(event) {
                     }
                 }
             });
-            debugLog(`✅ Loaded ${fieldsMapping.tables.length} tables to liveFillData.tables`, 'success');
+            debugLog(`✅ Loaded ${mappingData.tables.length} tables to liveFillData.tables`, 'success');
         }
 
+        // Log field info
         fieldsMapping.fields.forEach((field, idx) => {
             const id = field.id || field.fieldId;
             const value = liveFillData[id]?.value || liveFillData[id]?.checked || '';
             debugLog(`Field ${idx + 1}: id=${id}, type=${field.type}, page=${field.page}, value="${value}"`);
         });
 
+        // Create overlays and update UI
         initializeLiveFillData();
 
         if (pdfJsDoc) {
-            debugLog('📞 Calling createFieldOverlays from JSON upload', 'info');
+            debugLog('📞 Calling createFieldOverlays from applyMappingObject', 'info');
             createFieldOverlays();
             debugLog('✅ Field overlays created', 'success');
         }
 
         checkExportEnabled();
-        showStatus('מיפוי שדות נטען בהצלחה', 'success');
-        ToastManager.success(`מיפוי נטען בהצלחה (${fieldsMapping.fields.length} שדות)`);
+
+        return true;
+
+    } catch (e) {
+        console.error('[LiveFill] applyMappingObject error:', e);
+        debugLog(`❌ applyMappingObject failed: ${e.message}`, 'error');
+        return false;
+    }
+}
+
+// JSON Upload Handler
+/**
+ * Loads field mapping from JSON file and initializes field overlays
+ * @param {Event} event - File input change event
+ */
+async function handleJSONUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    debugLog(`📋 Starting JSON upload: ${file.name}`, 'info');
+
+    try {
+        // Clear old data
+        document.querySelectorAll('.field-editor').forEach(el => el.remove());
+        liveFillData = {};
+        window.liveFillData = liveFillData;  // Update window reference
+        localStorage.removeItem('liveFillData');
+        debugLog('🧹 Cleared previous liveFillData (memory + localStorage)', 'info');
+
+        // Parse JSON
+        const text = await file.text();
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+        } catch (parseError) {
+            throw new Error('הקובץ אינו JSON תקין - יש לבדוק את תקינות המבנה');
+        }
+
+        // Apply mapping using shared function
+        const success = await applyMappingObject(parsed);
+        if (success) {
+            showStatus('מיפוי שדות נטען בהצלחה', 'success');
+            ToastManager.success(`מיפוי נטען בהצלחה (${fieldsMapping.fields.length} שדות)`);
+        } else {
+            throw new Error('שגיאה בטעינת המיפוי');
+        }
 
     } catch (err) {
         debugLog(`❌ JSON upload failed: ${err.message}`, 'error');
@@ -818,6 +926,49 @@ function initializeLiveFillData() {
         }
     });
 }
+
+/**
+ * Update field data from Excel import
+ * Called by livefill.html Excel import flow
+ * @param {string} fieldId - The field ID to update
+ * @param {*} value - The value to set
+ * @param {string} fieldType - The field type (text, checkbox, radio, date, etc.)
+ */
+function updateFieldDataFromExcel(fieldId, value, fieldType) {
+    if (!fieldId) return;
+
+    console.log(`[updateFieldDataFromExcel] ${fieldId} = ${value} (${fieldType})`);
+
+    if (fieldType === 'checkbox' || fieldType === 'radio') {
+        // Boolean value for checkbox/radio
+        if (!liveFillData[fieldId]) {
+            liveFillData[fieldId] = { checked: false };
+        }
+        liveFillData[fieldId].checked = Boolean(value);
+    } else {
+        // Text/number/date value
+        if (!liveFillData[fieldId]) {
+            liveFillData[fieldId] = {
+                value: '',
+                style: {
+                    fontFamily: 'David Libre',
+                    fontSize: 14,
+                    color: '#000000',
+                    alignment: 'right',
+                    letterSpacing: 0,
+                    wordSpacing: 0,
+                    opacity: 1
+                }
+            };
+        }
+        liveFillData[fieldId].value = String(value ?? '');
+    }
+}
+
+// Expose to window for Excel import
+window.updateFieldDataFromExcel = updateFieldDataFromExcel;
+window.createFieldOverlays = createFieldOverlays;
+window.liveFillData = liveFillData;
 
 // ===== NEW ARCHITECTURE: CSS Transform Zoom =====
 
@@ -1175,9 +1326,8 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
             + `canvasCSS=${canvas.clientWidth}x${canvas.clientHeight}`
         );
 
-        if (['text','number','date','signature','id_number','phone','email'].includes(field.type)) {
-            // Check if this field type should use popover (perGlyphBoxes fields)
-            const usePopover = ['number', 'date', 'id_number', 'phone'].includes(field.type);
+        if (['text','number','date','id_number','phone','email'].includes(field.type)) {
+            // All text-like fields use hidden input for direct typing (like QuickFill)
             const currentValue = liveFillData[fieldId]?.value || '';
             const fieldStyle = liveFillData[fieldId]?.style || {};
 
@@ -1196,22 +1346,14 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
             // Scale factor: pt → px (use average for consistency)
             const ptToPxScale = (scaleX + scaleY) / 2;
 
-            // Render using Export-matching renderer
-            renderPreviewText(editor, currentValue, fieldPt, ptToPxScale, fieldStyle);
+            // Render using Export-matching renderer (pass field for structured segment caching)
+            renderPreviewText(editor, currentValue, fieldPt, ptToPxScale, fieldStyle, field);
 
-            // Store render info for popover callback
+            // Store render info for input callback
             editor.dataset.fieldPt = JSON.stringify(fieldPt);
             editor.dataset.ptToPxScale = ptToPxScale;
 
-            if (usePopover && window.FieldInputPopover) {
-                // Use popover for structured input
-                editor.style.cursor = 'pointer';
-                editor.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    selectField(fieldId);
-                    openFieldPopover(editor, field, fieldId);
-                });
-            } else {
+            {
                 // Use hidden input + rendered output for Export-matching display
                 const hiddenInput = document.createElement('input');
                 hiddenInput.type = 'text';
@@ -1235,10 +1377,10 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
                     }
                     liveFillData[fieldId].value = newValue;
 
-                    // Re-render with Export-matching renderer
+                    // Re-render with Export-matching renderer (pass field for structured segment caching)
                     const fp = JSON.parse(editor.dataset.fieldPt || '{"width":100,"height":20}');
                     const sc = parseFloat(editor.dataset.ptToPxScale || '1');
-                    renderPreviewText(editor, newValue, fp, sc, liveFillData[fieldId]?.style || {});
+                    renderPreviewText(editor, newValue, fp, sc, liveFillData[fieldId]?.style || {}, field);
 
                     // Re-add hidden input (renderPreviewText clears innerHTML)
                     editor.appendChild(hiddenInput);
@@ -1274,8 +1416,8 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
 
             const ptToPxScale = (scaleX + scaleY) / 2;
 
-            // Render using Export-matching renderer
-            renderPreviewText(editor, value, fieldPt, ptToPxScale, fieldStyle);
+            // Render using Export-matching renderer (pass field for structured segment caching)
+            renderPreviewText(editor, value, fieldPt, ptToPxScale, fieldStyle, field);
 
             // Store render info for popover callback
             editor.dataset.fieldPt = JSON.stringify(fieldPt);
@@ -1293,6 +1435,53 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
                 editor.addEventListener('input', handleFieldInput);
                 editor.addEventListener('click', () => selectField(fieldId));
             }
+            overlay.appendChild(editor);
+        }
+        // ===== SIGNATURE FIELD =====
+        else if (field.type === 'signature') {
+            editor.classList.add('signature-editor');
+
+            // Get current signature data if any
+            const sigData = liveFillData[fieldId];
+
+            // Render existing signature or placeholder
+            // Check both 'mode' and 'signatureMode' for compatibility
+            const sigMode = sigData?.mode || sigData?.signatureMode;
+            const sigValue = sigData?.signatureData || sigData?.value;
+            if (sigValue && sigMode) {
+                if (sigMode === 'draw') {
+                    const img = document.createElement('img');
+                    img.src = sigValue;
+                    img.style.cssText = 'width: 100%; height: 100%; object-fit: contain;';
+                    editor.appendChild(img);
+                } else {
+                    // Typed signature
+                    const textEl = document.createElement('div');
+                    textEl.className = `signature-text signature-font-${sigData?.signatureFont || 'cursive1'}`;
+                    textEl.textContent = sigValue;
+                    textEl.style.cssText = `
+                        width: 100%;
+                        height: 100%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: ${Math.min(h * 0.6, 24)}px;
+                        color: #000;
+                    `;
+                    editor.appendChild(textEl);
+                }
+            } else {
+                // Show placeholder
+                editor.innerHTML = '<span class="signature-placeholder">לחץ להוספת חתימה</span>';
+            }
+
+            editor.style.cursor = 'pointer';
+            editor.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectField(fieldId);
+                openSignatureModal(fieldId, editor, w, h);
+            });
+
             overlay.appendChild(editor);
         }
         // NOTE: Tables are handled separately by createTableOverlaysForPage()
@@ -1333,7 +1522,11 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
         else if (field.type === 'radio') {
             editor.addEventListener('click', () => toggleRadio(fieldId));
             // Show filled circle ● when checked (matches Export engine drawCircle)
-            editor.textContent = liveFillData[fieldId]?.checked ? '●' : '';
+            const isChecked = liveFillData[fieldId]?.checked === true;
+            editor.textContent = isChecked ? '●' : '';
+            if (isChecked) {
+                editor.classList.add('checked');
+            }
             overlay.appendChild(editor);
         }
     });
@@ -1349,20 +1542,114 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
 // ╚════════════════════════════════════════════════════════════════════════════╝
 
 /**
- * 🔒 LOCKED FUNCTION - Renders text in Preview using Export-matching calculations.
- * Delegates to PreviewTextRenderer module for exact mathematical replication.
+ * ╔════════════════════════════════════════════════════════════════════════════╗
+ * ║                    🔒 LOCKED FUNCTION - DO NOT MODIFY 🔒                    ║
+ * ╠════════════════════════════════════════════════════════════════════════════╣
+ * ║  renderPreviewText - Export-matching text rendering for LiveFill           ║
+ * ║                                                                            ║
+ * ║  STATUS: WORKING & TESTED (2026-01-20)                                     ║
+ * ║  INCLUDES: ScaffoldAvoidance structured placement for dates with slashes   ║
+ * ║                                                                            ║
+ * ║  CRITICAL: Caches structuredSegments on field object for export            ║
+ * ║  CRITICAL: Uses same positioning as PreviewTextRenderer (bottom: 0 +       ║
+ * ║            translateY(15%) + line-height: 0.8)                             ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
  *
  * @param {HTMLElement} container - The field overlay element (positioned, sized)
  * @param {string} value - The text value to display
  * @param {Object} fieldPt - Field dimensions in PDF points {width, height}
  * @param {number} scale - Scale factor: pt → px (from viewport)
  * @param {Object} style - Style from liveFillData {fontSize, color, alignment}
+ * @param {Object} field - Optional field object to cache structuredSegments for export
  */
-function renderPreviewText(container, value, fieldPt, scale, style = {}) {
+function renderPreviewText(container, value, fieldPt, scale, style = {}, field = null) {
     if (!window.PreviewTextRenderer) {
         console.error('[renderPreviewText] PreviewTextRenderer not loaded');
         container.textContent = value || '';
         return;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // STRUCTURED PLACEMENT (V2.1) - Try segment-based rendering first
+    // For date fields with printed separators: DD / MM / YYYY
+    // Same logic as QuickFillOverlay for visual consistency
+    // ══════════════════════════════════════════════════════════════════
+    if (window.FEATURES?.SCAFFOLD_AVOIDANCE && window.ScaffoldAvoidance?.computeStructuredPlacement) {
+        try {
+            // Get screen rect from container's pixel position
+            // The container is positioned inside .fields-overlay which overlaps the canvas
+            const screenRect = {
+                x: container.offsetLeft,
+                y: container.offsetTop,
+                width: container.offsetWidth,
+                height: container.offsetHeight
+            };
+
+            if (screenRect.width > 0 && screenRect.height > 0) {
+                const fontSize = fieldPt.height * 0.65 * scale;
+
+                console.log('[LiveFill] Checking structured placement:', {
+                    text: value,
+                    screenRect: screenRect,
+                    fontSize: fontSize
+                });
+
+                // Find the correct canvas for this field's page
+                // The container is inside fields-overlay -> page-wrapper -> contains page-canvas
+                const pageWrapper = container.closest('.page-wrapper');
+                const pageCanvas = pageWrapper?.querySelector('.page-canvas');
+
+                // Temporarily store the canvas reference for ScaffoldAvoidance to use
+                // This ensures multi-page PDFs use the correct page's canvas
+                if (pageCanvas) {
+                    window.__LIVEFILL_CURRENT_CANVAS__ = pageCanvas;
+                }
+
+                const structured = window.ScaffoldAvoidance.computeStructuredPlacement({
+                    screenRect: screenRect,
+                    fontSize: fontSize,
+                    text: value
+                });
+
+                // Clear temporary reference
+                window.__LIVEFILL_CURRENT_CANVAS__ = null;
+
+                console.log('[LiveFill] Structured result: mode=' + structured.mode +
+                    ', reason=' + structured.reason +
+                    ', segments=' + (structured.segments ? structured.segments.length : 0));
+
+                if (structured.mode === 'structured' && structured.segments) {
+                    // Cache segments on field object for export (same as QuickFill)
+                    if (field) {
+                        field.structuredSegments = structured.segments;
+                        field.screenRect = screenRect;
+                        field.isQuickFill = true;  // Enable structured export path
+                        console.log('[LiveFill] Cached structuredSegments on field for export');
+                    }
+
+                    // Add CSS class for overflow:visible
+                    container.classList.add('structured-placement');
+
+                    console.log('[LiveFill] Rendering structured segments:', structured.segments);
+
+                    // Render structured segments
+                    _renderStructuredSegmentsLiveFill(container, structured.segments, fontSize, fieldPt.height * scale, screenRect.width);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('[renderPreviewText] ERROR in structured placement:', err);
+        }
+    }
+
+    // Remove structured class if fallback
+    container.classList.remove('structured-placement');
+
+    // Clear any previously cached structured data (to prevent stale export)
+    if (field) {
+        field.structuredSegments = null;
+        field.screenRect = null;
+        field.isQuickFill = false;
     }
 
     // 🔒 Use the Export-matching renderer - DO NOT MODIFY
@@ -1371,6 +1658,64 @@ function renderPreviewText(container, value, fieldPt, scale, style = {}) {
         scale,
         style
     });
+}
+
+/**
+ * ╔════════════════════════════════════════════════════════════════════════════╗
+ * ║              🔒 LOCKED FUNCTION - DO NOT MODIFY 🔒                          ║
+ * ╠════════════════════════════════════════════════════════════════════════════╣
+ * ║  _renderStructuredSegmentsLiveFill - Renders date segments (DD/MM/YYYY)    ║
+ * ║                                                                            ║
+ * ║  STATUS: WORKING & TESTED (2026-01-20)                                     ║
+ * ║  MUST MATCH: QuickFillOverlay._renderStructuredSegments                    ║
+ * ║  MUST MATCH: export-engine.js structured placement output                  ║
+ * ║                                                                            ║
+ * ║  CRITICAL POSITIONING (same as PreviewTextRenderer):                       ║
+ * ║  • bottom: 0 (anchor to container bottom)                                  ║
+ * ║  • transform: translateY(15%) (push down for baseline alignment)           ║
+ * ║  • line-height: 0.8 (reduce text box height)                               ║
+ * ╚════════════════════════════════════════════════════════════════════════════╝
+ *
+ * @param {HTMLElement} container - Field element
+ * @param {Array} segments - Array of { text, x, width }
+ * @param {number} fontSize - Font size in pixels
+ * @param {number} containerHeight - Container height in pixels
+ * @param {number} bboxWidth - Original bbox width
+ */
+function _renderStructuredSegmentsLiveFill(container, segments, fontSize, containerHeight, bboxWidth) {
+    // Clear container but keep reference to hidden input
+    const hiddenInput = container.querySelector('.livefill-hidden-input');
+    container.innerHTML = '';
+
+    // Use bboxWidth for percentage calculations
+    const refWidth = bboxWidth || container.offsetWidth;
+
+    // Create each segment span positioned relative to container
+    // Use same positioning formula as PreviewTextRenderer for consistency
+    for (const segment of segments) {
+        const span = document.createElement('span');
+        span.textContent = segment.text;
+        // Use bottom: 0 + translateY(15%) like PreviewTextRenderer
+        // This anchors text to bottom with small gap (same as export-engine)
+        span.style.cssText = `
+            position: absolute;
+            left: ${segment.x}px;
+            bottom: 0;
+            transform: translateY(15%);
+            font-size: ${fontSize}px;
+            font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
+            line-height: 0.8;
+            white-space: nowrap;
+            pointer-events: none;
+            color: black;
+        `;
+        container.appendChild(span);
+    }
+
+    // Re-add hidden input if it existed
+    if (hiddenInput) {
+        container.appendChild(hiddenInput);
+    }
 }
 
 /**
@@ -1705,6 +2050,8 @@ function toggleRadio(fieldId) {
     const editor = document.querySelector(`[data-field-id="${fieldId}"]`);
     // Show filled circle ● when checked (matches Export engine drawCircle)
     editor.textContent = liveFillData[fieldId].checked ? '●' : '';
+    // Add checked class for styling
+    editor.classList.toggle('checked', liveFillData[fieldId].checked);
 }
 
 function selectField(fieldId) {
@@ -1746,6 +2093,300 @@ function deselectField() {
     selectedFieldId = null;
     document.getElementById('field-controls').style.display = 'none';
     document.getElementById('no-field-selected').style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIGNATURE MODAL (ported from QuickFill)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _signatureFieldId = null;
+let _signatureEditorEl = null;
+let _clearSignatureCanvas = null;
+let _getSignatureCanvasData = null;
+
+/**
+ * Open signature modal for a field
+ * @param {string} fieldId - The field ID
+ * @param {HTMLElement} editorEl - The editor element (for updating)
+ * @param {number} fieldWidth - Field width in px
+ * @param {number} fieldHeight - Field height in px
+ */
+function openSignatureModal(fieldId, editorEl, fieldWidth, fieldHeight) {
+    _signatureFieldId = fieldId;
+    _signatureEditorEl = editorEl;
+
+    // Remove existing modal if any
+    const existing = document.getElementById('signature-modal');
+    if (existing) existing.remove();
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.id = 'signature-modal';
+    modal.className = 'signature-modal';
+    modal.innerHTML = `
+        <div class="signature-modal-content">
+            <div class="signature-modal-header">
+                <h3>הוספת חתימה</h3>
+                <button class="signature-modal-close">×</button>
+            </div>
+            <div class="signature-tabs">
+                <button class="signature-tab active" data-tab="draw">✍️ ציור</button>
+                <button class="signature-tab" data-tab="type">⌨️ הקלדה</button>
+            </div>
+            <div class="signature-tab-content">
+                <div class="signature-panel active" data-panel="draw">
+                    <canvas id="signature-canvas" width="400" height="150"></canvas>
+                    <div class="signature-draw-actions">
+                        <button class="signature-clear-btn">🗑️ נקה</button>
+                    </div>
+                </div>
+                <div class="signature-panel" data-panel="type">
+                    <input type="text" id="signature-text-input" placeholder="הקלד את שמך..." dir="rtl">
+                    <div class="signature-preview" id="signature-type-preview"></div>
+                    <div class="signature-font-options">
+                        <button class="signature-font-btn active" data-font="cursive1">כתב יד 1</button>
+                        <button class="signature-font-btn" data-font="cursive2">כתב יד 2</button>
+                        <button class="signature-font-btn" data-font="cursive3">כתב יד 3</button>
+                    </div>
+                </div>
+            </div>
+            <div class="signature-modal-footer">
+                <button class="signature-cancel-btn">ביטול</button>
+                <button class="signature-confirm-btn">הוסף חתימה</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Initialize signature pad
+    initSignaturePad();
+
+    // Attach modal event handlers
+    attachSignatureModalHandlers(modal);
+}
+
+/**
+ * Initialize the signature drawing canvas
+ */
+function initSignaturePad() {
+    const canvas = document.getElementById('signature-canvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    // Set drawing style
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Clear canvas with white background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const startDrawing = (e) => {
+        isDrawing = true;
+        const rect = canvas.getBoundingClientRect();
+        lastX = e.clientX - rect.left;
+        lastY = e.clientY - rect.top;
+    };
+
+    const draw = (e) => {
+        if (!isDrawing) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        lastX = x;
+        lastY = y;
+    };
+
+    const stopDrawing = () => {
+        isDrawing = false;
+    };
+
+    // Mouse events
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+
+    // Touch events
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        startDrawing({ clientX: touch.clientX, clientY: touch.clientY });
+    });
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        draw({ clientX: touch.clientX, clientY: touch.clientY });
+    });
+    canvas.addEventListener('touchend', stopDrawing);
+
+    // Store reference to clear function
+    _clearSignatureCanvas = () => {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    // Store reference to get image data
+    _getSignatureCanvasData = () => {
+        return canvas.toDataURL('image/png');
+    };
+}
+
+/**
+ * Attach event handlers to signature modal
+ */
+function attachSignatureModalHandlers(modal) {
+    // Helper to clear pending and close
+    const cancelAndClose = () => {
+        _signatureFieldId = null;
+        _signatureEditorEl = null;
+        modal.remove();
+    };
+
+    // Close button
+    modal.querySelector('.signature-modal-close').addEventListener('click', cancelAndClose);
+
+    // Cancel button
+    modal.querySelector('.signature-cancel-btn').addEventListener('click', cancelAndClose);
+
+    // Click outside to close
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) cancelAndClose();
+    });
+
+    // Tab switching
+    modal.querySelectorAll('.signature-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            modal.querySelectorAll('.signature-tab').forEach(t => t.classList.remove('active'));
+            modal.querySelectorAll('.signature-panel').forEach(p => p.classList.remove('active'));
+            tab.classList.add('active');
+            modal.querySelector(`[data-panel="${tabName}"]`).classList.add('active');
+        });
+    });
+
+    // Clear canvas button
+    modal.querySelector('.signature-clear-btn').addEventListener('click', () => {
+        if (_clearSignatureCanvas) _clearSignatureCanvas();
+    });
+
+    // Text input for typed signature
+    const textInput = modal.querySelector('#signature-text-input');
+    const preview = modal.querySelector('#signature-type-preview');
+    let selectedFont = 'cursive1';
+
+    const updatePreview = () => {
+        const text = textInput.value || 'חתימה';
+        preview.textContent = text;
+        preview.className = `signature-preview signature-font-${selectedFont}`;
+    };
+
+    textInput.addEventListener('input', updatePreview);
+    updatePreview();
+
+    // Font selection
+    modal.querySelectorAll('.signature-font-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            modal.querySelectorAll('.signature-font-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedFont = btn.dataset.font;
+            updatePreview();
+        });
+    });
+
+    // Confirm button
+    modal.querySelector('.signature-confirm-btn').addEventListener('click', () => {
+        const activeTab = modal.querySelector('.signature-tab.active').dataset.tab;
+
+        if (activeTab === 'draw') {
+            // Get canvas data
+            const imageData = _getSignatureCanvasData();
+            applySignatureToField(imageData, 'draw');
+        } else {
+            // Get typed signature
+            const text = textInput.value;
+            if (!text) {
+                alert('יש להקליד חתימה');
+                return;
+            }
+            applySignatureToField(text, 'type', selectedFont);
+        }
+
+        modal.remove();
+    });
+}
+
+/**
+ * Apply signature data to the field
+ * @param {string} data - Image data URL or text
+ * @param {string} mode - 'draw' or 'type'
+ * @param {string} font - Font name for typed signatures
+ */
+function applySignatureToField(data, mode, font = 'cursive1') {
+    if (!_signatureFieldId || !_signatureEditorEl) return;
+
+    const fieldId = _signatureFieldId;
+    const editorEl = _signatureEditorEl;
+
+    // Store signature data in liveFillData
+    // Export engine expects: data.value (base64 for draw, text for type), data.mode
+    if (!liveFillData[fieldId]) {
+        liveFillData[fieldId] = { value: '', style: getDefaultStyle() };
+    }
+    // For export engine compatibility:
+    // - value: the actual signature data (base64 URL for draw, text for type)
+    // - mode: 'draw' or 'type'
+    // - signatureFont: font name for typed signatures (for preview only)
+    liveFillData[fieldId].value = data;
+    liveFillData[fieldId].mode = mode;
+    liveFillData[fieldId].signatureData = data;  // Keep for preview
+    liveFillData[fieldId].signatureMode = mode;  // Keep for preview
+    liveFillData[fieldId].signatureFont = font;
+
+    // Update the editor element
+    editorEl.innerHTML = '';
+
+    if (mode === 'draw') {
+        const img = document.createElement('img');
+        img.src = data;
+        img.style.cssText = 'width: 100%; height: 100%; object-fit: contain;';
+        editorEl.appendChild(img);
+    } else {
+        const h = editorEl.clientHeight || 30;
+        const textEl = document.createElement('div');
+        textEl.className = `signature-text signature-font-${font}`;
+        textEl.textContent = data;
+        textEl.style.cssText = `
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: ${Math.min(h * 0.6, 24)}px;
+            color: #000;
+        `;
+        editorEl.appendChild(textEl);
+    }
+
+    triggerAutoSave();
+    console.log(`[LiveFill] Signature applied to field ${fieldId}, mode: ${mode}`);
+
+    // Clear references
+    _signatureFieldId = null;
+    _signatureEditorEl = null;
 }
 
 // ⚡ Debounced wrapper for field style updates
@@ -1818,6 +2459,7 @@ function undoLastChange() {
     try {
         redoStack.push(JSON.stringify(liveFillData));
         liveFillData = JSON.parse(undoStack.pop());
+        window.liveFillData = liveFillData;  // Update window reference
         createFieldOverlays();
         showStatus('פעולה בוטלה', 'success');
     } catch (e) {
@@ -1833,6 +2475,7 @@ function redoChange() {
     try {
         undoStack.push(JSON.stringify(liveFillData));
         liveFillData = JSON.parse(redoStack.pop());
+        window.liveFillData = liveFillData;  // Update window reference
         createFieldOverlays();
         showStatus('פעולה שוחזרה', 'success');
     } catch (e) {
@@ -1917,6 +2560,7 @@ async function loadProgress() {
         if (savedFields) {
             try {
                 fieldsMapping = JSON.parse(savedFields);
+                window.fieldsMapping = fieldsMapping;  // Expose to window for Excel import
             } catch (e) {
                 console.error('Failed to parse saved fields from localStorage:', e);
                 localStorage.removeItem('liveFillFieldsMapping');
@@ -1926,6 +2570,7 @@ async function loadProgress() {
         if (savedData) {
             try {
                 liveFillData = JSON.parse(savedData);
+                window.liveFillData = liveFillData;  // Update window reference
             } catch (e) {
                 console.error('Failed to parse saved data from localStorage:', e);
                 localStorage.removeItem('liveFillData');

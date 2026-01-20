@@ -1025,7 +1025,21 @@ class QuickFillOverlay {
     }
 
     /**
-     * Render structured segments at computed X positions
+     * ╔════════════════════════════════════════════════════════════════════════╗
+     * ║              🔒 LOCKED FUNCTION - DO NOT MODIFY 🔒                      ║
+     * ╠════════════════════════════════════════════════════════════════════════╣
+     * ║  _renderStructuredSegments - Renders date segments (DD/MM/YYYY)        ║
+     * ║                                                                        ║
+     * ║  STATUS: WORKING & TESTED (2026-01-20)                                 ║
+     * ║  MUST MATCH: LiveFill _renderStructuredSegmentsLiveFill                ║
+     * ║  MUST MATCH: export-engine.js structured placement output              ║
+     * ║                                                                        ║
+     * ║  CRITICAL POSITIONING (same as PreviewTextRenderer):                   ║
+     * ║  • bottom: 0 (anchor to container bottom)                              ║
+     * ║  • transform: translateY(15%) (push down for baseline alignment)       ║
+     * ║  • line-height: 0.8 (reduce text box height)                           ║
+     * ╚════════════════════════════════════════════════════════════════════════╝
+     *
      * @param {HTMLElement} container - Box element
      * @param {Array} segments - Array of { text, x, width }
      * @param {number} fontSize - Font size in pixels
@@ -1044,20 +1058,22 @@ class QuickFillOverlay {
         const refWidth = bboxWidth || container.offsetWidth;
 
         // Create each segment span positioned relative to container
+        // Use same positioning formula as PreviewTextRenderer for consistency
         for (const segment of segments) {
             // Use pixel positioning directly (segment.x is in screen pixels relative to bbox)
             // This matches how Export calculates: segmentX = xPDF + (segment.x * scale)
             const span = document.createElement('span');
             span.textContent = segment.text;
-            // Use pixel positioning for X (more accurate than percentage)
-            // Use bottom anchoring like Export (15% from bottom, minimum 2px)
-            const bottomPadding = Math.max(2, containerHeight * 0.15);
+            // Use bottom: 0 + translateY(15%) like PreviewTextRenderer
+            // This anchors text to bottom with small gap (same as export-engine)
             span.style.cssText = `
                 position: absolute;
                 left: ${segment.x}px;
-                bottom: ${bottomPadding}px;
+                bottom: 0;
+                transform: translateY(15%);
                 font-size: ${fontSize}px;
                 font-family: 'David Libre', 'David', 'Arial Hebrew', serif;
+                line-height: 0.8;
                 white-space: nowrap;
                 pointer-events: none;
                 color: black;
