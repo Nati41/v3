@@ -419,7 +419,7 @@ export class DrawController {
         }
 
         const tool = state.get('tool');
-        return [Tools.DRAW_TEXT, Tools.DRAW_CHECKBOX, Tools.DRAW_RADIO, Tools.DRAW_TABLE, Tools.DRAW_SIGNATURE, Tools.DRAW_CELL, Tools.CAPTURE_NAME].includes(tool);
+        return [Tools.DRAW_TEXT, Tools.DRAW_CHECKBOX, Tools.DRAW_RADIO, Tools.DRAW_CIRCLE, Tools.DRAW_TABLE, Tools.DRAW_SIGNATURE, Tools.DRAW_CELL, Tools.CAPTURE_NAME].includes(tool);
     }
 
     /**
@@ -1621,7 +1621,7 @@ export class DrawController {
 
         // Determine field type from current tool
         const tool = state.get('tool');
-        const isCheckboxOrRadio = tool === Tools.DRAW_CHECKBOX || tool === Tools.DRAW_RADIO;
+        const isCheckboxOrRadio = tool === Tools.DRAW_CHECKBOX || tool === Tools.DRAW_RADIO || tool === Tools.DRAW_CIRCLE;
         const isCell = tool === Tools.DRAW_CELL;  // V3.10: Cell type - no size constraints
         const isSignature = tool === Tools.DRAW_SIGNATURE;
 
@@ -1688,6 +1688,9 @@ export class DrawController {
             case Tools.DRAW_RADIO:
                 fieldType = 'radio';
                 break;
+            case Tools.DRAW_CIRCLE:
+                fieldType = 'circle';
+                break;
             case Tools.DRAW_CELL:
                 fieldType = 'cell';
                 break;
@@ -1701,8 +1704,8 @@ export class DrawController {
         // Use finalX/Y/Width/Height (may be adjusted for one-click creation)
         const bbox = overlayRenderer.screenToBbox({ x: finalX, y: finalY, width: finalWidth, height: finalHeight });
 
-        // For checkbox/radio/cell, also store anchor point (center of the field)
-        if (fieldType === 'checkbox' || fieldType === 'radio' || fieldType === 'cell') {
+        // For checkbox/radio/circle/cell, also store anchor point (center of the field)
+        if (fieldType === 'checkbox' || fieldType === 'radio' || fieldType === 'circle' || fieldType === 'cell') {
             const centerX = finalX + finalWidth / 2;
             const centerY = finalY + finalHeight / 2;
             const anchor = overlayRenderer.screenToAnchor(centerX, centerY);
@@ -1754,10 +1757,11 @@ export class DrawController {
             if (existingField) {
                 const currentPage = state.get('document.currentPage');
 
-                // V3.10: For checkbox/radio/cell, ALWAYS store overlayWidth/Height
+                // V3.10: For checkbox/radio/circle/cell, ALWAYS store overlayWidth/Height
                 // This ensures proper rendering and duplication for both symbol and auto modes
                 const isMarkField = existingField.type === 'checkbox' ||
                                    existingField.type === 'radio' ||
+                                   existingField.type === 'circle' ||
                                    existingField.type === 'cell';
 
                 if (isMarkField) {
@@ -1866,6 +1870,9 @@ export class DrawController {
             // NO POPUP - semantic data will be collected in Review screen
             // ═══════════════════════════════════════════════════════════════
 
+            // Get current page for field assignment
+            const currentPage = state.get('document.currentPage');
+
             // Auto-detect structure using FieldIntentResolver
             const detectedStructure = this._autoDetectStructure(fieldType, bbox);
 
@@ -1875,6 +1882,7 @@ export class DrawController {
                 field = state.addField({
                     type: this.pendingFieldData.type || fieldType,
                     bbox: bbox,
+                    page: currentPage,
                     isMapped: true,
                     status: 'draft',
                     // Label data from selection
@@ -1921,6 +1929,7 @@ export class DrawController {
                 field = state.addField({
                     type: fieldType,
                     bbox: bbox,
+                    page: currentPage,
                     isMapped: true,
                     status: 'draft',
                     detectedType: fieldType,
@@ -1928,10 +1937,14 @@ export class DrawController {
                     ...fieldData
                 });
 
-                console.log('[DrawController] Created DRAFT field (no label):', field.id, 'detected:', detectedStructure);
+                if (field) {
+                    console.log('[DrawController] Created DRAFT field (no label):', field.id, 'detected:', detectedStructure);
 
-                // Show visual feedback
-                this._showDraftFeedback(field, detectedStructure);
+                    // Show visual feedback
+                    this._showDraftFeedback(field, detectedStructure);
+                } else {
+                    console.warn('[DrawController] Failed to create field - validation blocked');
+                }
             }
         }
 
@@ -3306,9 +3319,9 @@ export class DrawController {
         // Add small gap between fields
         const deltaY = h + (h * 0.1); // 10% gap
 
-        // V3.10: Get overlay dimensions from source field for checkbox/radio
+        // V3.10: Get overlay dimensions from source field for checkbox/radio/circle
         // Use overlayWidth/overlayHeight if available, otherwise calculate from bbox
-        const isCheckboxOrRadio = sourceField.type === 'checkbox' || sourceField.type === 'radio';
+        const isCheckboxOrRadio = sourceField.type === 'checkbox' || sourceField.type === 'radio' || sourceField.type === 'circle';
         let sourceOverlayWidth = sourceField.overlayWidth;
         let sourceOverlayHeight = sourceField.overlayHeight;
 

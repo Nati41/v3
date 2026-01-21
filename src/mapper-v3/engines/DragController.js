@@ -242,7 +242,7 @@ export class DragController {
         if (!container) return;
 
         // ============ EXACT from V2 line 677-678 ============
-        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio';
+        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio' || this.activeField.type === 'circle';
 
         const coords = this._getLayerCoordinates(clientX, clientY);
         let newX = coords.x - this.dragStart.x;
@@ -294,7 +294,7 @@ export class DragController {
         const newY = parseFloat(element.style.top);
 
         // ============ EXACT from V2 line 677 ============
-        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio';
+        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio' || this.activeField.type === 'circle';
 
         if (isCheckboxOrRadio) {
             // ============ EXACT from V2 lines 699-728: Checkbox/Radio anchor calculation ============
@@ -442,7 +442,7 @@ export class DragController {
         if (!container) return;
 
         // ============ EXACT from V2 line 841 ============
-        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio';
+        const isCheckboxOrRadio = this.activeField.type === 'checkbox' || this.activeField.type === 'radio' || this.activeField.type === 'circle';
 
         const coords = this._getLayerCoordinates(clientX, clientY);
         let x = coords.x;

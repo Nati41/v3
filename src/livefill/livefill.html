@@ -352,6 +352,32 @@
             background: rgba(255, 152, 0, 0.1) !important;
         }
 
+        /* Circle - for circling answers (like multiple choice) */
+        /* NOT active: faint dashed border to show the area */
+        .field-editor.circle,
+        .field-editor[data-field-type="circle"],
+        .field-editor.circle-editor {
+            border-radius: 50% !important;
+            border: 1px dashed rgba(200, 200, 200, 0.5) !important;
+            background: transparent !important;
+            cursor: pointer !important;
+        }
+
+        .field-editor.circle:hover,
+        .field-editor[data-field-type="circle"]:hover,
+        .field-editor.circle-editor:hover {
+            border: 2px dashed rgba(244, 67, 54, 0.7) !important;
+            background: rgba(244, 67, 54, 0.08) !important;
+        }
+
+        /* ACTIVE: solid black circle around the answer */
+        .field-editor.circle.circled,
+        .field-editor[data-field-type="circle"].circled,
+        .field-editor.circle-editor.circled {
+            border: 3px solid #000000 !important;
+            background: transparent !important;
+        }
+
         /* Structured Placement - for date fields with printed slashes */
         .field-editor.structured-placement {
             overflow: visible !important;

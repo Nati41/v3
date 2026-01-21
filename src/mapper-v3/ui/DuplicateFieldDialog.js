@@ -297,7 +297,7 @@ class DuplicateFieldDialog {
         const pdfDims = state.state.pdfDimensions;
 
         // V3.10: Fix source field overlayWidth/overlayHeight if missing (for proper rendering)
-        if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell') &&
+        if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle' || field.type === 'cell') &&
             (!field.overlayWidth || !field.overlayHeight)) {
             const calcOverlayW = w * pdfDims.width;
             const calcOverlayH = h * pdfDims.height;
@@ -312,7 +312,7 @@ class DuplicateFieldDialog {
         // Prevents duplicating oversized checkbox fields
         // V3.10: Skip constraint for cell type and placementMode='auto' - preserve full size
         const MAX_CHECKBOX_NORM = 30 / pdfDims.width; // ~30 pixels in normalized coords
-        const isCheckboxOrRadio = field.type === 'checkbox' || field.type === 'radio';
+        const isCheckboxOrRadio = field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle';
         const isCell = field.type === 'cell';  // Cell type NEVER gets constrained
         const isOversized = w > MAX_CHECKBOX_NORM || h > MAX_CHECKBOX_NORM;
 

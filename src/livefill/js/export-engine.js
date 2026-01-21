@@ -202,24 +202,43 @@ window.ExportEngine = {
                 const size = Math.min(box.width, box.height) * 0.70;  // 70% of box
 
                 if (type === "checkbox" || type === "V") {
-                    // ✔ ZapfDingbats checkmark - optimized centering
-                    const glyph = "✔";
-                    const checkX = centerX - size / 2.0;
-                    const checkY = centerY - size / 2.25;
+                    // ✔ Draw a simple checkmark using lines (more precise than font glyph)
+                    // This gives us exact control over positioning
 
-                    // Draw twice for darker, stronger appearance
-                    page.drawText(glyph, {
-                        x: checkX,
-                        y: checkY,
-                        size: size,
-                        font: zapfFont,
+                    // Shrink the effective box by 20% padding on each side
+                    const padding = Math.min(box.width, box.height) * 0.2;
+                    const innerX = box.x + padding;
+                    const innerY = box.y + padding;
+                    const innerW = box.width - padding * 2;
+                    const innerH = box.height - padding * 2;
+
+                    // Draw V shape with two lines
+                    const lineWidth = Math.max(1, Math.min(box.width, box.height) * 0.12);
+
+                    // V checkmark points (relative to inner box):
+                    // Start at top-left, go to bottom-center, then to top-right
+                    const x1 = innerX;                    // top-left X
+                    const y1 = innerY + innerH * 0.7;     // top-left Y
+                    const x2 = innerX + innerW * 0.35;    // bottom-center X
+                    const y2 = innerY + innerH * 0.2;     // bottom-center Y
+                    const x3 = innerX + innerW;           // top-right X
+                    const y3 = innerY + innerH;           // top-right Y
+
+                    console.log(`✅ V_LINES: box=(${box.x.toFixed(1)}, ${box.y.toFixed(1)}, ${box.width.toFixed(1)}x${box.height.toFixed(1)}), inner=(${innerX.toFixed(1)}, ${innerY.toFixed(1)}, ${innerW.toFixed(1)}x${innerH.toFixed(1)})`);
+
+                    // Draw first line of V (left side)
+                    page.drawLine({
+                        start: { x: x1, y: y1 },
+                        end: { x: x2, y: y2 },
+                        thickness: lineWidth,
                         color: PDFLib.rgb(0, 0, 0)
                     });
-                    page.drawText(glyph, {
-                        x: checkX + 0.1,  // Slight offset for boldness
-                        y: checkY,
-                        size: size,
-                        font: zapfFont,
+
+                    // Draw second line of V (right side)
+                    page.drawLine({
+                        start: { x: x2, y: y2 },
+                        end: { x: x3, y: y3 },
+                        thickness: lineWidth,
                         color: PDFLib.rgb(0, 0, 0)
                     });
                 }
@@ -370,14 +389,32 @@ window.ExportEngine = {
                             boxY = field.pdfY;
                             boxW = field.pdfWidth;
                             boxH = field.pdfHeight;
+                            console.log(`📍 V2 checkbox ${fid}: PDF=(${boxX.toFixed(1)}, ${boxY.toFixed(1)}, ${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
                         }
                         // V1 anchor (center point in percentages)
                         else if (field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
+                            // DEBUG: Log raw anchor values
+                            console.log(`🔍 V1 anchor raw: ${fid} anchor=[${field.anchor[0].toFixed(4)}, ${field.anchor[1].toFixed(4)}], page=${pw.toFixed(1)}x${ph.toFixed(1)}`);
+
                             const centerXPdf = field.anchor[0] * pw;
+                            // anchor[1] appears to be from BOTTOM (like PDF), so use directly
                             const centerYPdf = field.anchor[1] * ph;
 
-                            // Get size from bbox if available, otherwise use small default for PDF points
-                            if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+                            // Priority: overlayWidth/Height > bbox > default
+                            if (field.overlayWidth !== undefined && field.overlayHeight !== undefined) {
+                                // overlayWidth/Height might be in percentages (<=1) or pixels
+                                if (field.overlayWidth <= 1 && field.overlayHeight <= 1) {
+                                    boxW = field.overlayWidth * pw;
+                                    boxH = field.overlayHeight * ph;
+                                } else {
+                                    // Already in pixels, need to convert to PDF points
+                                    // Assume these are CSS pixels at scale 1
+                                    boxW = field.overlayWidth;
+                                    boxH = field.overlayHeight;
+                                }
+                            }
+                            // Get size from bbox if available
+                            else if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
                                 // Normalize bbox: convert percentages to PDF points
                                 let [x, y, w, h] = field.bbox;
                                 if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
@@ -388,13 +425,15 @@ window.ExportEngine = {
                                 boxH = h;
                             } else {
                                 // Default size in PDF points (NOT pixels!)
-                                boxW = 10;
-                                boxH = 10;
+                                boxW = 12;
+                                boxH = 12;
                             }
 
                             // Anchor is center, so offset by half the size
                             boxX = centerXPdf - boxW / 2;
                             boxY = centerYPdf - boxH / 2;
+
+                            console.log(`📍 V1 anchor checkbox ${fid}: anchor=(${field.anchor[0].toFixed(3)}, ${field.anchor[1].toFixed(3)}), center=(${centerXPdf.toFixed(1)}, ${centerYPdf.toFixed(1)}), size=(${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
                         }
                         else {
                             console.warn(`⚠️ Export: Checkbox/Radio/Cell ${fid} missing coordinates, skipping`);
@@ -412,6 +451,89 @@ window.ExportEngine = {
                             height: boxH
                         }, drawType, zapfFont);
                     }
+                    continue;
+                }
+
+                // ============================
+                // CIRCLE – DRAW ELLIPSE TO CIRCLE AN ANSWER
+                // ============================
+                if (field.type === 'circle') {
+                    // Only draw if circle is active (checked)
+                    if (data.checked !== true) {
+                        continue;
+                    }
+
+                    let boxX, boxY, boxW, boxH;
+
+                    // V2 coordinates (already in PDF points)
+                    if (field.pdfX !== undefined && field.pdfY !== undefined &&
+                        field.pdfWidth !== undefined && field.pdfHeight !== undefined) {
+                        boxX = field.pdfX;
+                        boxY = field.pdfY;
+                        boxW = field.pdfWidth;
+                        boxH = field.pdfHeight;
+                        console.log(`📍 V2 circle ${fid}: PDF=(${boxX.toFixed(1)}, ${boxY.toFixed(1)}, ${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
+                    }
+                    // V1 anchor (center point in percentages)
+                    else if (field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
+                        const centerXPdf = field.anchor[0] * pw;
+                        const centerYPdf = field.anchor[1] * ph;
+
+                        // Get size from overlayWidth/Height or bbox or default
+                        if (field.overlayWidth !== undefined && field.overlayHeight !== undefined) {
+                            if (field.overlayWidth <= 1 && field.overlayHeight <= 1) {
+                                boxW = field.overlayWidth * pw;
+                                boxH = field.overlayHeight * ph;
+                            } else {
+                                boxW = field.overlayWidth;
+                                boxH = field.overlayHeight;
+                            }
+                        } else if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+                            let [x, y, w, h] = field.bbox;
+                            if (x <= 1 && y <= 1 && w <= 1 && h <= 1) {
+                                w *= pw;
+                                h *= ph;
+                            }
+                            boxW = w;
+                            boxH = h;
+                        } else {
+                            boxW = 20;
+                            boxH = 20;
+                        }
+
+                        boxX = centerXPdf - boxW / 2;
+                        boxY = centerYPdf - boxH / 2;
+                        console.log(`📍 V1 anchor circle ${fid}: center=(${centerXPdf.toFixed(1)}, ${centerYPdf.toFixed(1)}), size=(${boxW.toFixed(1)}, ${boxH.toFixed(1)})`);
+                    }
+                    // V1 bbox (percentages)
+                    else if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+                        const normalized = coord._normalizeBbox(field.bbox);
+                        boxX = normalized.x;
+                        boxY = normalized.y;
+                        boxW = normalized.w;
+                        boxH = normalized.h;
+                    }
+                    else {
+                        console.warn(`⚠️ Export: Circle ${fid} missing coordinates, skipping`);
+                        continue;
+                    }
+
+                    // Draw ellipse - line width relative to size (min dimension * 0.08)
+                    const lineWidth = Math.max(1, Math.min(boxW, boxH) * 0.08);
+                    const centerX = boxX + boxW / 2;
+                    const centerY = boxY + boxH / 2;
+
+                    page.drawEllipse({
+                        x: centerX,
+                        y: centerY,
+                        xScale: boxW / 2,
+                        yScale: boxH / 2,
+                        borderColor: PDFLib.rgb(0, 0, 0),
+                        borderWidth: lineWidth,
+                        // No color = no fill, outline only
+                    });
+
+                    console.log(`✅ Export circle ${fid}: center=(${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size=(${boxW.toFixed(1)}, ${boxH.toFixed(1)}), lineWidth=${lineWidth.toFixed(1)}`);
                     continue;
                 }
 

@@ -67,6 +67,9 @@ export class WordSelector {
         // Overlay layer reference
         this.overlayLayer = null;
 
+        // PROTECTION: Prevent rapid multiple clicks from breaking the flow
+        this._isStarting = false;
+
         // Configuration
         this.config = {
             lineHeightTolerance: 10  // px - for determining same line
@@ -376,7 +379,20 @@ export class WordSelector {
      * @param {Object} options - { mode, fieldId, callback }
      */
     async startSelection(options) {
+        // PROTECTION: Prevent rapid clicks from breaking the flow
+        if (this._isStarting) {
+            console.log('[WordSelector] ⚠️ Already starting, ignoring duplicate call');
+            return;
+        }
+
+        // If already active in the same mode, just return (don't restart)
+        if (this.selectionState.active && this.selectionState.mode === options.mode) {
+            console.log('[WordSelector] Already active in same mode, ignoring');
+            return;
+        }
+
         console.log('[WordSelector] Starting selection mode:', options.mode);
+        this._isStarting = true;
 
         // Cancel any existing selection
         this.cancelSelection();
@@ -390,6 +406,7 @@ export class WordSelector {
         if (!words || words.length === 0) {
             console.warn('[WordSelector] No words found');
             this._showMessage('לא נמצאו מילים בעמוד', 'error');
+            this._isStarting = false;
             return;
         }
 
@@ -409,6 +426,9 @@ export class WordSelector {
 
         // Show instruction
         this._showMessage('לחץ על מילים לבניית השם. לחץ שוב להסרה. Enter לאישור.');
+
+        // PROTECTION: Clear the starting flag
+        this._isStarting = false;
     }
 
     /**
@@ -838,6 +858,9 @@ export class WordSelector {
      * Cancel selection
      */
     cancelSelection() {
+        // Always reset the starting flag
+        this._isStarting = false;
+
         if (!this.selectionState.active) return;
 
         console.log('[WordSelector] Selection cancelled');

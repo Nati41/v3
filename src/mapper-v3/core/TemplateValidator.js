@@ -21,7 +21,7 @@ export const ValidationLevel = {
 };
 
 // Field types enum (matches StateManager)
-const VALID_FIELD_TYPES = ['text', 'checkbox', 'radio', 'date', 'signature', 'number', 'id_number', 'phone', 'email'];
+const VALID_FIELD_TYPES = ['text', 'checkbox', 'radio', 'circle', 'cell', 'date', 'signature', 'number', 'id_number', 'phone', 'email'];
 
 // Status values that indicate a mapped field
 const MAPPED_STATUSES = ['mapped', 'complete'];

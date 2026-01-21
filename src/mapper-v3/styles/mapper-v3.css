@@ -924,6 +924,23 @@ input, textarea {
     background: rgba(33, 150, 243, 0.2);
 }
 
+/* Circle Field Overlay - for circling answers */
+.field-overlay.type-circle {
+    border-radius: 50%;
+    border: 2px solid rgba(244, 67, 54, 0.6);
+    background: transparent;
+}
+
+.field-overlay.type-circle:hover {
+    border-color: rgba(244, 67, 54, 0.8);
+    background: rgba(244, 67, 54, 0.05);
+}
+
+.field-overlay.type-circle.selected {
+    border: 3px solid #000000;
+    background: transparent;
+}
+
 /* Cell Field Overlay - V3.10: Full-size mark area without constraints */
 .field-overlay.type-cell {
     border-radius: 2px;
@@ -4783,6 +4800,7 @@ body.quick-fill-mode #overlay-layer {
 }
 
 /* Quick Fill Checkbox/Radio/Cell Styles - V3.10: Subtle slate-gray */
+/* NOTE: Circle has its own separate styles below */
 .quick-fill-box.quick-fill-checkbox,
 .quick-fill-box.quick-fill-radio,
 .quick-fill-box.quick-fill-cell {
@@ -4810,6 +4828,30 @@ body.quick-fill-mode #overlay-layer {
 
 .quick-fill-box.quick-fill-radio {
     border-radius: 50%;
+}
+
+/* Circle type - for circling answers (like multiple choice) */
+/* NOT active: faint dashed to show the area */
+.quick-fill-box.quick-fill-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 50%;
+    border: 1px dashed rgba(150, 150, 150, 0.4);
+    background: transparent;
+}
+
+.quick-fill-box.quick-fill-circle:hover {
+    border: 2px dashed rgba(244, 67, 54, 0.6);
+    background: rgba(244, 67, 54, 0.05);
+}
+
+/* ACTIVE: solid black circle around the answer */
+.quick-fill-box.quick-fill-circle[data-checked="true"] {
+    border: 2px solid #000000;
+    background: transparent;
 }
 
 /* Cell type - subtle purple-gray to distinguish from checkbox */
@@ -4917,11 +4959,18 @@ body.quickfill-public-mode .quick-fill-box.has-text:focus-within {
     box-shadow: none !important;
 }
 
-/* Checkbox/Radio - when checked, rectangle disappears */
+/* Checkbox/Radio/Cell - when checked, rectangle disappears */
 body.quickfill-public-mode .quick-fill-box.quick-fill-checkbox[data-checked="true"],
 body.quickfill-public-mode .quick-fill-box.quick-fill-radio[data-checked="true"],
 body.quickfill-public-mode .quick-fill-box.quick-fill-cell[data-checked="true"] {
     border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Circle - when checked, keep the black circle visible! */
+body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="true"] {
+    border: 2px solid #000000 !important;
     background: transparent !important;
     box-shadow: none !important;
 }
@@ -4931,6 +4980,10 @@ body.quickfill-public-mode .quick-fill-box.quick-fill-checkbox[data-checked="tru
 body.quickfill-public-mode .quick-fill-box.quick-fill-radio[data-checked="true"]:hover,
 body.quickfill-public-mode .quick-fill-box.quick-fill-cell[data-checked="true"]:hover {
     background: rgba(37, 99, 235, 0.03) !important;
+}
+
+body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="true"]:hover {
+    border-color: #333333 !important;
 }
 
 

@@ -18,6 +18,7 @@ export const Tools = {
     DRAW_TEXT: 'draw_text',
     DRAW_CHECKBOX: 'draw_checkbox',
     DRAW_RADIO: 'draw_radio',
+    DRAW_CIRCLE: 'draw_circle',  // Circle type - for circling answers
     DRAW_TABLE: 'draw_table',
     DRAW_SIGNATURE: 'draw_signature',
     DRAW_CELL: 'draw_cell',  // V3.10: Cell type - rectangular mark areas without size constraints

@@ -1331,7 +1331,7 @@ export class OverlayRenderer {
         overlay.className = 'field-overlay';
 
         // Add type-specific class
-        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell' || field.type === 'signature') {
+        if (field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle' || field.type === 'cell' || field.type === 'signature') {
             overlay.classList.add(`type-${field.type}`);
         }
 
@@ -1381,9 +1381,9 @@ export class OverlayRenderer {
             width = Math.round(bboxW * scaleX);
             height = Math.round(bboxH * scaleY);
 
-        } else if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'cell') &&
+        } else if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle' || field.type === 'cell') &&
                    field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
-            // ============ ANCHOR FORMAT: [xPercent, yPercent] for checkbox/radio/cell ============
+            // ============ ANCHOR FORMAT: [xPercent, yPercent] for checkbox/radio/circle/cell ============
             // NOTE: yPercent is stored as "from bottom" (Y-flipped during save)
             const [anchorX, anchorY] = field.anchor;
 
@@ -1392,9 +1392,11 @@ export class OverlayRenderer {
             const canvasCenterX = anchorX * layerWidth;
             const canvasCenterY = (1 - anchorY) * layerHeight;  // ← Y-AXIS FLIP BACK
 
-            // V3.10: Cell uses its stored dimensions, checkbox/radio have defaults
-            width = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'radio' ? RADIO_SIZE : CHECKBOX_SIZE));
-            height = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'radio' ? RADIO_SIZE : CHECKBOX_SIZE));
+            // V3.10: Cell uses its stored dimensions, checkbox/radio/circle have defaults
+            const CIRCLE_SIZE = 24;
+            const defaultSize = field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'radio' ? RADIO_SIZE : (field.type === 'circle' ? CIRCLE_SIZE : CHECKBOX_SIZE));
+            width = field.overlayWidth || defaultSize;
+            height = field.overlayHeight || defaultSize;
             x = Math.round(canvasCenterX - width / 2);
             y = Math.round(canvasCenterY - height / 2);
 

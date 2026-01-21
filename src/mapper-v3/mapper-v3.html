@@ -92,6 +92,9 @@
                 <button id="btn-tool-radio" class="toolbar-btn tool-btn" data-tool="draw_radio" title="Draw Radio (R)">
                     <span class="icon">🔘</span>
                 </button>
+                <button id="btn-tool-circle" class="toolbar-btn tool-btn" data-tool="draw_circle" title="Draw Circle (O)">
+                    <span class="icon">⭕</span>
+                </button>
                 <button id="btn-tool-cell" class="toolbar-btn tool-btn" data-tool="draw_cell" title="תא סימון (M)">
                     <span class="icon">▢</span>
                 </button>
@@ -186,6 +189,10 @@
                 <button class="toolbar-btn qf-tool-btn" data-tool="draw_radio" title="בחירה ●">
                     <span class="icon">🔘</span>
                     <span class="qf-text"><span class="qf-title">בחירה</span></span>
+                </button>
+                <button class="toolbar-btn qf-tool-btn" data-tool="draw_circle" title="עיגול תשובה">
+                    <span class="icon">⭕</span>
+                    <span class="qf-text"><span class="qf-title">עיגול</span></span>
                 </button>
                 <button class="toolbar-btn qf-tool-btn" data-tool="draw_signature" title="חתימה">
                     <span class="icon">✍️</span>
@@ -341,6 +348,7 @@
                     <option value="number">מספר</option>
                     <option value="date">תאריך</option>
                     <option value="checkbox">תיבת סימון</option>
+                    <option value="circle">עיגול</option>
                 </select>
             </div>
             <div class="form-group">
@@ -827,6 +835,7 @@
             document.querySelectorAll('.tool-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const tool = btn.dataset.tool;
+                    console.log('[Toolbar] Button clicked, tool:', tool);
                     const inQuickFill = state.isQuickFillMode();
 
                     // V3.10: Block non-drawing tools in Quick Fill mode
@@ -885,12 +894,14 @@
                         return;
                     }
 
+                    console.log('[Toolbar] Setting tool to:', tool);
                     state.setTool(tool);
                 });
             });
 
             // Listen for tool changes to update UI
             eventBus.on(Events.TOOL_CHANGED, ({ tool }) => {
+                console.log('[Toolbar] Tool changed event received:', tool);
                 document.querySelectorAll('.tool-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.tool === tool);
                 });

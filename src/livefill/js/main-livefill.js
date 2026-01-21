@@ -158,6 +158,7 @@ const debounce = window.Debounce;
 // ===============================
 const CHECKBOX_SIZE = 20;
 const RADIO_SIZE = 16;
+const CIRCLE_SIZE = 24;
 const DEBOUNCE_INPUT = 150;
 
 // Use shared normalizeField from window.normalizeField (loaded from shared/normalizeField.js)
@@ -871,11 +872,12 @@ function exportJSON() {
                 page: field.page || 1
             };
 
-            // Checkbox/Radio: export with anchor + overlay size
-            if ((field.type === 'checkbox' || field.type === 'radio') && field.anchor) {
+            // Checkbox/Radio/Circle: export with anchor + overlay size
+            if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle') && field.anchor) {
                 fieldData.anchor = field.anchor;
-                fieldData.overlayWidth = field.overlayWidth || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
-                fieldData.overlayHeight = field.overlayHeight || (field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE);
+                const defaultSize = field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'circle' ? CIRCLE_SIZE : RADIO_SIZE);
+                fieldData.overlayWidth = field.overlayWidth || defaultSize;
+                fieldData.overlayHeight = field.overlayHeight || defaultSize;
             }
             // Regular fields: export with bbox
             else if (field.bbox) {
@@ -1247,8 +1249,8 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
 
             console.log(`✅ V2 positioning: ${fieldId}, PDF(${field.pdfX.toFixed(1)}, ${field.pdfY.toFixed(1)}) → CSS(${x.toFixed(1)}, ${y.toFixed(1)}, ${w.toFixed(1)}, ${h.toFixed(1)})`);
         }
-        // V1 anchor (checkbox/radio) - normalized 0-1 values
-        else if ((field.type === 'checkbox' || field.type === 'radio') && field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
+        // V1 anchor (checkbox/radio/circle) - normalized 0-1 values
+        else if ((field.type === 'checkbox' || field.type === 'radio' || field.type === 'circle') && field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
             const [anchorX, anchorY] = field.anchor;
 
             // anchor is stored as [xPercent, yPercentFromBottom]
@@ -1257,8 +1259,8 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
 
             // Fixed size for checkbox/radio at RENDER_SCALE
             // Handle unit conversion: if overlayWidth <= 1, it's percentage (from normalizeField), convert to pixels
-            const defaultW = field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE;
-            const defaultH = field.type === 'checkbox' ? CHECKBOX_SIZE : RADIO_SIZE;
+            const defaultW = field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'circle' ? CIRCLE_SIZE : RADIO_SIZE);
+            const defaultH = field.type === 'checkbox' ? CHECKBOX_SIZE : (field.type === 'circle' ? CIRCLE_SIZE : RADIO_SIZE);
 
             if (field.overlayWidth && field.overlayWidth <= 1) {
                 // Percentage value - convert to pixels
@@ -1530,6 +1532,39 @@ function createFieldOverlaysForPage(pageNum, pageFields) {
             if (isChecked) {
                 editor.classList.add('checked');
             }
+            overlay.appendChild(editor);
+        }
+        else if (field.type === 'circle') {
+            editor.classList.add('circle-editor');
+
+            // Add click event listener to toggle circle
+            editor.addEventListener('click', (e) => {
+                e.stopPropagation();
+
+                const fieldId = field.id || field.fieldId;
+                if (!fieldId) {
+                    console.error("❌ Circle clicked but has no fieldId");
+                    return;
+                }
+
+                // Toggle local state
+                const current = liveFillData[fieldId]?.checked === true;
+                const newValue = !current;
+
+                liveFillData[fieldId] = { checked: newValue };
+                triggerAutoSave();
+
+                console.log(`⭕ Circle toggled: ${fieldId} → ${newValue}`);
+
+                // Update UI
+                editor.classList.toggle("circled", newValue);
+            });
+
+            // Initialize circled state from liveFillData
+            if (liveFillData[fieldId]?.checked === true) {
+                editor.classList.add('circled');
+            }
+
             overlay.appendChild(editor);
         }
     });

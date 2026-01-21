@@ -472,6 +472,7 @@ class QuickFillOverlay {
             'draw_text': Tools.DRAW_TEXT,
             'draw_checkbox': Tools.DRAW_CHECKBOX,
             'draw_radio': Tools.DRAW_RADIO,
+            'draw_circle': Tools.DRAW_CIRCLE,
             'draw_signature': Tools.DRAW_SIGNATURE
         };
 
@@ -641,7 +642,7 @@ class QuickFillOverlay {
         this._pushUndo('create', { boxId: box.id, box: { ...box } });
 
         // Render based on type
-        if (boxType === 'checkbox' || boxType === 'radio' || boxType === 'cell') {
+        if (boxType === 'checkbox' || boxType === 'radio' || boxType === 'circle' || boxType === 'cell') {
             this._renderCheckboxRadio(box);
         } else {
             this._renderBox(box);
@@ -818,18 +819,20 @@ class QuickFillOverlay {
     }
 
     /**
-     * Render a checkbox or radio box (same style as LiveFill)
-     * @param {Object} box - Box data with type 'checkbox' or 'radio'
+     * Render a checkbox, radio, or circle box (same style as LiveFill)
+     * @param {Object} box - Box data with type 'checkbox', 'radio', or 'circle'
      * @param {boolean} skipFocus - If true, don't auto-focus (for bulk import)
      */
     _renderCheckboxRadio(box, skipFocus = false) {
         const currentPage = state.get('document.currentPage');
         const isCheckbox = box.type === 'checkbox';
         const isCell = box.type === 'cell';
+        const isCircle = box.type === 'circle';
 
         const boxEl = document.createElement('div');
         boxEl.id = box.id;
         // Cell type uses checkbox styling but with preserved size
+        // Circle type uses its own styling
         const styleClass = isCell ? 'cell' : box.type;
         boxEl.className = `quick-fill-box quick-fill-${styleClass}`;
         boxEl.dataset.page = box.page;
@@ -907,6 +910,9 @@ class QuickFillOverlay {
             // V פשוט ואנושי - יותר סימטרי מ-✓
             // Cell type uses same symbol as checkbox but preserves full rectangle size
             symbolEl.textContent = checked ? 'V' : '';
+        } else if (type === 'circle') {
+            // Circle: show outline ellipse when active
+            symbolEl.textContent = checked ? '⭕' : '';
         } else {
             symbolEl.textContent = checked ? '●' : '';
         }
@@ -1954,7 +1960,7 @@ class QuickFillOverlay {
             this._boxes.push(box);
 
             // Render based on type (pass skipFocus=true to avoid focusing each box)
-            if (boxType === 'checkbox' || boxType === 'radio') {
+            if (boxType === 'checkbox' || boxType === 'radio' || boxType === 'circle') {
                 this._renderCheckboxRadio(box, true);
             } else {
                 this._renderBox(box, true);
@@ -2224,15 +2230,15 @@ class QuickFillOverlay {
                     'V2:', { pdfX: pdfX.toFixed(1), pdfY: pdfY.toFixed(1), w: pdfWidth.toFixed(1), h: pdfHeight.toFixed(1) },
                     'value:', box.text || '(empty)');
 
-            } else if (box.type === 'checkbox' || box.type === 'radio') {
-                // Checkbox/Radio - provide BOTH anchor for validation and V2 for export
+            } else if (box.type === 'checkbox' || box.type === 'radio' || box.type === 'circle') {
+                // Checkbox/Radio/Circle - provide BOTH anchor for validation and V2 for export
                 // Calculate center point from bbox (for anchor)
                 const centerXPct = xPct + (wPct / 2);
                 const centerYPct = yPct + (hPct / 2);
 
                 fields.push({
                     id: box.id,
-                    type: box.type === 'radio' ? 'radio' : 'checkbox',
+                    type: box.type,  // Keep original type: checkbox, radio, or circle
                     page: box.page,
                     // V1: anchor for validation
                     anchor: [centerXPct, centerYPct],
@@ -2524,7 +2530,7 @@ class QuickFillOverlay {
         this._boxes.push(boxData);
 
         // Re-render based on type
-        if (boxData.type === 'checkbox' || boxData.type === 'radio') {
+        if (boxData.type === 'checkbox' || boxData.type === 'radio' || boxData.type === 'circle') {
             this._renderCheckboxRadio(boxData);
         } else if (boxData.type === 'signature') {
             this._renderSignature(boxData);
@@ -2561,7 +2567,7 @@ class QuickFillOverlay {
         const boxEl = document.getElementById(box.id);
         if (!boxEl) return;
 
-        if (box.type === 'checkbox' || box.type === 'radio') {
+        if (box.type === 'checkbox' || box.type === 'radio' || box.type === 'circle') {
             boxEl.dataset.checked = box.checked ? 'true' : 'false';
             const symbol = boxEl.querySelector('.quick-fill-symbol');
             if (symbol) this._updateCheckboxSymbol(symbol, box.type, box.checked);
