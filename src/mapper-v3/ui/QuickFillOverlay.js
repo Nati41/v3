@@ -2249,7 +2249,9 @@ class QuickFillOverlay {
                     id: box.id,
                     type: box.type,  // Keep original type: checkbox, radio, or circle
                     page: box.page,
-                    // V1: anchor for validation
+                    // V1: bbox for validation (export-engine requires this)
+                    bbox: [xPct, yPct, wPct, hPct],
+                    // V1: anchor for LiveFill compatibility
                     anchor: [centerXPct, centerYPct],
                     // V2: for export (preferred by export-engine)
                     pdfX: pdfX,
@@ -2263,8 +2265,8 @@ class QuickFillOverlay {
                     checked: box.checked || false
                 };
                 console.log('[QuickFillOverlay] Added', box.type, ':', box.id,
-                    'anchor:', [centerXPct.toFixed(3), centerYPct.toFixed(3)],
-                    'V2:', { pdfX: pdfX.toFixed(1), pdfY: pdfY.toFixed(1) },
+                    'bbox:', [xPct.toFixed(3), yPct.toFixed(3), wPct.toFixed(3), hPct.toFixed(3)],
+                    'V2:', { pdfX: pdfX.toFixed(1), pdfY: pdfY.toFixed(1), w: pdfWidth.toFixed(1), h: pdfHeight.toFixed(1) },
                     'checked:', box.checked);
 
             } else if (box.type === 'signature') {
