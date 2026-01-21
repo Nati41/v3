@@ -296,11 +296,15 @@ class QuickFillUIProfile {
      * V3.12: Show the QuickFill landing page
      */
     _showLanding() {
+        console.log('[QuickFillUIProfile] _showLanding called');
+        console.log('[QuickFillUIProfile] QuickFillLanding available:', typeof QuickFillLanding !== 'undefined');
+
         // Create container if needed
         if (!this._landingContainer) {
             this._landingContainer = document.createElement('div');
             this._landingContainer.id = 'qf-landing-container';
             document.body.appendChild(this._landingContainer);
+            console.log('[QuickFillUIProfile] Created landing container');
         }
 
         this._landingContainer.style.display = 'block';
@@ -308,10 +312,12 @@ class QuickFillUIProfile {
 
         // Initialize landing page if QuickFillLanding is available
         if (typeof QuickFillLanding !== 'undefined') {
+            console.log('[QuickFillUIProfile] Initializing QuickFillLanding...');
             QuickFillLanding.init(this._landingContainer, {
                 onFormSelected: (data) => this._handleFormSelected(data),
                 onFileUploaded: (file) => this._handleFileUploaded(file)
             });
+            console.log('[QuickFillUIProfile] QuickFillLanding initialized');
         } else {
             console.warn('[QuickFillUIProfile] QuickFillLanding not loaded, showing direct upload');
             // Fallback: just show the mapper
