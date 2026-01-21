@@ -1,0 +1,59 @@
+{
+    "version": "1.0",
+    "forms": [
+        {
+            "id": "form-101",
+            "name": "טופס 101",
+            "subtitle": "מס הכנסה",
+            "icon": "📋",
+            "pdfFile": "form-101.pdf",
+            "jsonFile": "form-101.json",
+            "enabled": false
+        },
+        {
+            "id": "form-106",
+            "name": "טופס 106",
+            "subtitle": "ביטוח לאומי",
+            "icon": "📄",
+            "pdfFile": "form-106.pdf",
+            "jsonFile": "form-106.json",
+            "enabled": false
+        },
+        {
+            "id": "form-passport",
+            "name": "בקשה לדרכון",
+            "subtitle": "משרד הפנים",
+            "icon": "🛂",
+            "pdfFile": "passport-request.pdf",
+            "jsonFile": "passport-request.json",
+            "enabled": false
+        },
+        {
+            "id": "form-address",
+            "name": "הודעה על שינוי כתובת",
+            "subtitle": "משרד הפנים",
+            "icon": "🏠",
+            "pdfFile": "address-change.pdf",
+            "jsonFile": "address-change.json",
+            "enabled": false
+        },
+        {
+            "id": "form-arnona",
+            "name": "בקשה להנחה בארנונה",
+            "subtitle": "רשות מקומית",
+            "icon": "🏛️",
+            "pdfFile": "arnona-discount.pdf",
+            "jsonFile": "arnona-discount.json",
+            "enabled": false
+        },
+        {
+            "id": "form-vehicle",
+            "name": "העברת בעלות רכב",
+            "subtitle": "משרד התחבורה",
+            "icon": "🚗",
+            "pdfFile": "vehicle-transfer.pdf",
+            "jsonFile": "vehicle-transfer.json",
+            "enabled": false
+        }
+    ]
+}

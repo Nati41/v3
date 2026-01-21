@@ -1,15 +1,18 @@
 /**
  * QuickFillUIProfile.js
  * V3.10: Public QuickFill Mode - UI Profile Only
+ * V3.12: Integrated QuickFillLanding page for minimal first experience
  *
  * This module manages the UI visibility for Public QuickFill mode.
- * When ?mode=quickfill is present, it hides technical/advanced UI
- * and shows only: Upload PDF → Fill → Export
+ * When ?mode=quickfill is present:
+ * 1. Shows QuickFillLanding page (forms + upload)
+ * 2. When user selects form/uploads PDF, transitions to mapper
  *
  * IMPORTANT: This module ONLY controls UI visibility.
  * It does NOT touch any engines or logic.
  *
  * Features:
+ * - Minimal landing page with pre-made forms
  * - Hides mapping tools, import/export JSON, AI, templates
  * - Hides sidebar, properties panel
  * - Adds "Advanced Mode" button to reveal full UI
@@ -23,6 +26,8 @@ class QuickFillUIProfile {
     constructor() {
         this._isPublicMode = false;
         this._advancedModeBtn = null;
+        this._landingContainer = null;
+        this._landingVisible = false;
 
         // Elements to hide in public mode
         this._hiddenSelectors = [
@@ -77,7 +82,7 @@ class QuickFillUIProfile {
 
     /**
      * Enter public QuickFill mode
-     * Hides advanced UI, shows simplified interface
+     * V3.12: Now shows landing page first, then transitions to mapper
      */
     enterPublicMode() {
         if (this._isPublicMode) return;
@@ -90,13 +95,13 @@ class QuickFillUIProfile {
         // Hide elements
         this._hideElements();
 
-        // CRITICAL: Show mapper-container (welcome screens hide it by default)
+        // Hide mapper container - will show it when PDF is loaded
         const mapperContainer = document.getElementById('mapper-container');
         if (mapperContainer) {
-            mapperContainer.style.display = 'flex';
+            mapperContainer.style.display = 'none';
         }
 
-        // Also hide the welcome screen containers directly
+        // Also hide the welcome screen containers
         const welcomeContainer = document.getElementById('welcome-screen-container');
         const fieldLoaderContainer = document.getElementById('field-loader-screen-container');
         if (welcomeContainer) {
@@ -106,16 +111,13 @@ class QuickFillUIProfile {
             fieldLoaderContainer.style.display = 'none';
         }
 
-        // Expand PDF viewer to full width (no sidebar)
-        this._expandPdfViewer();
-
-        // Add "Advanced Mode" button
-        this._addAdvancedModeButton();
+        // V3.12: Show landing page
+        this._showLanding();
 
         // Update page title
-        document.title = 'Tofesly - מילוי טפסים';
+        document.title = 'טופסלי - מילוי טפסים';
 
-        console.log('[QuickFillUIProfile] Entered public mode');
+        console.log('[QuickFillUIProfile] Entered public mode with landing page');
 
         // Emit event for other modules
         eventBus.emit('UI_PROFILE_CHANGED', { mode: 'public' });
@@ -288,6 +290,128 @@ class QuickFillUIProfile {
      */
     isPublicMode() {
         return this._isPublicMode;
+    }
+
+    /**
+     * V3.12: Show the QuickFill landing page
+     */
+    _showLanding() {
+        // Create container if needed
+        if (!this._landingContainer) {
+            this._landingContainer = document.createElement('div');
+            this._landingContainer.id = 'qf-landing-container';
+            document.body.appendChild(this._landingContainer);
+        }
+
+        this._landingContainer.style.display = 'block';
+        this._landingVisible = true;
+
+        // Initialize landing page if QuickFillLanding is available
+        if (typeof QuickFillLanding !== 'undefined') {
+            QuickFillLanding.init(this._landingContainer, {
+                onFormSelected: (data) => this._handleFormSelected(data),
+                onFileUploaded: (file) => this._handleFileUploaded(file)
+            });
+        } else {
+            console.warn('[QuickFillUIProfile] QuickFillLanding not loaded, showing direct upload');
+            // Fallback: just show the mapper
+            this._transitionToMapper();
+        }
+    }
+
+    /**
+     * V3.12: Hide landing and show mapper
+     */
+    _transitionToMapper() {
+        // Hide landing
+        if (this._landingContainer) {
+            this._landingContainer.style.display = 'none';
+        }
+        this._landingVisible = false;
+
+        // Show mapper
+        const mapperContainer = document.getElementById('mapper-container');
+        if (mapperContainer) {
+            mapperContainer.style.display = 'flex';
+        }
+
+        // Expand PDF viewer to full width
+        this._expandPdfViewer();
+
+        // Add "Advanced Mode" button
+        this._addAdvancedModeButton();
+
+        console.log('[QuickFillUIProfile] Transitioned to mapper');
+    }
+
+    /**
+     * V3.12: Handle pre-made form selection from landing
+     */
+    async _handleFormSelected(data) {
+        console.log('[QuickFillUIProfile] Form selected:', data.formName);
+
+        // Transition to mapper first
+        this._transitionToMapper();
+
+        // Wait for mapper to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Load the PDF
+        if (data.file && window.pdfEngine) {
+            try {
+                await window.pdfEngine.loadPDF(data.file);
+                console.log('[QuickFillUIProfile] PDF loaded:', data.file.name);
+
+                // If form has mapping data, load it
+                if (data.mapping && window.quickFillOverlay) {
+                    // Wait for PDF to render
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // Import mapping to QuickFill
+                    const imported = window.quickFillOverlay.importFromMappingData(data.mapping);
+                    console.log('[QuickFillUIProfile] Mapping imported, fields:', imported);
+                }
+            } catch (e) {
+                console.error('[QuickFillUIProfile] Failed to load form:', e);
+                alert('שגיאה בטעינת הטופס');
+            }
+        }
+
+        // Hide landing loading
+        if (typeof QuickFillLanding !== 'undefined') {
+            QuickFillLanding.showLoading(false);
+        }
+    }
+
+    /**
+     * V3.12: Handle user file upload from landing
+     */
+    async _handleFileUploaded(file) {
+        console.log('[QuickFillUIProfile] File uploaded:', file.name);
+
+        // Transition to mapper
+        this._transitionToMapper();
+
+        // Wait for mapper to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Load the PDF
+        if (file && window.pdfEngine) {
+            try {
+                await window.pdfEngine.loadPDF(file);
+                console.log('[QuickFillUIProfile] PDF loaded:', file.name);
+            } catch (e) {
+                console.error('[QuickFillUIProfile] Failed to load PDF:', e);
+                alert('שגיאה בטעינת הקובץ');
+            }
+        }
+    }
+
+    /**
+     * V3.12: Check if landing is currently visible
+     */
+    isLandingVisible() {
+        return this._landingVisible;
     }
 }
 

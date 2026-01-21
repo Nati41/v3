@@ -1992,6 +1992,122 @@ class QuickFillOverlay {
     }
 
     /**
+     * V3.12: Import mapping data from JSON object (for pre-made forms)
+     * @param {Object} mappingData - Mapping data with fields array
+     * @param {boolean} clearExisting - Whether to clear existing boxes first
+     * @returns {number} Number of boxes imported
+     */
+    importFromMappingData(mappingData, clearExisting = true) {
+        console.log('[QuickFillOverlay] importFromMappingData called');
+
+        if (!mappingData || !mappingData.fields || !Array.isArray(mappingData.fields)) {
+            console.warn('[QuickFillOverlay] Invalid mapping data - no fields array');
+            return 0;
+        }
+
+        // Check PDF is loaded
+        const pdfDims = state.get('pdfDimensions');
+        if (!pdfDims || !pdfDims.width || !pdfDims.height) {
+            console.warn('[QuickFillOverlay] Cannot import - PDF not loaded yet');
+            return 0;
+        }
+
+        // Clear existing if requested
+        if (clearExisting) {
+            this.clearAll();
+        }
+
+        let importedCount = 0;
+        const fields = mappingData.fields;
+
+        console.log('[QuickFillOverlay] Importing', fields.length, 'fields from mapping data');
+
+        fields.forEach(field => {
+            // Determine box type
+            let boxType = 'text';
+            let tool = 'draw_text';
+
+            const fieldType = (field.type || 'text').toLowerCase();
+            if (fieldType === 'checkbox' || fieldType === 'check') {
+                boxType = 'checkbox';
+                tool = 'draw_checkbox';
+            } else if (fieldType === 'radio') {
+                boxType = 'radio';
+                tool = 'draw_radio';
+            } else if (fieldType === 'circle') {
+                boxType = 'circle';
+                tool = 'draw_circle';
+            } else if (fieldType === 'signature') {
+                // Skip signatures for now
+                console.log('[QuickFillOverlay] Skipping signature field:', field.id);
+                return;
+            }
+
+            // Get bbox
+            let bbox = field.bbox;
+            if (!bbox && field.pdfX !== undefined) {
+                // Convert V2 coordinates to bbox
+                const w = pdfDims.width;
+                const h = pdfDims.height;
+                bbox = [
+                    field.pdfX / w,
+                    field.pdfY / h,
+                    field.pdfWidth / w,
+                    field.pdfHeight / h
+                ];
+            }
+
+            if (!bbox || !Array.isArray(bbox) || bbox.length !== 4) {
+                console.warn('[QuickFillOverlay] Invalid bbox for field:', field.id);
+                return;
+            }
+
+            // Convert bbox to screenRect
+            const screenRect = overlayRenderer.bboxToScreen(bbox);
+            if (!screenRect || screenRect.width <= 0 || screenRect.height <= 0) {
+                console.warn('[QuickFillOverlay] Invalid screenRect for field:', field.id);
+                return;
+            }
+
+            // Create box
+            const boxId = `qf-box-${++this._boxCounter}`;
+            const page = field.page || 1;
+
+            const box = {
+                id: boxId,
+                bbox: bbox,
+                screenRect: screenRect,
+                page: page,
+                text: field.value || field.defaultValue || '',
+                tool: tool,
+                type: boxType,
+                checked: boxType === 'circle' ? true : false,
+                createdAt: Date.now(),
+                originalFieldId: field.id
+            };
+
+            this._boxes.push(box);
+
+            // Render based on type
+            if (boxType === 'checkbox' || boxType === 'radio' || boxType === 'circle') {
+                this._renderCheckboxRadio(box, true);
+            } else {
+                this._renderBox(box, true);
+            }
+
+            importedCount++;
+        });
+
+        // Update positions
+        setTimeout(() => {
+            this._updateAllBoxPositions();
+        }, 100);
+
+        console.log('[QuickFillOverlay] Imported', importedCount, 'boxes from mapping data');
+        return importedCount;
+    }
+
+    /**
      * Get all boxes for current page
      * @returns {Array} Boxes on current page
      */
