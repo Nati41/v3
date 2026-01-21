@@ -617,13 +617,18 @@ class QuickFillOverlay {
         // Determine box type from tool
         const isCheckbox = tool === 'draw_checkbox';
         const isRadio = tool === 'draw_radio';
+        const isCircle = tool === 'draw_circle';
         const isCell = tool === 'draw_cell';
-        const boxType = isCell ? 'cell' : (isCheckbox ? 'checkbox' : (isRadio ? 'radio' : 'text'));
+        const boxType = isCell ? 'cell' : (isCheckbox ? 'checkbox' : (isRadio ? 'radio' : (isCircle ? 'circle' : 'text')));
 
         // Generate unique ID
         const boxId = `qf-box-${++this._boxCounter}`;
 
         // Create box data
+        // Circle starts as checked=true (creating it IS the action)
+        // Checkbox/Radio start as checked=false (user needs to click to check)
+        const initialChecked = isCircle ? true : false;
+
         const box = {
             id: boxId,
             bbox: bbox,
@@ -631,8 +636,8 @@ class QuickFillOverlay {
             page: page,
             text: '',
             tool: tool,
-            type: boxType,          // 'text', 'checkbox', or 'radio'
-            checked: false,         // For checkbox/radio
+            type: boxType,          // 'text', 'checkbox', 'radio', or 'circle'
+            checked: initialChecked,
             createdAt: Date.now()
         };
 
@@ -651,10 +656,10 @@ class QuickFillOverlay {
         // Update status
         this._updateStatusBar();
 
-        console.log('[QuickFillOverlay] Box created:', boxId, 'type:', boxType, 'Total:', this._boxes.length);
+        console.log('[QuickFillOverlay] Box created:', boxId, 'type:', boxType, 'checked:', initialChecked, 'Total:', this._boxes.length);
 
         // Emit event for external listeners
-        eventBus.emit(Events.QUICK_FILL_BOX_UPDATED, { boxId, text: '', checked: false, type: boxType, bbox, page });
+        eventBus.emit(Events.QUICK_FILL_BOX_UPDATED, { boxId, text: '', checked: initialChecked, type: boxType, bbox, page });
     }
 
     /**
@@ -911,8 +916,9 @@ class QuickFillOverlay {
             // Cell type uses same symbol as checkbox but preserves full rectangle size
             symbolEl.textContent = checked ? 'V' : '';
         } else if (type === 'circle') {
-            // Circle: show outline ellipse when active
-            symbolEl.textContent = checked ? '⭕' : '';
+            // Circle: no symbol inside - the border itself is the circle
+            // The border becomes solid black when checked (via CSS)
+            symbolEl.textContent = '';
         } else {
             symbolEl.textContent = checked ? '●' : '';
         }
@@ -1924,6 +1930,9 @@ class QuickFillOverlay {
             } else if (fieldType === 'radio') {
                 boxType = 'radio';
                 tool = 'draw_radio';
+            } else if (fieldType === 'circle') {
+                boxType = 'circle';
+                tool = 'draw_circle';
             } else if (fieldType === 'signature') {
                 // Skip signatures for now - they need special handling
                 console.log('[QuickFillOverlay] Skipping signature field:', field.id);

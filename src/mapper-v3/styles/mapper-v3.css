@@ -4968,11 +4968,19 @@ body.quickfill-public-mode .quick-fill-box.quick-fill-cell[data-checked="true"] 
     box-shadow: none !important;
 }
 
+/* Circle - when NOT checked, make it nearly invisible (like checkbox/radio) */
+body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="false"] {
+    border: 1px dashed rgba(200, 200, 200, 0.2) !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 /* Circle - when checked, keep the black circle visible! */
 body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="true"] {
     border: 2px solid #000000 !important;
     background: transparent !important;
     box-shadow: none !important;
+    border-radius: 50% !important;
 }
 
 /* Subtle hover hint for checked boxes */
