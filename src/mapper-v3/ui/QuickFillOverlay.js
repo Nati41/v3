@@ -656,7 +656,7 @@ class QuickFillOverlay {
         // Update status
         this._updateStatusBar();
 
-        console.log('[QuickFillOverlay] Box created:', boxId, 'type:', boxType, 'checked:', initialChecked, 'Total:', this._boxes.length);
+        console.log('[QuickFillOverlay] Box created:', boxId, 'type:', boxType, 'checked:', initialChecked, 'bbox:', box.bbox, 'Total:', this._boxes.length);
 
         // Emit event for external listeners
         eventBus.emit(Events.QUICK_FILL_BOX_UPDATED, { boxId, text: '', checked: initialChecked, type: boxType, bbox, page });
