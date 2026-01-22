@@ -231,6 +231,16 @@ export class DrawController {
             if (this._refinerActive && tool !== Tools.DRAW_TEXT) {
                 this._cancelRefiner();
             }
+
+            // V3.13: Cancel WordSelector when switching to drawing tools
+            // This prevents WordSelector from blocking DrawController clicks
+            if (window.wordSelector && window.wordSelector.isActive()) {
+                const drawingTools = [Tools.DRAW_TEXT, Tools.DRAW_CHECKBOX, Tools.DRAW_RADIO, Tools.DRAW_CIRCLE, Tools.DRAW_TABLE, Tools.SELECT];
+                if (drawingTools.includes(tool)) {
+                    console.log('[DrawController] Cancelling WordSelector due to tool change to:', tool);
+                    window.wordSelector.cancelSelection();
+                }
+            }
         });
 
         // Clear AutoBoxer geometry cache on page change
