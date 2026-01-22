@@ -140,11 +140,90 @@ input, textarea {
     gap: 4px;
 }
 
+/* Surprise: floating dock controls */
+.toolbar-group.page-nav.dock-nav,
+.toolbar-group.zoom-controls.dock-zoom {
+    position: relative;
+    background: radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(226, 232, 240, 0.6));
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 14px;
+    padding: 4px 8px;
+    gap: 6px;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.18);
+}
+
+.toolbar-group.page-nav.dock-nav.is-inactive,
+.toolbar-group.zoom-controls.dock-zoom.is-inactive {
+    opacity: 0.55;
+    filter: saturate(0.6);
+    box-shadow: none;
+}
+
+.toolbar-group.page-nav.dock-nav::after,
+.toolbar-group.zoom-controls.dock-zoom::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    pointer-events: none;
+}
+
+.toolbar-group.page-nav.dock-nav .toolbar-btn,
+.toolbar-group.zoom-controls.dock-zoom .toolbar-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.06);
+    transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.toolbar-group.page-nav.dock-nav .toolbar-btn:hover,
+.toolbar-group.zoom-controls.dock-zoom .toolbar-btn:hover {
+    background: rgba(59, 130, 246, 0.18);
+    box-shadow: 0 6px 12px rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
+}
+
+.toolbar-group.page-nav.dock-nav .toolbar-btn:disabled,
+.toolbar-group.zoom-controls.dock-zoom .toolbar-btn:disabled {
+    background: rgba(148, 163, 184, 0.16);
+    opacity: 0.55;
+}
+
+.toolbar-group.page-nav.dock-nav .page-indicator,
+.toolbar-group.zoom-controls.dock-zoom .zoom-indicator {
+    min-width: 62px;
+    text-align: center;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: 0.3px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.08);
+}
+
+.toolbar-group.zoom-controls.dock-zoom #btn-zoom-fit {
+    background: rgba(14, 165, 233, 0.18);
+    border: 1px solid rgba(14, 165, 233, 0.4);
+    color: #0f172a;
+}
+
 .toolbar-separator {
     width: 1px;
     height: 24px;
     background: var(--border-color);
     margin: 0 4px;
+}
+
+.toolbar-separator-mini {
+    width: 1px;
+    height: 18px;
+    background: var(--border-color);
+    margin: 0 6px;
+    opacity: 0.5;
 }
 
 .toolbar-spacer {
@@ -5596,5 +5675,555 @@ body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="true"
     /* Ensure inputs don't zoom on iOS */
     input, textarea, select {
         font-size: 16px !important;
+    }
+}
+
+/* ============================================
+   DARK MODE
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --primary-color: #3b82f6;
+        --primary-hover: #2563eb;
+        --success-color: #22c55e;
+        --warning-color: #eab308;
+        --error-color: #ef4444;
+
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-tertiary: #334155;
+
+        --text-primary: #f1f5f9;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+
+        --border-color: #475569;
+    }
+
+    body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+    .toolbar {
+        background: var(--bg-secondary) !important;
+        border-bottom-color: var(--border-color) !important;
+    }
+
+    .toolbar-btn {
+        color: var(--text-primary);
+    }
+
+    .toolbar-btn:hover {
+        background: var(--bg-tertiary);
+    }
+
+    .sidebar {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+    }
+
+    .canvas-area {
+        background: var(--bg-primary);
+    }
+
+    .pdf-drop-zone {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+    }
+
+    .pdf-drop-zone:hover {
+        border-color: var(--primary-color);
+        background: var(--bg-tertiary);
+    }
+
+    .drop-zone-content {
+        color: var(--text-secondary);
+    }
+
+    .drop-zone-title {
+        color: var(--text-primary);
+    }
+
+    .drop-zone-subtitle,
+    .drop-zone-hint {
+        color: var(--text-muted);
+    }
+
+    .properties-panel {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+    }
+
+    .toast {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    /* Status indicator */
+    .status-indicator {
+        color: var(--text-secondary);
+    }
+
+    /* Page indicator */
+    .page-indicator {
+        color: var(--text-secondary);
+    }
+
+    /* Zoom indicator */
+    .zoom-indicator {
+        color: var(--text-secondary);
+    }
+
+    /* Dialog overlays */
+    .dialog-overlay {
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    .dialog-overlay .dialog,
+    .dialog-box {
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border-color: var(--border-color);
+    }
+
+    /* Inputs */
+    input, textarea, select {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-color: var(--border-color);
+    }
+
+    input:focus, textarea:focus, select:focus {
+        border-color: var(--primary-color);
+    }
+
+    /* Field list */
+    .field-list {
+        background: var(--bg-secondary);
+    }
+
+    .field-item {
+        background: var(--bg-tertiary);
+        border-color: var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .field-item:hover {
+        background: #3b4a5e;
+    }
+
+    /* Context menu */
+    .context-menu {
+        background: var(--bg-secondary);
+        border-color: var(--border-color);
+    }
+
+    .context-menu button {
+        color: var(--text-primary);
+    }
+
+    .context-menu button:hover {
+        background: var(--bg-tertiary);
+    }
+}
+
+/* ============================================
+   V3.12: MODERN PAGE NAVIGATION
+   ============================================ */
+
+.page-nav-modern {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.nav-btn:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: white;
+}
+
+.nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.nav-btn svg {
+    transition: transform 0.2s ease;
+}
+
+.nav-btn:hover:not(:disabled) svg {
+    transform: scale(1.1);
+}
+
+.page-indicator-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 70px;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+.page-indicator-modern {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    user-select: none;
+}
+
+.page-indicator-wrapper:hover .page-indicator-modern {
+    color: var(--primary-color);
+}
+
+.page-input {
+    width: 50px;
+    padding: 4px 8px;
+    border: 2px solid var(--primary-color);
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    outline: none;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.page-input::-webkit-inner-spin-button,
+.page-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* ============================================
+   V3.12: MODERN ZOOM CONTROLS
+   ============================================ */
+
+.zoom-controls-modern {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.zoom-btn svg {
+    transition: transform 0.2s ease;
+}
+
+.zoom-btn:hover svg {
+    transform: scale(1.1);
+}
+
+.zoom-dropdown-wrapper {
+    position: relative;
+}
+
+.zoom-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 6px 28px 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+    min-width: 90px;
+    transition: all 0.2s ease;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.zoom-select:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.zoom-select:focus {
+    box-shadow: 0 0 0 2px var(--primary-color);
+}
+
+/* Dark mode adjustments for new controls */
+@media (prefers-color-scheme: dark) {
+    .page-nav-modern,
+    .zoom-controls-modern {
+        background: var(--bg-tertiary);
+    }
+
+    .nav-btn,
+    .zoom-btn {
+        color: var(--text-secondary);
+    }
+
+    .nav-btn:hover:not(:disabled),
+    .zoom-btn:hover {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .page-indicator-modern {
+        color: var(--text-primary);
+    }
+
+    .zoom-select {
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    }
+
+    .zoom-select:hover {
+        background-color: var(--bg-tertiary);
+    }
+
+    .page-input {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        border-color: var(--primary-color);
+    }
+}
+
+/* ============================================
+   V3.12: COMPACT PAGE NAVIGATION & ZOOM CONTROLS
+   Modern, sleek design with dark mode support
+   ============================================ */
+
+/* Page Navigation - Minimal Modern Style */
+.page-nav-compact {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.nav-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.nav-arrow svg {
+    width: 18px;
+    height: 18px;
+    stroke: #64748b;
+    transition: all 0.15s ease;
+}
+
+.nav-arrow:hover:not(:disabled) {
+    background: #f1f5f9;
+}
+
+.nav-arrow:hover:not(:disabled) svg {
+    stroke: #1e293b;
+}
+
+.nav-arrow:disabled {
+    opacity: 0.25;
+    cursor: default;
+}
+
+/* Page Display */
+.page-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+}
+
+.page-display:hover {
+    background: #f1f5f9;
+}
+
+.page-display #page-indicator {
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.page-display #page-input {
+    display: none;
+    width: 40px;
+    padding: 4px 6px;
+    border: 2px solid var(--primary-color);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    outline: none;
+    background: white;
+    color: #1e293b;
+    -moz-appearance: textfield;
+}
+
+.page-display #page-input::-webkit-inner-spin-button,
+.page-display #page-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.page-display.editing #page-indicator {
+    display: none;
+}
+
+.page-display.editing #page-input {
+    display: block;
+}
+
+/* Zoom Controls - Minimal */
+.zoom-compact {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.zoom-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.zoom-icon-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: #64748b;
+    transition: all 0.15s ease;
+}
+
+.zoom-icon-btn:hover {
+    background: #f1f5f9;
+}
+
+.zoom-icon-btn:hover svg {
+    stroke: #1e293b;
+}
+
+/* Zoom Dropdown */
+.zoom-dropdown {
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 4px 24px 4px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #475569;
+    cursor: pointer;
+    outline: none;
+    min-width: 64px;
+    height: 28px;
+    transition: all 0.15s ease;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+}
+
+.zoom-dropdown:hover {
+    background-color: #f1f5f9;
+}
+
+.zoom-dropdown:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+}
+
+/* ============================================
+   DARK MODE for Compact Controls
+   ============================================ */
+@media (prefers-color-scheme: dark) {
+    .nav-arrow svg,
+    .zoom-icon-btn svg {
+        stroke: #94a3b8;
+    }
+
+    .nav-arrow:hover:not(:disabled),
+    .zoom-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-arrow:hover:not(:disabled) svg,
+    .zoom-icon-btn:hover svg {
+        stroke: #e2e8f0;
+    }
+
+    .page-display:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .page-display #page-indicator {
+        color: #e2e8f0;
+    }
+
+    .page-display #page-input {
+        background: #1e293b;
+        color: #e2e8f0;
+        border-color: var(--primary-color);
+    }
+
+    .zoom-dropdown {
+        color: #e2e8f0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    }
+
+    .zoom-dropdown:hover {
+        background-color: rgba(255, 255, 255, 0.1);
     }
 }

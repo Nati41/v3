@@ -4,56 +4,56 @@
         {
             "id": "form-101",
             "name": "טופס 101",
-            "subtitle": "מס הכנסה",
-            "icon": "📋",
-            "pdfFile": "form-101.pdf",
-            "jsonFile": "form-101.json",
-            "enabled": false
+            "subtitle": "כרטיס עובד",
+            "category": "מס הכנסה",
+            "pdfFile": "טופס_101_-_כרטיס_עובד.pdf",
+            "jsonFile": null,
+            "enabled": true
         },
         {
-            "id": "form-106",
-            "name": "טופס 106",
-            "subtitle": "ביטוח לאומי",
-            "icon": "📄",
-            "pdfFile": "form-106.pdf",
-            "jsonFile": "form-106.json",
-            "enabled": false
+            "id": "form-birth",
+            "name": "דמי לידה",
+            "subtitle": "תביעה ליולדת",
+            "category": "ביטוח לאומי",
+            "pdfFile": "הורדה_תביעה_לתשלום_דמי_לידה_ליולדת_(355).pdf",
+            "jsonFile": null,
+            "enabled": true
         },
         {
-            "id": "form-passport",
-            "name": "בקשה לדרכון",
-            "subtitle": "משרד הפנים",
-            "icon": "🛂",
-            "pdfFile": "passport-request.pdf",
-            "jsonFile": "passport-request.json",
-            "enabled": false
+            "id": "form-nursing",
+            "name": "גמלת סיעוד",
+            "subtitle": "תביעה לגמלה",
+            "category": "ביטוח לאומי",
+            "pdfFile": "הורדה_תביעה_לגמלת_סיעוד_(2600).pdf",
+            "jsonFile": null,
+            "enabled": true
         },
         {
-            "id": "form-address",
-            "name": "הודעה על שינוי כתובת",
-            "subtitle": "משרד הפנים",
-            "icon": "🏠",
-            "pdfFile": "address-change.pdf",
-            "jsonFile": "address-change.json",
-            "enabled": false
+            "id": "form-employer",
+            "name": "טופס מעסיק",
+            "subtitle": "הבטחת הכנסה",
+            "category": "ביטוח לאומי",
+            "pdfFile": "הורדה_טופס_למילוי_על_ידי_מעסיק_לתובעי_הבטחת_הכנסה_שעובדים_(5521).pdf",
+            "jsonFile": null,
+            "enabled": true
         },
         {
-            "id": "form-arnona",
-            "name": "בקשה להנחה בארנונה",
-            "subtitle": "רשות מקומית",
-            "icon": "🏛️",
-            "pdfFile": "arnona-discount.pdf",
-            "jsonFile": "arnona-discount.json",
-            "enabled": false
+            "id": "form-vehicle-poa",
+            "name": "ייפוי כוח לרכב",
+            "subtitle": "העברת בעלות",
+            "category": "משרד התחבורה",
+            "pdfFile": "ייפוי_כוח_לרכב.pdf",
+            "jsonFile": null,
+            "enabled": true
         },
         {
-            "id": "form-vehicle",
-            "name": "העברת בעלות רכב",
-            "subtitle": "משרד התחבורה",
-            "icon": "🚗",
-            "pdfFile": "vehicle-transfer.pdf",
-            "jsonFile": "vehicle-transfer.json",
-            "enabled": false
+            "id": "form-rental",
+            "name": "חוזה שכירות",
+            "subtitle": "שכירות בלתי מוגנת",
+            "category": "חוזים",
+            "pdfFile": "חוזה שכירות בלתי מוגנת - נוסח מלא.pdf",
+            "jsonFile": null,
+            "enabled": true
         }
     ]
 }

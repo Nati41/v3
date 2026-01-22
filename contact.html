@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>צור קשר | tofesPDF</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.8;
+            color: #1e293b;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+            padding: 48px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo a {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+            text-decoration: none;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #64748b;
+            font-size: 18px;
+            margin-bottom: 32px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: #475569;
+        }
+
+        .highlight-box {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .highlight-box p {
+            margin-bottom: 8px;
+        }
+
+        .highlight-box p:last-child {
+            margin-bottom: 0;
+        }
+
+        .warning-box {
+            background: #fef3c7;
+            border: 1px solid #fcd34d;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin: 24px 0;
+        }
+
+        .warning-box p {
+            margin: 0;
+            color: #92400e;
+            font-size: 14px;
+        }
+
+        .email-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+            margin: 16px 0;
+            transition: all 0.2s;
+        }
+
+        .email-link:hover {
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .email-link svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 32px 0;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        /* Form Styles */
+        .contact-form {
+            margin-top: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #334155;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 15px;
+            color: #1e293b;
+            transition: all 0.2s;
+            background: #ffffff;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .form-group select {
+            cursor: pointer;
+        }
+
+        .submit-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 14px 24px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: #2563eb;
+        }
+
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        .submit-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .response-note {
+            text-align: center;
+            color: #64748b;
+            font-size: 14px;
+            margin-top: 24px;
+        }
+
+        .disclaimer {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 32px;
+        }
+
+        .disclaimer h3 {
+            color: #334155;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .disclaimer p {
+            color: #64748b;
+            font-size: 13px;
+            margin: 0;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 32px;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .back-link:hover {
+            background: #2563eb;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        /* Success message */
+        .success-message {
+            display: none;
+            background: #dcfce7;
+            border: 1px solid #86efac;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-top: 24px;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .success-message h3 {
+            color: #166534;
+            margin-bottom: 8px;
+        }
+
+        .success-message p {
+            color: #166534;
+            margin: 0;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 24px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <a href="/">tofesPDF</a>
+        </div>
+
+        <h1>צור קשר</h1>
+        <p class="subtitle">אנחנו כאן כדי לעזור.</p>
+
+        <p>
+            אם נתקלת בבעיה, יש לך שאלה, הצעה לשיפור, או שתרצה לדווח על תקלה – נשמח לשמוע ממך.
+        </p>
+
+        <div class="warning-box">
+            <p>
+                המערכת פועלת באופן מקומי בדפדפן, ולכן איננו רואים מסמכים או נתונים אישיים.
+                בפנייה אלינו, אנא הימנע משליחת קבצים רגישים או מידע אישי.
+            </p>
+        </div>
+
+        <p>ניתן לפנות אלינו באחת הדרכים הבאות:</p>
+
+        <a href="mailto:nati3028@gmail.com" class="email-link">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            nati3028@gmail.com
+        </a>
+
+        <div class="divider">
+            <span>או באמצעות הטופס שלהלן</span>
+        </div>
+
+        <form class="contact-form" id="contactForm">
+            <div class="form-group">
+                <label for="name">שם מלא</label>
+                <input type="text" id="name" name="name" required placeholder="הכנס את שמך">
+            </div>
+
+            <div class="form-group">
+                <label for="email">כתובת דוא״ל</label>
+                <input type="email" id="email" name="email" required placeholder="example@email.com">
+            </div>
+
+            <div class="form-group">
+                <label for="subject">נושא הפנייה</label>
+                <select id="subject" name="subject" required>
+                    <option value="">בחר נושא...</option>
+                    <option value="bug">דיווח על תקלה</option>
+                    <option value="question">שאלה כללית</option>
+                    <option value="suggestion">הצעה לשיפור</option>
+                    <option value="form-request">בקשה להוספת טופס</option>
+                    <option value="other">אחר</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="message">תוכן ההודעה</label>
+                <textarea id="message" name="message" required placeholder="כתוב את הודעתך כאן..."></textarea>
+            </div>
+
+            <button type="submit" class="submit-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"/>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+                שלח הודעה
+            </button>
+        </form>
+
+        <div class="success-message" id="successMessage">
+            <h3>ההודעה נשלחה בהצלחה!</h3>
+            <p>תודה על פנייתך. נשתדל לחזור אליך בהקדם.</p>
+        </div>
+
+        <p class="response-note">אנו עושים מאמץ להשיב לכל פנייה בהקדם האפשרי.</p>
+
+        <div class="disclaimer">
+            <h3>הבהרה</h3>
+            <p>
+                tofesPDF.com הוא כלי טכנולוגי עצמאי ואינו גוף רשמי או ממשלתי.
+                איננו מעניקים ייעוץ משפטי, פיננסי או רגולטורי, ואיננו מאשרים תקינות טפסים מול גורמים חיצוניים.
+            </p>
+        </div>
+
+        <p style="text-align: center; margin-top: 24px; color: #64748b;">
+            תודה שבחרת להשתמש ב-tofesPDF.com
+        </p>
+
+        <footer>
+            <p>&copy; 2026 tofesPDF. כל הזכויות שמורות.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Get form data
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const subject = document.getElementById('subject').value;
+            const message = document.getElementById('message').value;
+
+            // Create mailto link with form data
+            const subjectText = document.getElementById('subject').options[document.getElementById('subject').selectedIndex].text;
+            const mailtoLink = `mailto:nati3028@gmail.com?subject=${encodeURIComponent('פנייה מהאתר: ' + subjectText)}&body=${encodeURIComponent('שם: ' + name + '\nדוא"ל: ' + email + '\n\n' + message)}`;
+
+            // Open email client
+            window.location.href = mailtoLink;
+
+            // Show success message
+            document.getElementById('contactForm').style.display = 'none';
+            document.getElementById('successMessage').classList.add('show');
+        });
+    </script>
+</body>
+</html>

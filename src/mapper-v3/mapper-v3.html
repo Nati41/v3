@@ -11,12 +11,17 @@
     <!-- Tesseract.js for OCR fallback -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-    <!-- Styles -->
-    <link rel="stylesheet" href="styles/mapper-v3.css">
+    <!-- V3.12: Heebo font for Hebrew -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles (cache bust) -->
+    <link rel="stylesheet" href="styles/mapper-v3.css?v=319">
     <!-- V3.9: Welcome screens styles -->
-    <link rel="stylesheet" href="styles/welcome-screens.css">
+    <link rel="stylesheet" href="styles/welcome-screens.css?v=313">
     <!-- V3.12: QuickFill Landing page styles -->
-    <link rel="stylesheet" href="styles/quickfill-landing.css">
+    <link rel="stylesheet" href="styles/quickfill-landing.css?v=313">
 
     <!-- V3.10: David Libre Font - CRITICAL for Quick Fill text anchoring (same as Export) -->
     <style>
@@ -50,10 +55,7 @@
         <!-- Header / Toolbar -->
         <header id="toolbar" class="toolbar">
             <div class="toolbar-group">
-                <button id="btn-open-pdf" class="toolbar-btn" title="Open PDF">
-                    <span class="icon">📄</span>
-                    <span class="label">Open PDF</span>
-                </button>
+                <!-- V3.12: Open PDF button removed - use center drop zone instead -->
                 <button id="btn-import-json" class="toolbar-btn" title="Import JSON">
                     <span class="icon">📥</span>
                     <span class="label">Import</span>
@@ -118,31 +120,27 @@
 
             <div class="toolbar-separator" data-mapper-only></div>
 
-            <div class="toolbar-group page-nav">
-                <button id="btn-prev-page" class="toolbar-btn" title="Previous Page" disabled>
+            <!-- Page Navigation -->
+            <div class="toolbar-group page-nav dock-nav is-inactive">
+                <button id="btn-prev-page" class="toolbar-btn" title="עמוד קודם" disabled>
                     <span class="icon">◀</span>
                 </button>
                 <span id="page-indicator" class="page-indicator">1 / 1</span>
-                <button id="btn-next-page" class="toolbar-btn" title="Next Page" disabled>
+                <button id="btn-next-page" class="toolbar-btn" title="עמוד הבא" disabled>
                     <span class="icon">▶</span>
                 </button>
             </div>
 
             <div class="toolbar-separator"></div>
 
-            <div class="toolbar-group zoom-controls">
-                <button id="btn-zoom-out" class="toolbar-btn" title="Zoom Out (Ctrl+-)">
+            <!-- Zoom Controls -->
+            <div class="toolbar-group zoom-controls dock-zoom is-inactive">
+                <button id="btn-zoom-out" class="toolbar-btn" title="הקטן">
                     <span class="icon">➖</span>
                 </button>
-                <span id="zoom-info" class="zoom-indicator">100%</span>
-                <button id="btn-zoom-in" class="toolbar-btn" title="Zoom In (Ctrl++)">
+                <span id="zoom-indicator" class="zoom-indicator">100%</span>
+                <button id="btn-zoom-in" class="toolbar-btn" title="הגדל">
                     <span class="icon">➕</span>
-                </button>
-                <button id="btn-zoom-fit" class="toolbar-btn" title="Fit to Window">
-                    <span class="icon">⛶</span>
-                </button>
-                <button id="btn-zoom-reset" class="toolbar-btn" title="Reset Zoom (Ctrl+0)">
-                    <span class="icon">↺</span>
                 </button>
             </div>
 
@@ -180,6 +178,13 @@
 
             <!-- V3.11: Static QuickFill toolbar (shown in QuickFill mode) -->
             <div id="qf-static-toolbar" class="toolbar-group quick-fill-tools hidden">
+                <button id="btn-qf-undo" class="toolbar-btn" title="בטל (Ctrl+Z)" disabled>
+                    <span class="icon">↩️</span>
+                </button>
+                <button id="btn-qf-redo" class="toolbar-btn" title="חזור (Ctrl+Y)" disabled>
+                    <span class="icon">↪️</span>
+                </button>
+                <div class="toolbar-separator-mini"></div>
                 <button class="toolbar-btn qf-tool-btn active" data-tool="draw_text" title="מילוי טקסט">
                     <span class="icon">📝</span>
                     <span class="qf-text"><span class="qf-title">טקסט</span></span>
@@ -204,10 +209,6 @@
             <div class="toolbar-separator quick-fill-tools hidden"></div>
             <div id="qf-static-actions" class="toolbar-group quick-fill-tools hidden">
                 <span class="qf-box-count">0 שדות</span>
-                <button class="toolbar-btn load-json-btn" title="טען מיפוי">
-                    <span class="icon">📋</span>
-                    <span class="qf-text"><span class="qf-title">מיפוי</span></span>
-                </button>
                 <button class="toolbar-btn export-pdf-btn" title="הורד PDF">
                     <span class="icon">⬇️</span>
                     <span class="qf-text"><span class="qf-title">הורד</span></span>
@@ -687,6 +688,10 @@
                     updatePageIndicator();
                     document.getElementById('btn-prev-page').disabled = false;
                     document.getElementById('btn-next-page').disabled = false;
+                    // setNavZoomActive is defined later - use safe call
+                    if (typeof setNavZoomActive === 'function') {
+                        setNavZoomActive(true);
+                    }
                 });
 
                 // ============ Window resize handler ============
@@ -720,17 +725,20 @@
                 // Hide loading screen
                 document.getElementById('loading-screen').classList.add('hidden');
 
-                // V3.9: Initialize Welcome Screens (new UX flow)
-                initWelcomeScreens();
+                // V3.12: Check if QuickFill mode
+                const isQuickFillPublicMode = quickFillUIProfile.isPublicModeRequested();
+
+                if (isQuickFillPublicMode) {
+                    // V3.12: QuickFill mode - embed landing in drop zone
+                    console.log('[Mapper V3] QuickFill mode detected - embedding landing in drop zone');
+                    quickFillUIProfile.init();
+                    state.setFlowMode(FlowModes.QUICK_FILL);
+                } else {
+                    // V3.9: Regular mode - Initialize Welcome Screens (new UX flow)
+                    initWelcomeScreens();
+                }
 
                 console.log('[Mapper V3] Ready!');
-
-                // V3.10: Initialize QuickFill UI Profile (handles ?mode=quickfill)
-                // This also enters Quick Fill mode and hides advanced UI
-                quickFillUIProfile.init();
-                if (quickFillUIProfile.isPublicMode()) {
-                    state.setFlowMode(FlowModes.QUICK_FILL);
-                }
 
             } catch (error) {
                 console.error('[Mapper V3] Init error:', error);
@@ -947,7 +955,7 @@
                 showToast(data.message, data.type || 'info', options);
             });
 
-            // Page navigation
+            // V3.12: Modern Page Navigation
             document.getElementById('btn-prev-page').addEventListener('click', async () => {
                 await pdfEngine.prevPage();
             });
@@ -956,7 +964,21 @@
                 await pdfEngine.nextPage();
             });
 
-            // Zoom controls
+            // Keyboard shortcuts for page navigation
+            document.addEventListener('keydown', async (e) => {
+                // Skip if in input/textarea
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+                    await pdfEngine.nextPage(); // RTL - left is next
+                } else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+                    await pdfEngine.prevPage(); // RTL - right is prev
+                }
+            });
+
+            // Zoom Controls
+            const zoomIndicator = document.getElementById('zoom-indicator');
+
             document.getElementById('btn-zoom-in').addEventListener('click', () => {
                 viewportController.zoomIn();
             });
@@ -965,12 +987,33 @@
                 viewportController.zoomOut();
             });
 
-            document.getElementById('btn-zoom-fit').addEventListener('click', () => {
-                viewportController.fitToViewport();
-            });
+            const zoomFitBtn = document.getElementById('btn-zoom-fit');
+            if (zoomFitBtn) {
+                zoomFitBtn.addEventListener('click', () => {
+                    viewportController.fitToViewport();
+                });
+            }
 
-            document.getElementById('btn-zoom-reset').addEventListener('click', () => {
-                viewportController.resetZoom();
+            // Update zoom indicator when zoom changes
+            function updateZoomIndicator() {
+                if (!zoomIndicator) return;
+                const currentZoom = Math.round((state.get('viewport.scale') || 1) * 100);
+                zoomIndicator.textContent = currentZoom + '%';
+            }
+
+            function setNavZoomActive(isActive) {
+                document.querySelectorAll('.dock-nav, .dock-zoom').forEach((group) => {
+                    group.classList.toggle('is-inactive', !isActive);
+                });
+            }
+
+            eventBus.on(Events.PDF_LOADED, () => setNavZoomActive(true));
+            eventBus.on(Events.PDF_LOAD_FAILED, () => setNavZoomActive(false));
+            setNavZoomActive(false);
+
+            // Listen for zoom changes
+            eventBus.on(Events.ZOOM_CHANGED, () => {
+                updateZoomIndicator();
             });
 
             // V3.9: Auto-advance toggle button
@@ -1045,10 +1088,7 @@
                 }
             }
 
-            // Open PDF button
-            document.getElementById('btn-open-pdf').addEventListener('click', () => {
-                document.getElementById('pdf-file-input').click();
-            });
+            // V3.12: Open PDF button removed - using center drop zone instead
 
             // Import JSON button
             document.getElementById('btn-import-json').addEventListener('click', () => {
@@ -1167,7 +1207,13 @@
             if (!dropZone || !fileInput) return;
 
             // Click to open file picker
-            dropZone.addEventListener('click', () => {
+            // V3.12: Check if in QuickFill landing mode before triggering
+            dropZone.addEventListener('click', (e) => {
+                // Don't trigger if QuickFill landing is active (it has its own upload)
+                if (dropZone.classList.contains('qf-landing-embedded-zone')) {
+                    return;
+                }
+                console.log('[Mapper] Drop zone clicked - opening file picker');
                 fileInput.click();
             });
 
@@ -1309,6 +1355,22 @@
                 return;
             }
 
+            const toolToName = {
+                [Tools.DRAW_TEXT]: 'draw_text',
+                [Tools.DRAW_CHECKBOX]: 'draw_checkbox',
+                [Tools.DRAW_RADIO]: 'draw_radio',
+                [Tools.DRAW_CIRCLE]: 'draw_circle',
+                [Tools.DRAW_SIGNATURE]: 'draw_signature'
+            };
+
+            function syncStaticToolButtons(tool) {
+                const toolName = toolToName[tool];
+                if (!toolName) return;
+                staticToolbar.querySelectorAll('.qf-tool-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.tool === toolName);
+                });
+            }
+
             // Tool buttons
             staticToolbar.querySelectorAll('.qf-tool-btn[data-tool]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1320,6 +1382,45 @@
                     btn.classList.add('active');
                 });
             });
+
+            // Undo/Redo buttons for QuickFill
+            const undoBtn = document.getElementById('btn-qf-undo');
+            const redoBtn = document.getElementById('btn-qf-redo');
+
+            if (undoBtn) {
+                undoBtn.addEventListener('click', () => {
+                    if (quickFillOverlay && quickFillOverlay.canUndo()) {
+                        quickFillOverlay.undo();
+                        updateUndoRedoButtons();
+                    }
+                });
+            }
+
+            if (redoBtn) {
+                redoBtn.addEventListener('click', () => {
+                    if (quickFillOverlay && quickFillOverlay.canRedo()) {
+                        quickFillOverlay.redo();
+                        updateUndoRedoButtons();
+                    }
+                });
+            }
+
+            // Update undo/redo button states
+            function updateUndoRedoButtons() {
+                if (undoBtn) {
+                    undoBtn.disabled = !quickFillOverlay || !quickFillOverlay.canUndo();
+                }
+                if (redoBtn) {
+                    redoBtn.disabled = !quickFillOverlay || !quickFillOverlay.canRedo();
+                }
+            }
+
+            // Listen for QuickFill changes to update button states
+            eventBus.on('QUICKFILL_CHANGED', updateUndoRedoButtons);
+            eventBus.on(Events.STATE_CHANGED, updateUndoRedoButtons);
+
+            // Initial state
+            updateUndoRedoButtons();
 
             // Load JSON button
             staticActions.querySelector('.load-json-btn')?.addEventListener('click', () => {
@@ -1360,11 +1461,31 @@
                 advancedModeBtn.addEventListener('click', (e) => {
                     // V3.11: Only switch if we're actually in QuickFill mode and this is a real click
                     if (state.isQuickFillMode() && e.isTrusted && !advancedModeBtn.disabled) {
+                        // V3.12: Password protection for advanced mode
+                        const password = prompt('הזן קוד גישה למצב מתקדם:');
+                        if (password !== 'נתנאל3028') {
+                            if (password !== null) { // User didn't cancel
+                                alert('קוד שגוי');
+                            }
+                            return;
+                        }
                         console.log('[Toolbar] Advanced mode button clicked - switching to MAPPING');
-                        state.setFlowMode(FlowModes.MAPPING);
+
+                        // V3.12: Exit public mode to restore full UI
+                        if (quickFillUIProfile.isPublicMode()) {
+                            quickFillUIProfile.exitPublicMode();
+                        } else {
+                            state.setFlowMode(FlowModes.MAPPING);
+                        }
                     }
                 });
             }
+
+            eventBus.on(Events.TOOL_CHANGED, ({ tool }) => {
+                syncStaticToolButtons(tool);
+            });
+
+            syncStaticToolButtons(state.get('tool'));
 
             console.log('[Mapper] Static QuickFill toolbar initialized');
         }
@@ -1588,5 +1709,31 @@
             });
         }
     </script>
+
+    <!-- NagishLi Accessibility Plugin -->
+    <style>
+    /* Make NagishLi minimal */
+    nagishli#NagishLiTag > #NagishLiBar {
+        transform: scale(0.6) !important;
+        transform-origin: bottom left !important;
+        opacity: 0.4 !important;
+        transition: all 0.2s ease !important;
+    }
+    nagishli#NagishLiTag:hover > #NagishLiBar {
+        opacity: 1 !important;
+        transform: scale(0.75) !important;
+    }
+    </style>
+    <script>
+    var defined_NagishLi = {
+        lang: 'he',
+        position: 'bl',
+        color: 'blue',
+        compact: 1,
+        accordion: 0,
+        directory: '/assets/nl-files'
+    };
+    </script>
+    <script src="/assets/nagishli.js"></script>
 </body>
 </html>

@@ -32,10 +32,12 @@ class QuickFillUIProfile {
         // Elements to hide in public mode
         this._hiddenSelectors = [
             // Toolbar buttons - mapping related
+            '#btn-open-pdf',        // V3.12: Hide Open PDF button (use center upload instead)
             '#btn-import-json',
             '#btn-export-json',
             '#btn-load-template',
             '#btn-ai-analyze',
+            '#btn-continue-to-livefill',  // V3.12: Hide continue to livefill
 
             // Tool groups with data-mapper-only
             '[data-mapper-only]',
@@ -82,7 +84,7 @@ class QuickFillUIProfile {
 
     /**
      * Enter public QuickFill mode
-     * V3.12: Now shows landing page first, then transitions to mapper
+     * V3.12: Embeds landing content inside the PDF drop zone
      */
     enterPublicMode() {
         if (this._isPublicMode) return;
@@ -92,16 +94,10 @@ class QuickFillUIProfile {
         // Add body class for CSS-based hiding
         document.body.classList.add('quickfill-public-mode');
 
-        // Hide elements
+        // Hide elements (sidebar, properties, etc.)
         this._hideElements();
 
-        // Hide mapper container - will show it when PDF is loaded
-        const mapperContainer = document.getElementById('mapper-container');
-        if (mapperContainer) {
-            mapperContainer.style.display = 'none';
-        }
-
-        // Also hide the welcome screen containers
+        // Hide welcome screen containers
         const welcomeContainer = document.getElementById('welcome-screen-container');
         const fieldLoaderContainer = document.getElementById('field-loader-screen-container');
         if (welcomeContainer) {
@@ -111,13 +107,19 @@ class QuickFillUIProfile {
             fieldLoaderContainer.style.display = 'none';
         }
 
-        // V3.12: Show landing page
-        this._showLanding();
+        // Show mapper container (we need the toolbar visible)
+        const mapperContainer = document.getElementById('mapper-container');
+        if (mapperContainer) {
+            mapperContainer.style.display = 'flex';
+        }
+
+        // V3.12: Replace drop zone content with landing content
+        this._embedLandingInDropZone();
 
         // Update page title
-        document.title = 'טופסלי - מילוי טפסים';
+        document.title = 'tofesPDF - מילוי טפסים';
 
-        console.log('[QuickFillUIProfile] Entered public mode with landing page');
+        console.log('[QuickFillUIProfile] Entered public mode with embedded landing');
 
         // Emit event for other modules
         eventBus.emit('UI_PROFILE_CHANGED', { mode: 'public' });
@@ -134,7 +136,7 @@ class QuickFillUIProfile {
         // Remove body class
         document.body.classList.remove('quickfill-public-mode');
 
-        // Show hidden elements
+        // Show hidden elements (sidebar, properties panel, etc.)
         this._showElements();
 
         // Restore PDF viewer width
@@ -142,6 +144,21 @@ class QuickFillUIProfile {
 
         // Remove "Advanced Mode" button
         this._removeAdvancedModeButton();
+
+        // V3.12: Restore drop zone if it was modified
+        const dropZone = document.getElementById('pdf-drop-zone');
+        if (dropZone && this._originalDropZoneContent) {
+            dropZone.innerHTML = this._originalDropZoneContent;
+            dropZone.classList.remove('qf-landing-embedded-zone');
+            dropZone.style.display = '';
+            dropZone.classList.remove('hidden');
+        }
+
+        // V3.12: Show mapper container
+        const mapperContainer = document.getElementById('mapper-container');
+        if (mapperContainer) {
+            mapperContainer.style.display = 'flex';
+        }
 
         // V3.10: Exit QuickFill mode to return to Mapping mode
         // This hides the QuickFill toolbar buttons (load, export, clear)
@@ -223,6 +240,15 @@ class QuickFillUIProfile {
                 // V3.11: Only run if this is a real user click and button is not disabled
                 if (!e.isTrusted || existingBtn.disabled) return;
 
+                // V3.12: Password protection for advanced mode
+                const password = prompt('הזן קוד גישה למצב מתקדם:');
+                if (password !== 'נתנאל3028') {
+                    if (password !== null) { // User didn't cancel
+                        alert('קוד שגוי');
+                    }
+                    return;
+                }
+
                 // Exit public mode (hides UI elements, restores sidebar, etc.)
                 this._isPublicMode = false;
                 document.body.classList.remove('quickfill-public-mode');
@@ -260,6 +286,14 @@ class QuickFillUIProfile {
         this._advancedModeBtn.addEventListener('click', (e) => {
             // V3.11: Only run if this is a real user click
             if (e.isTrusted) {
+                // V3.12: Password protection for advanced mode
+                const password = prompt('הזן קוד גישה למצב מתקדם:');
+                if (password !== 'נתנאל3028') {
+                    if (password !== null) { // User didn't cancel
+                        alert('קוד שגוי');
+                    }
+                    return;
+                }
                 this.exitPublicMode();
             }
         });
@@ -293,52 +327,74 @@ class QuickFillUIProfile {
     }
 
     /**
-     * V3.12: Show the QuickFill landing page
+     * V3.12: Embed landing content inside the PDF drop zone
      */
-    _showLanding() {
-        console.log('[QuickFillUIProfile] _showLanding called');
-        console.log('[QuickFillUIProfile] QuickFillLanding available:', typeof QuickFillLanding !== 'undefined');
+    _embedLandingInDropZone() {
+        console.log('[QuickFillUIProfile] _embedLandingInDropZone called');
 
-        // Create container if needed
-        if (!this._landingContainer) {
-            this._landingContainer = document.createElement('div');
-            this._landingContainer.id = 'qf-landing-container';
-            document.body.appendChild(this._landingContainer);
-            console.log('[QuickFillUIProfile] Created landing container');
+        const dropZone = document.getElementById('pdf-drop-zone');
+        if (!dropZone) {
+            console.error('[QuickFillUIProfile] Drop zone not found');
+            return;
         }
 
-        this._landingContainer.style.display = 'block';
+        // Store original content
+        this._originalDropZoneContent = dropZone.innerHTML;
+
+        // Clear and replace with landing content container
+        dropZone.innerHTML = '';
+        dropZone.classList.add('qf-landing-embedded-zone');
+
+        // Create embedded container
+        this._landingContainer = document.createElement('div');
+        this._landingContainer.className = 'qf-landing-embedded';
+        dropZone.appendChild(this._landingContainer);
+
+        // Prevent drop zone click from triggering file picker
+        dropZone.onclick = null;
+        dropZone.removeAttribute('onclick');
+
+        // Stop propagation on the landing container
+        this._landingContainer.addEventListener('click', (e) => {
+            // Don't stop propagation for the upload dropzone inside
+            if (!e.target.closest('#qfDropzone')) {
+                e.stopPropagation();
+            }
+        });
+
         this._landingVisible = true;
 
         // Initialize landing page if QuickFillLanding is available
         if (typeof QuickFillLanding !== 'undefined') {
-            console.log('[QuickFillUIProfile] Initializing QuickFillLanding...');
+            console.log('[QuickFillUIProfile] Initializing QuickFillLanding in drop zone...');
             QuickFillLanding.init(this._landingContainer, {
                 onFormSelected: (data) => this._handleFormSelected(data),
                 onFileUploaded: (file) => this._handleFileUploaded(file)
             });
             console.log('[QuickFillUIProfile] QuickFillLanding initialized');
         } else {
-            console.warn('[QuickFillUIProfile] QuickFillLanding not loaded, showing direct upload');
-            // Fallback: just show the mapper
-            this._transitionToMapper();
+            console.warn('[QuickFillUIProfile] QuickFillLanding not loaded');
         }
     }
 
     /**
-     * V3.12: Hide landing and show mapper
+     * V3.12: Show the QuickFill landing page (legacy - now uses _embedLandingInDropZone)
+     */
+    _showLanding() {
+        this._embedLandingInDropZone();
+    }
+
+    /**
+     * V3.12: Hide landing and show mapper with PDF
      */
     _transitionToMapper() {
-        // Hide landing
-        if (this._landingContainer) {
-            this._landingContainer.style.display = 'none';
-        }
         this._landingVisible = false;
 
-        // Show mapper
-        const mapperContainer = document.getElementById('mapper-container');
-        if (mapperContainer) {
-            mapperContainer.style.display = 'flex';
+        // V3.12: Hide the drop zone entirely (PDF will be shown instead)
+        const dropZone = document.getElementById('pdf-drop-zone');
+        if (dropZone) {
+            dropZone.style.display = 'none';
+            dropZone.classList.add('hidden');
         }
 
         // Expand PDF viewer to full width
@@ -365,7 +421,7 @@ class QuickFillUIProfile {
         // Load the PDF
         if (data.file && window.pdfEngine) {
             try {
-                await window.pdfEngine.loadPDF(data.file);
+                await window.pdfEngine.load(data.file);
                 console.log('[QuickFillUIProfile] PDF loaded:', data.file.name);
 
                 // If form has mapping data, load it
@@ -404,7 +460,7 @@ class QuickFillUIProfile {
         // Load the PDF
         if (file && window.pdfEngine) {
             try {
-                await window.pdfEngine.loadPDF(file);
+                await window.pdfEngine.load(file);
                 console.log('[QuickFillUIProfile] PDF loaded:', file.name);
             } catch (e) {
                 console.error('[QuickFillUIProfile] Failed to load PDF:', e);

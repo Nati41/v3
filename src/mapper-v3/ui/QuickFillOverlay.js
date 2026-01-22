@@ -32,6 +32,12 @@ class QuickFillOverlay {
 
         // V3.11: Flag for pending import (when JSON loaded before PDF)
         this._pendingImportFromFields = false;
+
+        // V3.12: Auto-save for QuickFill
+        this._autoSaveTimer = null;
+        this._autoSaveDelay = 2000; // 2 seconds debounce
+        this._hasUnsavedChanges = false;
+        this._currentPdfName = null;
     }
 
     /**
@@ -42,6 +48,7 @@ class QuickFillOverlay {
 
         this._createOverlayContainer();
         this._attachEventListeners();
+        this._setupBeforeUnloadWarning();
         this._initialized = true;
 
         console.log('[QuickFillOverlay] Initialized');
@@ -310,6 +317,17 @@ class QuickFillOverlay {
         if (redoBtn) {
             redoBtn.disabled = this._redoStack.length === 0;
         }
+
+        // Also update toolbar buttons
+        const toolbarUndoBtn = document.getElementById('btn-qf-undo');
+        const toolbarRedoBtn = document.getElementById('btn-qf-redo');
+
+        if (toolbarUndoBtn) {
+            toolbarUndoBtn.disabled = this._undoStack.length === 0;
+        }
+        if (toolbarRedoBtn) {
+            toolbarRedoBtn.disabled = this._redoStack.length === 0;
+        }
     }
 
     /**
@@ -395,6 +413,15 @@ class QuickFillOverlay {
             }, 200);
             this._updateToolbarAvailability();
             this._updateInstructionDefault();
+
+            // V3.12: Check for auto-save when PDF is loaded
+            const fileName = state.get('document.fileName');
+            if (fileName && this._boxes.length === 0) {
+                // Only check auto-save if no boxes exist (not a pre-made form load)
+                setTimeout(() => {
+                    this.checkAndRestoreAutoSave(fileName);
+                }, 400);
+            }
         });
 
         // V3.10: Listen for mapping loaded from JSON - recalculate all positions
@@ -1846,6 +1873,15 @@ class QuickFillOverlay {
                 exportBtn.disabled = !hasPdf || this._boxes.length === 0;
             }
         }
+
+        // V3.12: Also update static toolbar counter
+        const staticCount = document.querySelector('#qf-static-actions .qf-box-count');
+        if (staticCount) {
+            staticCount.textContent = `${this._boxes.length} שדות`;
+        }
+
+        // V3.12: Schedule auto-save when boxes change
+        this._scheduleAutoSave();
     }
 
     /**
@@ -1865,6 +1901,9 @@ class QuickFillOverlay {
 
         // Update status
         this._updateStatusBar();
+
+        // V3.12: Clear auto-save when user clears all
+        this.clearAutoSave();
 
         // Emit event
         eventBus.emit(Events.QUICK_FILL_CLEAR_ALL);
@@ -2253,6 +2292,9 @@ class QuickFillOverlay {
 
             // ExportEngine handles download internally
             console.log('[QuickFillOverlay] PDF export completed');
+
+            // V3.12: Mark as saved after successful export
+            this._hasUnsavedChanges = false;
 
             // Restore button
             if (exportBtn) {
@@ -2736,6 +2778,220 @@ class QuickFillOverlay {
      */
     canRedo() {
         return this._redoStack.length > 0;
+    }
+
+    // ========================================
+    // V3.12: Auto-Save Methods
+    // ========================================
+
+    /**
+     * Get localStorage key for current PDF
+     */
+    _getAutoSaveKey() {
+        const fileName = this._currentPdfName || state.get('document.fileName') || 'untitled';
+        return `quickfill_autosave_${fileName}`;
+    }
+
+    /**
+     * Schedule auto-save with debounce
+     */
+    _scheduleAutoSave() {
+        this._hasUnsavedChanges = true;
+
+        if (this._autoSaveTimer) {
+            clearTimeout(this._autoSaveTimer);
+        }
+
+        this._autoSaveTimer = setTimeout(() => {
+            this._performAutoSave();
+        }, this._autoSaveDelay);
+    }
+
+    /**
+     * Perform auto-save to localStorage
+     */
+    _performAutoSave() {
+        if (this._boxes.length === 0) {
+            // No boxes to save, clear any existing save
+            this.clearAutoSave();
+            return;
+        }
+
+        const key = this._getAutoSaveKey();
+        const saveData = {
+            version: '3.12',
+            timestamp: Date.now(),
+            fileName: this._currentPdfName || state.get('document.fileName'),
+            boxes: this._boxes.map(box => ({
+                id: box.id,
+                type: box.type,
+                bbox: box.bbox,
+                page: box.page,
+                text: box.text || '',
+                checked: box.checked || false,
+                fontSize: box.fontSize,
+                fontFamily: box.fontFamily,
+                textAlign: box.textAlign,
+                radioGroup: box.radioGroup
+            })),
+            boxCounter: this._boxCounter
+        };
+
+        try {
+            localStorage.setItem(key, JSON.stringify(saveData));
+            this._hasUnsavedChanges = false;
+            console.log('[QuickFillOverlay] Auto-saved', this._boxes.length, 'boxes');
+        } catch (e) {
+            console.error('[QuickFillOverlay] Auto-save failed:', e);
+        }
+    }
+
+    /**
+     * Check for auto-save and prompt to restore
+     * Call this when PDF is loaded
+     */
+    checkAndRestoreAutoSave(fileName) {
+        this._currentPdfName = fileName;
+        const key = this._getAutoSaveKey();
+
+        try {
+            const savedData = localStorage.getItem(key);
+            if (!savedData) return false;
+
+            const data = JSON.parse(savedData);
+            if (!data.boxes || data.boxes.length === 0) return false;
+
+            // Calculate time since save
+            const savedAt = new Date(data.timestamp);
+            const now = new Date();
+            const diffMinutes = Math.floor((now - savedAt) / 60000);
+            let timeAgo;
+            if (diffMinutes < 1) {
+                timeAgo = 'לפני פחות מדקה';
+            } else if (diffMinutes < 60) {
+                timeAgo = `לפני ${diffMinutes} דקות`;
+            } else {
+                const diffHours = Math.floor(diffMinutes / 60);
+                if (diffHours < 24) {
+                    timeAgo = `לפני ${diffHours} שעות`;
+                } else {
+                    timeAgo = savedAt.toLocaleDateString('he-IL');
+                }
+            }
+
+            const shouldRestore = confirm(
+                `נמצאה שמירה אוטומטית!\n\n` +
+                `קובץ: ${data.fileName}\n` +
+                `שדות: ${data.boxes.length}\n` +
+                `נשמר: ${timeAgo}\n\n` +
+                `האם לשחזר את העבודה?`
+            );
+
+            if (shouldRestore) {
+                this._restoreFromAutoSave(data);
+                return true;
+            } else {
+                // User declined - clear the save
+                this.clearAutoSave();
+                return false;
+            }
+        } catch (e) {
+            console.error('[QuickFillOverlay] Failed to check auto-save:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Restore boxes from auto-save data
+     */
+    _restoreFromAutoSave(data) {
+        console.log('[QuickFillOverlay] Restoring from auto-save...');
+
+        // Clear existing boxes
+        this._boxes = [];
+        this._overlayContainer.innerHTML = '';
+
+        // Restore box counter
+        this._boxCounter = data.boxCounter || 0;
+
+        // Wait for PDF dimensions to be available
+        setTimeout(() => {
+            const pdfDims = state.get('pdfDimensions');
+            if (!pdfDims) {
+                console.warn('[QuickFillOverlay] PDF dimensions not available for restore');
+                return;
+            }
+
+            // Restore each box
+            data.boxes.forEach(boxData => {
+                // Calculate screen rect from bbox
+                const pdfScale = pdfDims.scale || 1;
+                const basePdfWidth = pdfDims.width / pdfScale;
+                const basePdfHeight = pdfDims.height / pdfScale;
+
+                const screenRect = {
+                    x: boxData.bbox[0] * pdfDims.width,
+                    y: (1 - boxData.bbox[3]) * pdfDims.height,
+                    width: (boxData.bbox[2] - boxData.bbox[0]) * pdfDims.width,
+                    height: (boxData.bbox[3] - boxData.bbox[1]) * pdfDims.height
+                };
+
+                const box = {
+                    ...boxData,
+                    screenRect
+                };
+
+                this._boxes.push(box);
+                this._renderBox(box);
+            });
+
+            this._updateStatusBar();
+            this._updateUndoRedoButtons();
+            this.clearUndoHistory(); // Clear undo history after restore
+
+            console.log('[QuickFillOverlay] Restored', this._boxes.length, 'boxes from auto-save');
+        }, 300);
+    }
+
+    /**
+     * Clear auto-save for current PDF
+     */
+    clearAutoSave() {
+        const key = this._getAutoSaveKey();
+        try {
+            localStorage.removeItem(key);
+            this._hasUnsavedChanges = false;
+            console.log('[QuickFillOverlay] Auto-save cleared');
+        } catch (e) {
+            console.error('[QuickFillOverlay] Failed to clear auto-save:', e);
+        }
+    }
+
+    /**
+     * Setup beforeunload warning for unsaved changes
+     */
+    _setupBeforeUnloadWarning() {
+        window.addEventListener('beforeunload', (e) => {
+            // Only warn if in QuickFill mode with unsaved changes
+            if (state.isQuickFillMode() && this._boxes.length > 0 && this._hasUnsavedChanges) {
+                // Force a final save before leaving
+                this._performAutoSave();
+
+                // Show warning
+                e.preventDefault();
+                e.returnValue = 'יש לך שינויים שלא נשמרו. האם אתה בטוח שברצונך לצאת?';
+                return e.returnValue;
+            }
+        });
+
+        console.log('[QuickFillOverlay] Beforeunload warning setup');
+    }
+
+    /**
+     * Check if there are unsaved changes
+     */
+    hasUnsavedChanges() {
+        return this._hasUnsavedChanges && this._boxes.length > 0;
     }
 }
 
