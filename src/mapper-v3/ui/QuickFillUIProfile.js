@@ -153,8 +153,17 @@ class QuickFillUIProfile {
         if (dropZone && this._originalDropZoneContent) {
             dropZone.innerHTML = this._originalDropZoneContent;
             dropZone.classList.remove('qf-landing-embedded-zone');
-            dropZone.style.display = '';
-            dropZone.classList.remove('hidden');
+
+            // V3.13: Only show drop zone if NO PDF is loaded
+            // If PDF is already loaded, keep it hidden so it doesn't block the PDF
+            const pdfLoaded = window.pdfEngine && window.pdfEngine.isLoaded();
+            if (pdfLoaded) {
+                dropZone.style.display = 'none';
+                dropZone.classList.add('hidden');
+            } else {
+                dropZone.style.display = '';
+                dropZone.classList.remove('hidden');
+            }
         }
 
         // V3.12: Show mapper container
