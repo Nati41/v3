@@ -440,7 +440,11 @@ class QuickFillOverlay {
      */
     _onModeChanged(active) {
         if (active) {
+            // V3.13: Restore visibility - clear both class and inline styles
             this._overlayContainer.classList.remove('hidden');
+            this._overlayContainer.style.display = '';
+            this._overlayContainer.style.pointerEvents = '';
+            this._overlayContainer.style.visibility = '';
 
             // Show QuickFill toolbar groups
             document.querySelectorAll('.quick-fill-tools').forEach(el => {
@@ -466,7 +470,11 @@ class QuickFillOverlay {
 
             console.log('[QuickFillOverlay] Quick Fill mode ACTIVATED - tool set to DRAW_TEXT');
         } else {
+            // V3.13: Aggressive hiding - both class AND inline styles
             this._overlayContainer.classList.add('hidden');
+            this._overlayContainer.style.display = 'none';
+            this._overlayContainer.style.pointerEvents = 'none';
+            this._overlayContainer.style.visibility = 'hidden';
 
             // Hide QuickFill toolbar groups
             document.querySelectorAll('.quick-fill-tools').forEach(el => {
@@ -485,7 +493,7 @@ class QuickFillOverlay {
             // Remove body class
             document.body.classList.remove('quick-fill-mode');
 
-            console.log('[QuickFillOverlay] Quick Fill mode DEACTIVATED - tool restored');
+            console.log('[QuickFillOverlay] Quick Fill mode DEACTIVATED - container hidden aggressively');
         }
     }
 
