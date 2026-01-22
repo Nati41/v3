@@ -179,6 +179,13 @@ class QuickFillUIProfile {
             console.log('[QuickFillUIProfile] Exited QuickFill flow mode');
         }
 
+        // V3.13: Hide NagishLi accessibility plugin in advanced mode
+        const nagishli = document.querySelector('nagishli#NagishLiTag');
+        if (nagishli) {
+            nagishli.style.display = 'none';
+            console.log('[QuickFillUIProfile] NagishLi hidden for advanced mode');
+        }
+
         // Restore page title
         document.title = 'Mapper V3 - Field Mapping Tool';
 

@@ -1712,30 +1712,55 @@
         }
     </script>
 
-    <!-- NagishLi Accessibility Plugin -->
-    <style>
-    /* Make NagishLi minimal */
-    nagishli#NagishLiTag > #NagishLiBar {
-        transform: scale(0.6) !important;
-        transform-origin: bottom left !important;
-        opacity: 0.4 !important;
-        transition: all 0.2s ease !important;
-    }
-    nagishli#NagishLiTag:hover > #NagishLiBar {
-        opacity: 1 !important;
-        transform: scale(0.75) !important;
-    }
-    </style>
+    <!-- NagishLi Accessibility Plugin - Only in QuickFill mode -->
     <script>
-    var defined_NagishLi = {
-        lang: 'he',
-        position: 'bl',
-        color: 'blue',
-        compact: 1,
-        accordion: 0,
-        directory: '/assets/nl-files'
-    };
+    (function() {
+        // Only load NagishLi in QuickFill mode (not advanced mode)
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = (urlParams.get('mode') || 'quickfill').toLowerCase();
+        const isQuickFillMode = mode !== 'advanced';
+
+        if (isQuickFillMode) {
+            // Add minimal styling
+            const style = document.createElement('style');
+            style.textContent = `
+                nagishli#NagishLiTag > #NagishLiBar {
+                    transform: scale(0.6) !important;
+                    transform-origin: bottom left !important;
+                    opacity: 0.4 !important;
+                    transition: all 0.2s ease !important;
+                }
+                nagishli#NagishLiTag:hover > #NagishLiBar {
+                    opacity: 1 !important;
+                    transform: scale(0.75) !important;
+                }
+                /* Prevent NagishLi from interfering with app elements */
+                nagishli#NagishLiTag {
+                    z-index: 99999 !important;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Configure NagishLi
+            window.defined_NagishLi = {
+                lang: 'he',
+                position: 'bl',
+                color: 'blue',
+                compact: 1,
+                accordion: 0,
+                directory: '/assets/nl-files'
+            };
+
+            // Load the script
+            const script = document.createElement('script');
+            script.src = '/assets/nagishli.js';
+            document.body.appendChild(script);
+
+            console.log('[NagishLi] Loaded for QuickFill mode');
+        } else {
+            console.log('[NagishLi] Skipped in Advanced mode');
+        }
+    })();
     </script>
-    <script src="/assets/nagishli.js"></script>
 </body>
 </html>
