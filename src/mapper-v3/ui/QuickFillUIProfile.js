@@ -235,32 +235,8 @@ class QuickFillUIProfile {
         const existingBtn = staticActions?.querySelector('.advanced-mode-btn');
         if (existingBtn) {
             console.log('[QuickFillUIProfile] Using existing advanced mode button from static toolbar');
-            // The static toolbar handler already calls setFlowMode(MAPPING)
-            // We need to make it also call our exitPublicMode for proper cleanup
+            // V3.13: Just save reference - the mapper-v3.html handler will call exitPublicMode()
             this._advancedModeBtn = existingBtn;
-
-            existingBtn.addEventListener('click', (e) => {
-                // V3.11: Only run if this is a real user click and button is not disabled
-                if (!e.isTrusted || existingBtn.disabled) return;
-
-                // V3.12: Password protection for advanced mode
-                const password = prompt('הזן קוד גישה למצב מתקדם:');
-                if (password !== 'נתנאל3028') {
-                    if (password !== null) { // User didn't cancel
-                        alert('קוד שגוי');
-                    }
-                    return;
-                }
-
-                // Exit public mode (hides UI elements, restores sidebar, etc.)
-                this._isPublicMode = false;
-                document.body.classList.remove('quickfill-public-mode');
-                this._showElements();
-                this._restorePdfViewer();
-                document.title = 'Mapper V3 - Field Mapping Tool';
-                eventBus.emit('UI_PROFILE_CHANGED', { mode: 'full' });
-                console.log('[QuickFillUIProfile] Exited public mode via static button');
-            });
             return;
         }
 
