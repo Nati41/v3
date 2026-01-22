@@ -38,6 +38,9 @@ class QuickFillOverlay {
         this._autoSaveDelay = 2000; // 2 seconds debounce
         this._hasUnsavedChanges = false;
         this._currentPdfName = null;
+
+        // V3.13: Flag to skip auto-save check when loading pre-made forms
+        this._skipAutoSaveCheck = false;
     }
 
     /**
@@ -415,13 +418,19 @@ class QuickFillOverlay {
             this._updateInstructionDefault();
 
             // V3.12: Check for auto-save when PDF is loaded
+            // V3.13: Skip if a pre-made form is being loaded (has mapping data)
             const fileName = state.get('document.fileName');
-            if (fileName && this._boxes.length === 0) {
-                // Only check auto-save if no boxes exist (not a pre-made form load)
+            if (fileName && this._boxes.length === 0 && !this._skipAutoSaveCheck) {
+                // Only check auto-save if no boxes exist AND not loading a pre-made form
                 setTimeout(() => {
-                    this.checkAndRestoreAutoSave(fileName);
+                    // Double-check boxes are still empty (mapping import might have happened)
+                    if (this._boxes.length === 0 && !this._skipAutoSaveCheck) {
+                        this.checkAndRestoreAutoSave(fileName);
+                    }
                 }, 400);
             }
+            // Reset the flag
+            this._skipAutoSaveCheck = false;
         });
 
         // V3.10: Listen for mapping loaded from JSON - recalculate all positions

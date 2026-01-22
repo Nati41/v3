@@ -416,6 +416,13 @@ class QuickFillUIProfile {
         // Load the PDF
         if (data.file && window.pdfEngine) {
             try {
+                // V3.13: If form has mapping data, tell QuickFillOverlay to skip auto-save check
+                // This prevents old auto-save from overwriting the pre-made form's fields
+                if (data.mapping && window.quickFillOverlay) {
+                    window.quickFillOverlay._skipAutoSaveCheck = true;
+                    console.log('[QuickFillUIProfile] Pre-made form with mapping - skipping auto-save check');
+                }
+
                 await window.pdfEngine.load(data.file);
                 console.log('[QuickFillUIProfile] PDF loaded:', data.file.name);
 
@@ -431,6 +438,10 @@ class QuickFillUIProfile {
             } catch (e) {
                 console.error('[QuickFillUIProfile] Failed to load form:', e);
                 alert('שגיאה בטעינת הטופס');
+                // Reset the flag on error
+                if (window.quickFillOverlay) {
+                    window.quickFillOverlay._skipAutoSaveCheck = false;
+                }
             }
         }
 
