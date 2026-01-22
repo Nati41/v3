@@ -379,6 +379,12 @@ export class WordSelector {
      * @param {Object} options - { mode, fieldId, callback }
      */
     async startSelection(options) {
+        // V3.13: Auto-init if not initialized yet (handles race condition in dynamic loading)
+        if (!this.overlayLayer) {
+            console.log('[WordSelector] Auto-initializing (overlayLayer was null)');
+            this.init();
+        }
+
         // PROTECTION: Prevent rapid clicks from breaking the flow
         if (this._isStarting) {
             console.log('[WordSelector] ⚠️ Already starting, ignoring duplicate call');
@@ -465,7 +471,11 @@ export class WordSelector {
      * Render clickable word overlays
      */
     _renderWordOverlays(words) {
-        if (!this.overlayLayer) return;
+        console.log('[WordSelector] _renderWordOverlays called, words:', words.length, 'overlayLayer:', this.overlayLayer);
+        if (!this.overlayLayer) {
+            console.error('[WordSelector] overlayLayer is null! Words will NOT be rendered.');
+            return;
+        }
 
         // Create container
         const container = document.createElement('div');
@@ -562,6 +572,8 @@ export class WordSelector {
         this.selectionState.container = container;
 
         console.log(`[WordSelector] Rendered ${validCount} words (delegated events)`);
+        console.log('[WordSelector] Container appended to overlayLayer:', this.overlayLayer.id || this.overlayLayer.className);
+        console.log('[WordSelector] Container in DOM:', document.contains(container));
 
         // Add keyboard listeners
         this._keyHandler = (e) => {
@@ -967,7 +979,11 @@ export class WordSelector {
         const pdfH = pdfPageDimensions.height / dpiScale;
 
         // Get the actual rendered size from the PDF image
-        const pdfImg = document.getElementById('pdf-image');
+        // V3.13: Fix - look for img inside pdf-container (not #pdf-image which doesn't exist)
+        const pdfImg = document.querySelector('#pdf-container img');
+        if (!pdfImg) {
+            console.warn('[WordSelector] PDF image not found! Using overlayLayer dimensions');
+        }
         const layerWidth = pdfImg?.offsetWidth || this.overlayLayer?.offsetWidth || 1;
         const layerHeight = pdfImg?.offsetHeight || this.overlayLayer?.offsetHeight || 1;
 
