@@ -78,9 +78,23 @@ export class WordSelector {
 
     /**
      * Initialize the word selector
+     * V3.13: Added safeguards - tracks initialization state, validates elements
      */
     init(options = {}) {
+        // Prevent double initialization
+        if (this._initialized) {
+            console.log('[WordSelector] Already initialized, skipping');
+            return;
+        }
+
         this.overlayLayer = document.getElementById(options.overlayLayerId || 'overlay-layer');
+
+        // V3.13: Validate critical elements exist
+        if (!this.overlayLayer) {
+            console.error('[WordSelector] ⚠️ CRITICAL: overlay-layer element not found! Word selection will NOT work.');
+            console.error('[WordSelector] Make sure the DOM has an element with id="overlay-layer"');
+            return;
+        }
 
         // Listen for escape to cancel
         document.addEventListener('keydown', (e) => {
@@ -89,7 +103,16 @@ export class WordSelector {
             }
         });
 
-        console.log('[WordSelector] Initialized');
+        this._initialized = true;
+        console.log('[WordSelector] Initialized successfully, overlayLayer:', this.overlayLayer.id);
+    }
+
+    /**
+     * V3.13: Check if WordSelector is ready to use
+     * @returns {boolean}
+     */
+    isReady() {
+        return this._initialized && this.overlayLayer !== null;
     }
 
     // ============ WORD EXTRACTION ============
@@ -379,10 +402,17 @@ export class WordSelector {
      * @param {Object} options - { mode, fieldId, callback }
      */
     async startSelection(options) {
-        // V3.13: Auto-init if not initialized yet (handles race condition in dynamic loading)
-        if (!this.overlayLayer) {
-            console.log('[WordSelector] Auto-initializing (overlayLayer was null)');
+        // V3.13: Auto-init if not ready (handles race condition in dynamic loading)
+        if (!this.isReady()) {
+            console.log('[WordSelector] Auto-initializing (not ready)');
             this.init();
+
+            // If still not ready after init, show error and abort
+            if (!this.isReady()) {
+                console.error('[WordSelector] Failed to initialize! Cannot start selection.');
+                this._showMessage('שגיאה באתחול בחירת מילים', 'error');
+                return;
+            }
         }
 
         // PROTECTION: Prevent rapid clicks from breaking the flow
@@ -471,9 +501,8 @@ export class WordSelector {
      * Render clickable word overlays
      */
     _renderWordOverlays(words) {
-        console.log('[WordSelector] _renderWordOverlays called, words:', words.length, 'overlayLayer:', this.overlayLayer);
         if (!this.overlayLayer) {
-            console.error('[WordSelector] overlayLayer is null! Words will NOT be rendered.');
+            console.error('[WordSelector] ⚠️ overlayLayer is null! Words will NOT be rendered.');
             return;
         }
 
@@ -571,9 +600,7 @@ export class WordSelector {
         this.overlayLayer.appendChild(container);
         this.selectionState.container = container;
 
-        console.log(`[WordSelector] Rendered ${validCount} words (delegated events)`);
-        console.log('[WordSelector] Container appended to overlayLayer:', this.overlayLayer.id || this.overlayLayer.className);
-        console.log('[WordSelector] Container in DOM:', document.contains(container));
+        console.log(`[WordSelector] Rendered ${validCount} selectable words`);
 
         // Add keyboard listeners
         this._keyHandler = (e) => {

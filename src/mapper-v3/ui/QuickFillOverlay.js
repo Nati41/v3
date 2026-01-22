@@ -2911,9 +2911,10 @@ class QuickFillOverlay {
 
     /**
      * Restore boxes from auto-save data
+     * V3.13: Fixed - added retry logic and better error handling
      */
     _restoreFromAutoSave(data) {
-        console.log('[QuickFillOverlay] Restoring from auto-save...');
+        console.log('[QuickFillOverlay] Restoring from auto-save...', data.boxes?.length, 'boxes');
 
         // Clear existing boxes
         this._boxes = [];
@@ -2922,21 +2923,36 @@ class QuickFillOverlay {
         // Restore box counter
         this._boxCounter = data.boxCounter || 0;
 
-        // Wait for PDF dimensions to be available
-        setTimeout(() => {
+        // V3.13: Retry logic - try multiple times to get pdfDimensions
+        const maxRetries = 10;
+        let retryCount = 0;
+
+        const tryRestore = () => {
             const pdfDims = state.get('pdfDimensions');
-            if (!pdfDims) {
-                console.warn('[QuickFillOverlay] PDF dimensions not available for restore');
+
+            if (!pdfDims || !pdfDims.width || !pdfDims.height) {
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    console.log(`[QuickFillOverlay] PDF dimensions not ready, retry ${retryCount}/${maxRetries}...`);
+                    setTimeout(tryRestore, 200);
+                    return;
+                }
+                console.error('[QuickFillOverlay] ⚠️ Failed to get PDF dimensions after', maxRetries, 'retries');
+                alert('שגיאה בשחזור השדות - נסה לטעון את הקובץ מחדש');
                 return;
             }
+
+            console.log('[QuickFillOverlay] PDF dimensions ready:', pdfDims.width, 'x', pdfDims.height);
+
+            // V3.13: Make sure overlay container is visible
+            this._overlayContainer.classList.remove('hidden');
+            this._overlayContainer.style.display = '';
+            this._overlayContainer.style.visibility = '';
+            this._overlayContainer.style.pointerEvents = '';
 
             // Restore each box
             data.boxes.forEach(boxData => {
                 // Calculate screen rect from bbox
-                const pdfScale = pdfDims.scale || 1;
-                const basePdfWidth = pdfDims.width / pdfScale;
-                const basePdfHeight = pdfDims.height / pdfScale;
-
                 const screenRect = {
                     x: boxData.bbox[0] * pdfDims.width,
                     y: (1 - boxData.bbox[3]) * pdfDims.height,
@@ -2957,8 +2973,11 @@ class QuickFillOverlay {
             this._updateUndoRedoButtons();
             this.clearUndoHistory(); // Clear undo history after restore
 
-            console.log('[QuickFillOverlay] Restored', this._boxes.length, 'boxes from auto-save');
-        }, 300);
+            console.log('[QuickFillOverlay] ✅ Restored', this._boxes.length, 'boxes from auto-save');
+        };
+
+        // Start first attempt after short delay
+        setTimeout(tryRestore, 200);
     }
 
     /**

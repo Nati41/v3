@@ -121,10 +121,15 @@ export class LabelOverlay {
 
     /**
      * Start field name selection
+     * V3.13: Added better error handling and logging
      */
     async startFieldNameSelection(callback) {
         const selector = await getWordSelector();
-        if (!selector) return;
+        if (!selector) {
+            console.error('[LabelOverlay] WordSelector not available - cannot start field name selection');
+            return;
+        }
+        console.log('[LabelOverlay] Starting field name selection, selector ready:', selector.isReady?.() ?? 'unknown');
         await selector.startFieldNameSelection(callback);
     }
 

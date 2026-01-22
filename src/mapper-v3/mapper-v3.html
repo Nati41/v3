@@ -570,6 +570,11 @@
             import('./engines/WordSelector.js').then((module) => {
                 wordSelector = module.wordSelector;
                 window.wordSelector = wordSelector;
+                // V3.13: Call init() immediately after loading
+                if (wordSelector && typeof wordSelector.init === 'function') {
+                    wordSelector.init();
+                    console.log('[Mapper] WordSelector loaded and initialized for advanced mode');
+                }
             }).catch((err) => {
                 console.error('[Mapper] Failed to load WordSelector:', err);
             });
