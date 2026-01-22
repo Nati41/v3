@@ -63,11 +63,14 @@ class QuickFillUIProfile {
 
     /**
      * Check if public mode should be active (URL param)
+     * V3.13: Default to quickfill mode when no mode specified (for clean URLs)
      * @returns {boolean}
      */
     isPublicModeRequested() {
         const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get('mode') === 'quickfill';
+        const mode = (urlParams.get('mode') || 'quickfill').toLowerCase();
+        // Only return false if explicitly requesting advanced mode
+        return mode !== 'advanced';
     }
 
     /**

@@ -1,0 +1,18 @@
+# robots.txt for tofesPDF
+User-agent: *
+Allow: /
+
+# Main pages
+Allow: /
+Allow: /fill
+Allow: /about.html
+Allow: /privacy.html
+Allow: /terms.html
+Allow: /contact.html
+Allow: /accessibility.html
+
+# Disallow internal/technical paths
+Disallow: /src/
+
+# Sitemap
+Sitemap: https://tofespdf.com/sitemap.xml

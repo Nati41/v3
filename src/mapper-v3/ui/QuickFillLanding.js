@@ -182,6 +182,8 @@ const QuickFillLanding = (function() {
                 <!-- Footer -->
                 <footer class="qf-footer">
                     <nav class="qf-footer-links">
+                        <a href="/about.html" target="_blank">אודות</a>
+                        <span class="qf-footer-sep"></span>
                         <a href="/accessibility.html" target="_blank">הצהרת נגישות</a>
                         <span class="qf-footer-sep"></span>
                         <a href="/privacy.html" target="_blank">מדיניות פרטיות</a>
