@@ -1,0 +1,13 @@
+# Netlify configuration
+
+[[redirects]]
+  from = "/fill"
+  to = "/src/mapper-v3/mapper-v3.html?mode=quickfill"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/fill/"
+  to = "/src/mapper-v3/mapper-v3.html?mode=quickfill"
+  status = 200
+  force = true
