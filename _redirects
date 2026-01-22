@@ -1,5 +1,6 @@
 # Netlify URL rewrites for clean public URLs
 # 200 = rewrite (URL stays clean in browser)
 
-/       /src/mapper-v3/mapper-v3.html?mode=quickfill   200
-/fill   /src/mapper-v3/mapper-v3.html?mode=quickfill   200
+/           /src/mapper-v3/mapper-v3.html?mode=quickfill    200
+/fill       /src/mapper-v3/mapper-v3.html?mode=quickfill    200
+/fill/      /src/mapper-v3/mapper-v3.html?mode=quickfill    200
