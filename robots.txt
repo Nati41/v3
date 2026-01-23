@@ -13,6 +13,8 @@ Allow: /accessibility.html
 
 # Disallow internal/technical paths
 Disallow: /src/
+Disallow: /dev.html
+Disallow: /_legacy/
 
 # Sitemap
 Sitemap: https://tofespdf.com/sitemap.xml

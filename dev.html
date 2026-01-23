@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>tofesPDF - פורטל מפתחים</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 40px 24px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 8px;
+        }
+
+        .header .badge {
+            display: inline-block;
+            background: #dc2626;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .version {
+            margin-top: 12px;
+            color: #64748b;
+            font-size: 0.9rem;
+        }
+
+        .section {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #f8fafc;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: #3b82f6;
+            border-radius: 2px;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+        }
+
+        .tool-card {
+            background: #334155;
+            border-radius: 8px;
+            padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .tool-card:hover {
+            background: #475569;
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+        }
+
+        .tool-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #f8fafc;
+            margin-bottom: 4px;
+        }
+
+        .tool-card p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        .tool-card .tag {
+            display: inline-block;
+            margin-top: 8px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 500;
+        }
+
+        .tag-public { background: #166534; color: #bbf7d0; }
+        .tag-protected { background: #9a3412; color: #fed7aa; }
+        .tag-dev { background: #1e40af; color: #bfdbfe; }
+
+        .debug-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .debug-btn {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .debug-btn-danger {
+            background: #7f1d1d;
+            color: #fecaca;
+        }
+
+        .debug-btn-danger:hover {
+            background: #991b1b;
+        }
+
+        .debug-btn-info {
+            background: #1e3a8a;
+            color: #bfdbfe;
+        }
+
+        .debug-btn-info:hover {
+            background: #1e40af;
+        }
+
+        .storage-info {
+            margin-top: 16px;
+            padding: 16px;
+            background: #0f172a;
+            border-radius: 8px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .storage-info.visible {
+            display: block;
+        }
+
+        .storage-info pre {
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .env-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .env-item {
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .env-item label {
+            display: block;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .env-item value {
+            display: block;
+            font-size: 0.9rem;
+            color: #f8fafc;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #166534;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .toast.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>tofesPDF - פורטל מפתחים</h1>
+            <span class="badge">פיתוח בלבד</span>
+            <div class="version">גרסה 3.13 | בנייה: 2025-01-23</div>
+        </header>
+
+        <section class="section">
+            <h2 class="section-title">כלים</h2>
+            <div class="tools-grid">
+                <a href="./src/mapper-v3/mapper-v3.html" class="tool-card">
+                    <h3>מילוי מהיר</h3>
+                    <p>ממשק מילוי טפסים לציבור</p>
+                    <span class="tag tag-public">ציבורי</span>
+                </a>
+                <a href="./src/mapper-v3/mapper-v3.html?mode=advanced" class="tool-card">
+                    <h3>מצב מתקדם</h3>
+                    <p>כלי מיפוי מלאים למפתחים</p>
+                    <span class="tag tag-protected">מוגן בסיסמה</span>
+                </a>
+                <a href="./src/livefill/livefill.html" class="tool-card">
+                    <h3>LiveFill</h3>
+                    <p>ממשק מילוי PDF חי</p>
+                    <span class="tag tag-dev">פיתוח</span>
+                </a>
+                <a href="./src/mobile-fill/mobile-fill.html" class="tool-card">
+                    <h3>מילוי מובייל</h3>
+                    <p>מילוי מותאם למובייל</p>
+                    <span class="tag tag-dev">פיתוח</span>
+                </a>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">כתובות פרודקשן</h2>
+            <div class="tools-grid">
+                <a href="./src/mapper-v3/mapper-v3.html" class="tool-card">
+                    <h3>/ (ראשי)</h3>
+                    <p>נקודת כניסה ראשית - מילוי מהיר</p>
+                    <span class="tag tag-public">פרודקשן</span>
+                </a>
+                <a href="./src/mapper-v3/mapper-v3.html" class="tool-card">
+                    <h3>/fill</h3>
+                    <p>כתובת חלופית לכלי הראשי</p>
+                    <span class="tag tag-public">פרודקשן</span>
+                </a>
+                <a href="./about.html" class="tool-card">
+                    <h3>/about.html</h3>
+                    <p>עמוד אודות</p>
+                    <span class="tag tag-public">פרודקשן</span>
+                </a>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">כלי דיבאג</h2>
+            <div class="debug-section">
+                <button class="debug-btn debug-btn-danger" onclick="clearLocalStorage()">נקה localStorage</button>
+                <button class="debug-btn debug-btn-danger" onclick="clearSessionStorage()">נקה sessionStorage</button>
+                <button class="debug-btn debug-btn-danger" onclick="clearAllStorage()">נקה הכל</button>
+                <button class="debug-btn debug-btn-info" onclick="toggleStorageInfo()">הצג נתונים שמורים</button>
+            </div>
+            <div id="storage-info" class="storage-info">
+                <pre id="storage-content"></pre>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title">סביבה</h2>
+            <div class="env-info">
+                <div class="env-item">
+                    <label>Host</label>
+                    <value id="env-host"></value>
+                </div>
+                <div class="env-item">
+                    <label>Protocol</label>
+                    <value id="env-protocol"></value>
+                </div>
+                <div class="env-item">
+                    <label>User Agent</label>
+                    <value id="env-ua"></value>
+                </div>
+                <div class="env-item">
+                    <label>פריטים ב-localStorage</label>
+                    <value id="env-ls-count"></value>
+                </div>
+                <div class="env-item">
+                    <label>פריטים ב-sessionStorage</label>
+                    <value id="env-ss-count"></value>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Environment info
+        document.getElementById('env-host').textContent = window.location.host;
+        document.getElementById('env-protocol').textContent = window.location.protocol;
+        document.getElementById('env-ua').textContent = navigator.userAgent.slice(0, 50) + '...';
+        updateStorageCounts();
+
+        function updateStorageCounts() {
+            document.getElementById('env-ls-count').textContent = localStorage.length;
+            document.getElementById('env-ss-count').textContent = sessionStorage.length;
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 2000);
+        }
+
+        function clearLocalStorage() {
+            const count = localStorage.length;
+            localStorage.clear();
+            updateStorageCounts();
+            showToast(`נוקו ${count} פריטים מ-localStorage`);
+        }
+
+        function clearSessionStorage() {
+            const count = sessionStorage.length;
+            sessionStorage.clear();
+            updateStorageCounts();
+            showToast(`נוקו ${count} פריטים מ-sessionStorage`);
+        }
+
+        function clearAllStorage() {
+            const lsCount = localStorage.length;
+            const ssCount = sessionStorage.length;
+            localStorage.clear();
+            sessionStorage.clear();
+            updateStorageCounts();
+            showToast(`נוקו ${lsCount + ssCount} פריטים בסך הכל`);
+        }
+
+        function toggleStorageInfo() {
+            const infoEl = document.getElementById('storage-info');
+            const contentEl = document.getElementById('storage-content');
+
+            if (infoEl.classList.contains('visible')) {
+                infoEl.classList.remove('visible');
+                return;
+            }
+
+            const data = {
+                localStorage: {},
+                sessionStorage: {}
+            };
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                try {
+                    const value = localStorage.getItem(key);
+                    data.localStorage[key] = value.length > 200
+                        ? value.slice(0, 200) + '... (' + value.length + ' chars)'
+                        : value;
+                } catch (e) {
+                    data.localStorage[key] = '[שגיאה בקריאה]';
+                }
+            }
+
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                try {
+                    const value = sessionStorage.getItem(key);
+                    data.sessionStorage[key] = value.length > 200
+                        ? value.slice(0, 200) + '... (' + value.length + ' chars)'
+                        : value;
+                } catch (e) {
+                    data.sessionStorage[key] = '[שגיאה בקריאה]';
+                }
+            }
+
+            contentEl.textContent = JSON.stringify(data, null, 2);
+            infoEl.classList.add('visible');
+        }
+    </script>
+</body>
+</html>

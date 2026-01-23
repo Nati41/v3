@@ -282,6 +282,17 @@ input, textarea {
     color: var(--text-muted);
 }
 
+.version-indicator {
+    font-size: 11px;
+    color: var(--text-muted);
+    opacity: 0.7;
+    padding: 2px 6px;
+    background: var(--bg-tertiary, rgba(0,0,0,0.1));
+    border-radius: 4px;
+    cursor: default;
+    user-select: none;
+}
+
 /* Zoom Controls */
 .zoom-controls {
     display: flex;

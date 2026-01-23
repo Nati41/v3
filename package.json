@@ -1,0 +1,13 @@
+{
+  "name": "tofespdf",
+  "version": "3.13.0",
+  "description": "tofesPDF - Hebrew PDF Form Filling Tool",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["pdf", "forms", "hebrew"],
+  "author": "tofesPDF",
+  "license": "UNLICENSED",
+  "private": true
+}

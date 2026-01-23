@@ -408,9 +408,9 @@ class QuickFillOverlay {
         });
 
         // V3.10: Listen for PDF load - layer size may change after PDF finishes rendering
-        // This catches the second size change that happens after UI profile change
-        eventBus.on(Events.PDF_LOADED, () => {
-            console.log('[QuickFillOverlay] PDF loaded - updating box positions');
+        // V3.13: Now receives dimensions directly from event payload
+        eventBus.on(Events.PDF_LOADED, ({ dimensions }) => {
+            console.log('[QuickFillOverlay] PDF loaded - updating box positions, dimensions:', dimensions);
             setTimeout(() => {
                 this._updateAllBoxPositions();
             }, 200);
@@ -419,15 +419,16 @@ class QuickFillOverlay {
 
             // V3.12: Check for auto-save when PDF is loaded
             // V3.13: Skip if a pre-made form is being loaded (has mapping data)
+            // V3.13: Now event-driven - dimensions available immediately from event
             const fileName = state.get('document.fileName');
             if (fileName && this._boxes.length === 0 && !this._skipAutoSaveCheck) {
-                // Only check auto-save if no boxes exist AND not loading a pre-made form
+                // Small delay to let any pending mapping imports complete
                 setTimeout(() => {
                     // Double-check boxes are still empty (mapping import might have happened)
                     if (this._boxes.length === 0 && !this._skipAutoSaveCheck) {
-                        this.checkAndRestoreAutoSave(fileName);
+                        this.checkAndRestoreAutoSave(fileName, dimensions);
                     }
-                }, 400);
+                }, 300);
             }
             // Reset the flag
             this._skipAutoSaveCheck = false;
@@ -2866,8 +2867,11 @@ class QuickFillOverlay {
     /**
      * Check for auto-save and prompt to restore
      * Call this when PDF is loaded
+     * V3.13: Now accepts dimensions from PDF_LOADED event for immediate restore
+     * @param {string} fileName - PDF file name
+     * @param {Object} dimensions - PDF dimensions from event { width, height, scale }
      */
-    checkAndRestoreAutoSave(fileName) {
+    checkAndRestoreAutoSave(fileName, dimensions = null) {
         this._currentPdfName = fileName;
         const key = this._getAutoSaveKey();
 
@@ -2905,7 +2909,7 @@ class QuickFillOverlay {
             );
 
             if (shouldRestore) {
-                this._restoreFromAutoSave(data);
+                this._restoreFromAutoSave(data, dimensions);
                 return true;
             } else {
                 // User declined - clear the save
@@ -2920,9 +2924,11 @@ class QuickFillOverlay {
 
     /**
      * Restore boxes from auto-save data
-     * V3.13: Fixed - added retry logic and better error handling
+     * V3.13: Now event-driven - receives dimensions directly from caller
+     * @param {Object} data - Auto-save data
+     * @param {Object} providedDims - PDF dimensions from event { width, height, scale }
      */
-    _restoreFromAutoSave(data) {
+    _restoreFromAutoSave(data, providedDims = null) {
         console.log('[QuickFillOverlay] Restoring from auto-save...', data.boxes?.length, 'boxes');
 
         // Clear existing boxes
@@ -2932,61 +2938,54 @@ class QuickFillOverlay {
         // Restore box counter
         this._boxCounter = data.boxCounter || 0;
 
-        // V3.13: Retry logic - try multiple times to get pdfDimensions
-        const maxRetries = 10;
-        let retryCount = 0;
+        // V3.13: Use provided dimensions if available, otherwise get from state
+        // This makes restore event-driven rather than polling-based
+        let pdfDims = providedDims || state.get('pdfDimensions');
 
-        const tryRestore = () => {
-            const pdfDims = state.get('pdfDimensions');
+        // If still no dimensions, retry with fallback (edge case)
+        if (!pdfDims || !pdfDims.width || !pdfDims.height) {
+            console.warn('[QuickFillOverlay] Dimensions not immediately available, trying state...');
+            pdfDims = state.get('pdfDimensions');
 
             if (!pdfDims || !pdfDims.width || !pdfDims.height) {
-                retryCount++;
-                if (retryCount < maxRetries) {
-                    console.log(`[QuickFillOverlay] PDF dimensions not ready, retry ${retryCount}/${maxRetries}...`);
-                    setTimeout(tryRestore, 200);
-                    return;
-                }
-                console.error('[QuickFillOverlay] ⚠️ Failed to get PDF dimensions after', maxRetries, 'retries');
+                console.error('[QuickFillOverlay] ⚠️ PDF dimensions not available');
                 alert('שגיאה בשחזור השדות - נסה לטעון את הקובץ מחדש');
                 return;
             }
+        }
 
-            console.log('[QuickFillOverlay] PDF dimensions ready:', pdfDims.width, 'x', pdfDims.height);
+        console.log('[QuickFillOverlay] PDF dimensions:', pdfDims.width, 'x', pdfDims.height);
 
-            // V3.13: Make sure overlay container is visible
-            this._overlayContainer.classList.remove('hidden');
-            this._overlayContainer.style.display = '';
-            this._overlayContainer.style.visibility = '';
-            this._overlayContainer.style.pointerEvents = '';
+        // V3.13: Make sure overlay container is visible
+        this._overlayContainer.classList.remove('hidden');
+        this._overlayContainer.style.display = '';
+        this._overlayContainer.style.visibility = '';
+        this._overlayContainer.style.pointerEvents = '';
 
-            // Restore each box
-            data.boxes.forEach(boxData => {
-                // Calculate screen rect from bbox
-                const screenRect = {
-                    x: boxData.bbox[0] * pdfDims.width,
-                    y: (1 - boxData.bbox[3]) * pdfDims.height,
-                    width: (boxData.bbox[2] - boxData.bbox[0]) * pdfDims.width,
-                    height: (boxData.bbox[3] - boxData.bbox[1]) * pdfDims.height
-                };
+        // Restore each box
+        data.boxes.forEach(boxData => {
+            // Calculate screen rect from bbox
+            const screenRect = {
+                x: boxData.bbox[0] * pdfDims.width,
+                y: (1 - boxData.bbox[3]) * pdfDims.height,
+                width: (boxData.bbox[2] - boxData.bbox[0]) * pdfDims.width,
+                height: (boxData.bbox[3] - boxData.bbox[1]) * pdfDims.height
+            };
 
-                const box = {
-                    ...boxData,
-                    screenRect
-                };
+            const box = {
+                ...boxData,
+                screenRect
+            };
 
-                this._boxes.push(box);
-                this._renderBox(box);
-            });
+            this._boxes.push(box);
+            this._renderBox(box);
+        });
 
-            this._updateStatusBar();
-            this._updateUndoRedoButtons();
-            this.clearUndoHistory(); // Clear undo history after restore
+        this._updateStatusBar();
+        this._updateUndoRedoButtons();
+        this.clearUndoHistory(); // Clear undo history after restore
 
-            console.log('[QuickFillOverlay] ✅ Restored', this._boxes.length, 'boxes from auto-save');
-        };
-
-        // Start first attempt after short delay
-        setTimeout(tryRestore, 200);
+        console.log('[QuickFillOverlay] ✅ Restored', this._boxes.length, 'boxes from auto-save');
     }
 
     /**
