@@ -6238,3 +6238,215 @@ body.quickfill-public-mode .quick-fill-box.quick-fill-circle[data-checked="true"
         background-color: rgba(255, 255, 255, 0.1);
     }
 }
+
+/* ============ V3.13: Auth Dialog ============ */
+
+.auth-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+}
+
+.auth-dialog-overlay.hidden {
+    display: none;
+}
+
+.auth-dialog-box {
+    background: var(--bg-primary);
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: authDialogIn 0.2s ease;
+}
+
+@keyframes authDialogIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.auth-dialog-header {
+    margin-bottom: 16px;
+}
+
+.auth-dialog-icon {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.auth-dialog-header h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.auth-dialog-description {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0 0 24px 0;
+    line-height: 1.5;
+}
+
+.auth-code-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 1.1rem;
+    font-family: inherit;
+    border: 2px solid var(--border-color);
+    border-radius: 10px;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.auth-code-input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.auth-code-input.error {
+    border-color: var(--error-color);
+    animation: authShake 0.4s ease;
+}
+
+@keyframes authShake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}
+
+.auth-error-message {
+    color: var(--error-color);
+    font-size: 0.9rem;
+    margin: 12px 0 0 0;
+    font-weight: 500;
+}
+
+.auth-error-message.hidden {
+    display: none;
+}
+
+.auth-dialog-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
+
+.auth-dialog-actions button {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.auth-dialog-actions .btn-secondary {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.auth-dialog-actions .btn-secondary:hover {
+    background: var(--bg-tertiary);
+}
+
+.auth-dialog-actions .btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.auth-dialog-actions .btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.auth-dialog-hint {
+    margin: 20px 0 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Auth button in toolbar */
+.auth-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.auth-toggle-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.auth-toggle-btn.authorized {
+    background: rgba(22, 163, 74, 0.1);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.auth-toggle-btn .auth-icon {
+    font-size: 1rem;
+}
+
+/* Hide elements based on auth level */
+[data-auth="authorized"] {
+    display: none;
+}
+
+body.auth-authorized [data-auth="authorized"] {
+    display: flex;
+}
+
+/* For inline elements */
+span[data-auth="authorized"],
+button[data-auth="authorized"] {
+    display: none;
+}
+
+body.auth-authorized span[data-auth="authorized"],
+body.auth-authorized button[data-auth="authorized"] {
+    display: inline-flex;
+}
+
+/* V3.13: Show QuickFill tools in public mode */
+body.quickfill-public-mode .toolbar-group.quick-fill-tools,
+body.quickfill-public-mode .toolbar-separator.quick-fill-tools {
+    display: flex !important;
+}
+
+/* V3.13: Hide admin-only tools in public mode */
+body.quickfill-public-mode [data-auth="authorized"] {
+    display: none !important;
+}
+
+/* V3.13: Show admin tools only when authorized AND in public mode */
+body.quickfill-public-mode.auth-authorized [data-auth="authorized"] {
+    display: none !important;
+}

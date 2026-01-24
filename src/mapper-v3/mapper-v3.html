@@ -38,6 +38,109 @@
     </style>
 </head>
 <body>
+    <!-- Mobile Warning Screen -->
+    <div id="mobile-warning" class="mobile-warning">
+        <div class="mobile-warning-content">
+            <div class="mobile-warning-icon">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                    <line x1="12" y1="18" x2="12" y2="18.01" stroke-width="2"/>
+                </svg>
+                <div class="mobile-warning-x">✕</div>
+            </div>
+            <h1>האתר אינו זמין במובייל</h1>
+            <p>tofesPDF מיועד לשימוש במחשב בלבד.</p>
+            <p>לחוויה הטובה ביותר, אנא פתח את האתר במחשב נייח או נייד.</p>
+            <div class="mobile-warning-url">
+                <span>tofespdf.com</span>
+            </div>
+            <div class="mobile-warning-hint">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                    <line x1="8" y1="21" x2="16" y2="21"/>
+                    <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                <span>עבור למחשב</span>
+            </div>
+        </div>
+    </div>
+    <style>
+        .mobile-warning {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 999999;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+            color: white;
+            font-family: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .mobile-warning-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 32px;
+            text-align: center;
+        }
+        .mobile-warning-icon {
+            position: relative;
+            color: #60a5fa;
+            margin-bottom: 32px;
+        }
+        .mobile-warning-x {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px;
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .mobile-warning h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin: 0 0 16px 0;
+            color: #f8fafc;
+        }
+        .mobile-warning p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin: 0 0 8px 0;
+            line-height: 1.6;
+        }
+        .mobile-warning-url {
+            margin-top: 32px;
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 1.1rem;
+            color: #60a5fa;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .mobile-warning-hint {
+            margin-top: 48px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+        .mobile-warning-hint svg {
+            color: #3b82f6;
+        }
+        /* Show only on mobile */
+        @media (max-width: 768px) {
+            .mobile-warning {
+                display: block;
+            }
+            body > *:not(.mobile-warning) {
+                display: none !important;
+            }
+        }
+    </style>
+
     <!-- Loading Screen -->
     <div id="loading-screen" class="loading-screen">
         <div class="loading-content">
@@ -56,7 +159,8 @@
     <div id="mapper-container" class="mapper-container">
         <!-- Header / Toolbar -->
         <header id="toolbar" class="toolbar">
-            <div class="toolbar-group">
+            <!-- V3.13: Auth-protected admin tools -->
+            <div class="toolbar-group" data-auth="authorized">
                 <!-- V3.12: Open PDF button removed - use center drop zone instead -->
                 <button id="btn-import-json" class="toolbar-btn" title="Import JSON">
                     <span class="icon">📥</span>
@@ -80,9 +184,10 @@
                 </button>
             </div>
 
-            <div class="toolbar-separator"></div>
+            <div class="toolbar-separator" data-auth="authorized"></div>
 
-            <div class="toolbar-group tools" data-mapper-only>
+            <!-- V3.13: Mapping tools - auth protected -->
+            <div class="toolbar-group tools" data-mapper-only data-auth="authorized">
                 <button id="btn-tool-select" class="toolbar-btn tool-btn active" data-tool="select" title="Select (V)">
                     <span class="icon">👆</span>
                 </button>
@@ -226,6 +331,14 @@
             </div>
             <div class="toolbar-spacer"></div>
 
+            <!-- V3.13: Auth toggle button -->
+            <div class="toolbar-group">
+                <button id="btn-auth-toggle" class="auth-toggle-btn" title="כניסת מנהל">
+                    <span class="auth-icon">🔒</span>
+                    <span class="auth-label">מנהל</span>
+                </button>
+            </div>
+
             <div class="toolbar-group">
                 <span id="status-indicator" class="status-indicator">Ready</span>
                 <span id="version-indicator" class="version-indicator" title="Version 3.13">v3.13</span>
@@ -235,7 +348,7 @@
         <!-- Main Content Area -->
         <main class="main-content">
             <!-- Sidebar -->
-            <aside id="sidebar-container" class="sidebar">
+            <aside id="sidebar-container" class="sidebar" data-auth="authorized">
                 <div class="sidebar-header">
                     <h2>Fields</h2>
                     <div class="sidebar-controls">
@@ -399,6 +512,36 @@
             </div>
         </div>
     </div>
+
+    <!-- V3.13: Auth Dialog -->
+    <div id="auth-dialog" class="auth-dialog-overlay hidden">
+        <div class="auth-dialog-box">
+            <div class="auth-dialog-header">
+                <span class="auth-dialog-icon">🔐</span>
+                <h2>כניסת מנהל</h2>
+            </div>
+            <p class="auth-dialog-description">הזן קוד גישה לפתיחת כלי העריכה והמיפוי</p>
+
+            <input type="text"
+                   id="auth-code-input"
+                   class="auth-code-input"
+                   placeholder="קוד גישה"
+                   autocomplete="off"
+                   lang="he">
+
+            <p id="auth-error-message" class="auth-error-message hidden">קוד שגוי, נסה שוב</p>
+
+            <div class="auth-dialog-actions">
+                <button id="auth-cancel-btn" class="btn-secondary">ביטול</button>
+                <button id="auth-submit-btn" class="btn-primary">כניסה</button>
+            </div>
+
+            <p class="auth-dialog-hint">שכחת את הקוד? פנה למנהל המערכת</p>
+        </div>
+    </div>
+
+    <!-- V3.13: Auth Manager -->
+    <script src="./core/AuthManager.js"></script>
 
     <!-- V3.9: Recent PDFs localStorage manager -->
     <script src="./core/RecentPDFs.js"></script>
@@ -616,9 +759,118 @@
         window.LABEL_DEBUG = true;  // Set to false to disable debug logs
         // window.LABEL_VALIDATE = true;  // Uncomment to compare V2 vs legacy
 
+        // ============ V3.13: AUTH SYSTEM ============
+        function initAuthSystem() {
+            const authDialog = document.getElementById('auth-dialog');
+            const authInput = document.getElementById('auth-code-input');
+            const authSubmitBtn = document.getElementById('auth-submit-btn');
+            const authCancelBtn = document.getElementById('auth-cancel-btn');
+            const authToggleBtn = document.getElementById('btn-auth-toggle');
+            const authErrorMsg = document.getElementById('auth-error-message');
+
+            if (!authDialog || !AuthManager) {
+                console.warn('[Auth] Auth system components not found');
+                return;
+            }
+
+            // Update UI based on auth level
+            function updateAuthUI() {
+                const isAuth = AuthManager.isAuthorized();
+
+                // Update body class for CSS visibility rules
+                document.body.classList.toggle('auth-authorized', isAuth);
+
+                // Update toggle button
+                if (authToggleBtn) {
+                    const icon = authToggleBtn.querySelector('.auth-icon');
+                    const label = authToggleBtn.querySelector('.auth-label');
+                    if (icon) icon.textContent = isAuth ? '🔓' : '🔒';
+                    if (label) label.textContent = isAuth ? 'מחובר' : 'מנהל';
+                    authToggleBtn.classList.toggle('authorized', isAuth);
+                    authToggleBtn.title = isAuth ? 'לחץ ליציאה' : 'כניסת מנהל';
+                }
+
+                console.log('[Auth] UI updated, authorized:', isAuth);
+            }
+
+            // Show dialog
+            function showAuthDialog() {
+                authDialog.classList.remove('hidden');
+                authInput.value = '';
+                authInput.classList.remove('error');
+                authErrorMsg.classList.add('hidden');
+                setTimeout(() => authInput.focus(), 100);
+            }
+
+            // Hide dialog
+            function hideAuthDialog() {
+                authDialog.classList.add('hidden');
+                authInput.value = '';
+            }
+
+            // Handle submit
+            function handleSubmit() {
+                const code = authInput.value;
+                if (AuthManager.authorize(code)) {
+                    hideAuthDialog();
+                    showToast('מחובר כמנהל', 'success');
+                } else {
+                    authInput.classList.add('error');
+                    authErrorMsg.classList.remove('hidden');
+                    setTimeout(() => authInput.classList.remove('error'), 400);
+                }
+            }
+
+            // Event listeners
+            authToggleBtn?.addEventListener('click', () => {
+                if (AuthManager.isAuthorized()) {
+                    AuthManager.logout();
+                    // Return to public/QuickFill mode
+                    if (typeof quickFillUIProfile !== 'undefined' && !quickFillUIProfile.isPublicMode()) {
+                        quickFillUIProfile.enterPublicMode();
+                    }
+                    showToast('יצאת ממצב מנהל', 'info');
+                } else {
+                    showAuthDialog();
+                }
+            });
+
+            authSubmitBtn?.addEventListener('click', handleSubmit);
+            authCancelBtn?.addEventListener('click', hideAuthDialog);
+
+            authInput?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleSubmit();
+                } else if (e.key === 'Escape') {
+                    hideAuthDialog();
+                }
+            });
+
+            // Close on backdrop click
+            authDialog?.addEventListener('click', (e) => {
+                if (e.target === authDialog) {
+                    hideAuthDialog();
+                }
+            });
+
+            // Listen for auth events
+            document.addEventListener(AuthManager.EVENTS.LEVEL_CHANGED, updateAuthUI);
+            document.addEventListener(AuthManager.EVENTS.SHOW_LOGIN_DIALOG, showAuthDialog);
+
+            // Initial UI update
+            updateAuthUI();
+
+            console.log('[Auth] System initialized');
+        }
+
         // Initialize when DOM ready
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('[Mapper V3] Starting...');
+
+            // ─────────────────────────────────────────────────────────────
+            // V3.13: Auth System Initialization
+            // ─────────────────────────────────────────────────────────────
+            initAuthSystem();
 
             try {
                 // Initialize PDF.js
@@ -1469,24 +1721,32 @@
                 advancedModeBtn.addEventListener('click', (e) => {
                     // V3.11: Only switch if we're actually in QuickFill mode and this is a real click
                     if (state.isQuickFillMode() && e.isTrusted && !advancedModeBtn.disabled) {
-                        // V3.12: Password protection for advanced mode
-                        const password = prompt('הזן קוד גישה למצב מתקדם:');
-                        if (password !== 'נתנאל3028') {
-                            if (password !== null) { // User didn't cancel
-                                alert('קוד שגוי');
-                            }
+                        // V3.13: Use AuthManager for authorization
+                        if (!AuthManager.isAuthorized()) {
+                            // Show auth dialog, then switch mode if successful
+                            const onAuthSuccess = () => {
+                                document.removeEventListener(AuthManager.EVENTS.LOGIN_SUCCESS, onAuthSuccess);
+                                switchToAdvancedMode();
+                            };
+                            document.addEventListener(AuthManager.EVENTS.LOGIN_SUCCESS, onAuthSuccess);
+                            AuthManager.showLoginDialog();
                             return;
                         }
-                        console.log('[Toolbar] Advanced mode button clicked - switching to MAPPING');
 
-                        // V3.12: Exit public mode to restore full UI
-                        if (quickFillUIProfile.isPublicMode()) {
-                            quickFillUIProfile.exitPublicMode();
-                        } else {
-                            state.setFlowMode(FlowModes.MAPPING);
-                        }
+                        switchToAdvancedMode();
                     }
                 });
+
+                function switchToAdvancedMode() {
+                    console.log('[Toolbar] Advanced mode button clicked - switching to MAPPING');
+
+                    // V3.12: Exit public mode to restore full UI
+                    if (quickFillUIProfile.isPublicMode()) {
+                        quickFillUIProfile.exitPublicMode();
+                    } else {
+                        state.setFlowMode(FlowModes.MAPPING);
+                    }
+                }
             }
 
             eventBus.on(Events.TOOL_CHANGED, ({ tool }) => {

@@ -281,12 +281,15 @@ class QuickFillUIProfile {
         this._advancedModeBtn.addEventListener('click', (e) => {
             // V3.11: Only run if this is a real user click
             if (e.isTrusted) {
-                // V3.12: Password protection for advanced mode
-                const password = prompt('הזן קוד גישה למצב מתקדם:');
-                if (password !== 'נתנאל3028') {
-                    if (password !== null) { // User didn't cancel
-                        alert('קוד שגוי');
-                    }
+                // V3.13: Use AuthManager for authorization
+                if (typeof AuthManager !== 'undefined' && !AuthManager.isAuthorized()) {
+                    // Show auth dialog, then exit public mode if successful
+                    const onAuthSuccess = () => {
+                        document.removeEventListener(AuthManager.EVENTS.LOGIN_SUCCESS, onAuthSuccess);
+                        this.exitPublicMode();
+                    };
+                    document.addEventListener(AuthManager.EVENTS.LOGIN_SUCCESS, onAuthSuccess);
+                    AuthManager.showLoginDialog();
                     return;
                 }
                 this.exitPublicMode();
