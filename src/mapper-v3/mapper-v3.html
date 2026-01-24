@@ -773,6 +773,9 @@
                 return;
             }
 
+            // V3.13: Initialize AuthManager first
+            AuthManager.init();
+
             // Update UI based on auth level
             function updateAuthUI() {
                 const isAuth = AuthManager.isAuthorized();
@@ -826,6 +829,7 @@
                 if (AuthManager.isAuthorized()) {
                     AuthManager.logout();
                     // Return to public/QuickFill mode
+                    // Note: enterPublicMode already calls importFromFields
                     if (typeof quickFillUIProfile !== 'undefined' && !quickFillUIProfile.isPublicMode()) {
                         quickFillUIProfile.enterPublicMode();
                     }

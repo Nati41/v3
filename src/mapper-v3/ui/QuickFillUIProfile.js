@@ -122,6 +122,20 @@ class QuickFillUIProfile {
         // Update page title
         document.title = 'tofesPDF - מילוי טפסים';
 
+        // V3.13: Set flow mode to QuickFill
+        if (state.getFlowMode() !== FlowModes.QUICK_FILL) {
+            state.setFlowMode(FlowModes.QUICK_FILL);
+            console.log('[QuickFillUIProfile] Set flow mode to QUICK_FILL');
+        }
+
+        // V3.13: Import existing fields to QuickFill boxes (if PDF is loaded)
+        if (window.quickFillOverlay && window.pdfEngine?.isLoaded()) {
+            setTimeout(() => {
+                const imported = window.quickFillOverlay.importFromFields(false);
+                console.log('[QuickFillUIProfile] Imported', imported, 'fields to QuickFill');
+            }, 100); // Small delay to ensure overlay is ready
+        }
+
         console.log('[QuickFillUIProfile] Entered public mode with embedded landing');
 
         // Emit event for other modules
@@ -177,6 +191,13 @@ class QuickFillUIProfile {
         if (state.getFlowMode() === FlowModes.QUICK_FILL) {
             state.setFlowMode(FlowModes.MAPPING);
             console.log('[QuickFillUIProfile] Exited QuickFill flow mode');
+        }
+
+        // V3.13: Clear QuickFill boxes when switching to admin mode
+        // Admin mode should start fresh without public mode data
+        if (window.quickFillOverlay) {
+            window.quickFillOverlay.clearAll();
+            console.log('[QuickFillUIProfile] Cleared QuickFill boxes for admin mode');
         }
 
         // V3.13: Hide NagishLi accessibility plugin in advanced mode

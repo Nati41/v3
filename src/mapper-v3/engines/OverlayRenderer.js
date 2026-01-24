@@ -281,6 +281,14 @@ export class OverlayRenderer {
     renderAll() {
         if (!this.overlayLayer) return;
 
+        // V3.13: Skip rendering admin overlays in public mode
+        // QuickFill mode uses its own overlay system
+        if (document.body.classList.contains('quickfill-public-mode')) {
+            this.clear();
+            labelOverlay.clearAll();
+            return;
+        }
+
         // Clear existing overlays
         this.clear();
 

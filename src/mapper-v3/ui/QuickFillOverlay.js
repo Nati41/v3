@@ -797,9 +797,19 @@ class QuickFillOverlay {
                 boxEl.classList.remove('has-text');
             }
 
+            // V3.13: Recalculate fieldPt and ptToPxScale from current box.screenRect
+            // This fixes the display issue when boxes are imported from admin mode
+            // (screenRect gets updated after initial render, but closure had old values)
+            const pdfDims = state.get('pdfDimensions') || { width: 595, height: 842, scale: 1 };
+            const pdfScale = pdfDims.scale || 1;
+            const basePdfWidth = pdfDims.width / pdfScale;
+            const basePdfHeight = pdfDims.height / pdfScale;
+            const currentFieldPt = this._getFieldPtFromBbox(box.bbox, basePdfWidth, basePdfHeight);
+            const currentPtToPxScale = box.screenRect.width / currentFieldPt.width;
+
             // Render with PreviewTextRenderer (same as LiveFill)
             try {
-                this._renderPreviewText(boxEl, newValue, fieldPt, ptToPxScale, box.screenRect, box);
+                this._renderPreviewText(boxEl, newValue, currentFieldPt, currentPtToPxScale, box.screenRect, box);
             } catch (err) {
                 console.error('[QuickFillOverlay] ERROR in _renderPreviewText:', err);
             }
@@ -1956,7 +1966,15 @@ class QuickFillOverlay {
         // Get all mapped fields from state
         const fields = state.get('fields') || [];
         console.log('[QuickFillOverlay] Total fields in state:', fields.length);
-        const mappedFields = fields.filter(f => f.bbox && Array.isArray(f.bbox) && f.bbox.length === 4);
+
+        // V3.13: Support both bbox and anchor-based fields
+        const mappedFields = fields.filter(f => {
+            // Has bbox array
+            if (f.bbox && Array.isArray(f.bbox) && f.bbox.length === 4) return true;
+            // Has anchor array (checkbox/radio)
+            if (f.anchor && Array.isArray(f.anchor) && f.anchor.length === 2) return true;
+            return false;
+        });
 
         if (mappedFields.length === 0) {
             console.log('[QuickFillOverlay] No mapped fields to import');
@@ -1996,41 +2014,47 @@ class QuickFillOverlay {
                 return;
             }
 
-            // Convert bbox to screenRect using overlayRenderer
-            const screenRect = overlayRenderer.bboxToScreen(field.bbox);
-            console.log('[QuickFillOverlay] Field', field.id, 'screenRect:', screenRect);
+            // V3.13: Convert bbox OR anchor to screenRect
+            let screenRect;
+            let bboxForStorage;
+
+            if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+                // Has bbox - use it directly
+                screenRect = overlayRenderer.bboxToScreen(field.bbox);
+                bboxForStorage = field.bbox;
+            } else if (field.anchor && Array.isArray(field.anchor) && field.anchor.length === 2) {
+                // Has anchor (checkbox/radio) - convert to screenRect with default size
+                const center = overlayRenderer.anchorToScreen(field.anchor);
+                const defaultSize = boxType === 'checkbox' || boxType === 'radio' ? 20 : 100;
+                screenRect = {
+                    x: center.x - defaultSize / 2,
+                    y: center.y - defaultSize / 2,
+                    width: defaultSize,
+                    height: defaultSize
+                };
+                // Create normalized bbox from anchor
+                bboxForStorage = [
+                    field.anchor[0] - 0.01,
+                    field.anchor[1] - 0.01,
+                    0.02,
+                    0.02
+                ];
+                console.log('[QuickFillOverlay] Converted anchor to screenRect:', field.id, center, '->', screenRect);
+            }
 
             if (!screenRect || screenRect.width <= 0 || screenRect.height <= 0) {
                 console.warn('[QuickFillOverlay] Invalid screenRect for field:', field.id, screenRect);
                 return;
             }
 
-            // Generate unique ID
-            const boxId = `qf-box-${++this._boxCounter}`;
-
-            // Create box data
-            const box = {
-                id: boxId,
-                bbox: field.bbox,
+            // V3.13: Use _onBoxCreated - exactly like regular QuickFill mode
+            // This ensures all the same rules and formatting apply
+            this._onBoxCreated({
+                bbox: bboxForStorage || field.bbox,
                 screenRect: screenRect,
                 page: field.page || 1,
-                text: field.value || '',
-                tool: tool,
-                type: boxType,
-                checked: field.checked || false,
-                label: field.label_he || field.label || field.id,
-                sourceFieldId: field.id,  // Track source field
-                createdAt: Date.now()
-            };
-
-            this._boxes.push(box);
-
-            // Render based on type (pass skipFocus=true to avoid focusing each box)
-            if (boxType === 'checkbox' || boxType === 'radio' || boxType === 'circle') {
-                this._renderCheckboxRadio(box, true);
-            } else {
-                this._renderBox(box, true);
-            }
+                tool: tool
+            });
 
             importedCount++;
         });

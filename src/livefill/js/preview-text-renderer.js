@@ -190,7 +190,7 @@
         // Generic: font size proportional to field height
         const fontSizePt = style.fontSize || calcFontSize(fieldPt.height);
         const color = style.color || '#000000';
-        const align = style.alignment || 'right';  // RTL default
+        const align = style.alignment || 'center-start';  // V3.13: Start at center, go right
 
         // Convert pt → px
         const fontSizePx = fontSizePt * scale;
@@ -200,7 +200,8 @@
         textSpan.textContent = text;
 
         // Horizontal positioning + transform (includes translateY to push down)
-        let positionCSS = 'right: 0;';
+        // V3.13: Default is 'center-start' - text starts at center and extends right
+        let positionCSS = 'left: 50%;';
         let transformCSS = 'translateY(15%)';
 
         if (align === 'center') {
@@ -208,7 +209,10 @@
             transformCSS = 'translateX(-50%) translateY(15%)';
         } else if (align === 'left') {
             positionCSS = 'left: 0;';
+        } else if (align === 'right') {
+            positionCSS = 'right: 0;';
         }
+        // 'center-start' uses the default: left: 50% without translateX
 
         // Check if text is numeric/date (should not be reversed)
         const isNumericOrDate = /^[\d\s.,\-\/\\:]+$/.test(text);

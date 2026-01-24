@@ -722,7 +722,7 @@ window.ExportEngine = {
                 const style = data.style || {};
                 let fontSize = style.fontSize || 14;
                 const colorHex = style.color || "#000000";
-                const align = style.alignment || "right";
+                const align = style.alignment || "center-start";  // V3.13: Start at center, go right
                 const baseline = 1.2;
 
                 const color = hexToRgb(colorHex);
@@ -797,12 +797,16 @@ window.ExportEngine = {
                     textWidth = hebrewFont.widthOfTextAtSize(rawValue, fontSize);
                 }
 
-                let tx = xPDF;
+                // V3.13: 'center-start' = text starts at center, extends right
+                let tx = xPDF + wPDF / 2;  // Default: center-start
                 if (effectiveAlign === "center") {
                     tx = xPDF + (wPDF - textWidth) / 2;
                 } else if (effectiveAlign === "right") {
                     tx = xPDF + (wPDF - textWidth);
+                } else if (effectiveAlign === "left") {
+                    tx = xPDF;
                 }
+                // 'center-start' uses the default: xPDF + wPDF / 2
 
                 // Bottom anchor: 15% padding from bottom or at least 2pt
                 const bottomPadding = Math.max(2, hPDF * 0.15);
