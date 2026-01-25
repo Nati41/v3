@@ -115,7 +115,13 @@
         panelEl.appendChild(inputContainer);
         panelEl.appendChild(actionsContainer);
 
-        document.body.appendChild(panelEl);
+        // Append to PDF container so it scrolls with content
+        const pdfContainer = document.getElementById('mobilefill-pdf-container');
+        if (pdfContainer) {
+            pdfContainer.appendChild(panelEl);
+        } else {
+            document.body.appendChild(panelEl);
+        }
     }
 
     function bindEvents() {
@@ -192,6 +198,12 @@
         // Show panel
         panelEl.classList.remove('is-hidden');
 
+        // Hide nav bar and export bar while panel is open
+        const navBar = document.getElementById('mobilefill-nav-bar');
+        const exportBar = document.getElementById('mobilefill-export-bar');
+        if (navBar) navBar.classList.add('panel-open');
+        if (exportBar) exportBar.classList.add('panel-open');
+
         // Highlight field on PDF
         window.MobileFillEventBus.emit('FIELD_HIGHLIGHT', { fieldId, active: true });
 
@@ -210,6 +222,12 @@
 
         // Hide panel
         panelEl.classList.add('is-hidden');
+
+        // Show nav bar and export bar again
+        const navBar = document.getElementById('mobilefill-nav-bar');
+        const exportBar = document.getElementById('mobilefill-export-bar');
+        if (navBar) navBar.classList.remove('panel-open');
+        if (exportBar) exportBar.classList.remove('panel-open');
 
         // Blur input
         inputEl.blur();

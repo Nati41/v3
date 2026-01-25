@@ -218,7 +218,10 @@ html, body {
    Fill Screen
    ======================================== */
 #mobilefill-fill-screen {
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
 }
 
 /* ========================================
@@ -226,13 +229,12 @@ html, body {
    ======================================== */
 #mobilefill-pdf-container {
     flex: 1;
-    overflow-y: auto;
-    overflow-x: visible;
-    padding-bottom: 140px; /* Space for nav + export bars */
-    touch-action: pan-y;
-    overscroll-behavior-x: none;
+    overflow: auto;
+    padding: 0 0 20px 0;
+    touch-action: pan-x pan-y pinch-zoom;
     width: 100%;
     background: #e2e8f0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .mobilefill-page {
@@ -333,18 +335,13 @@ html, body {
    Navigation Bar (Prev/Next Field)
    ======================================== */
 #mobilefill-nav-bar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 72px; /* Above export bar */
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 16px;
     padding: 12px 16px;
-    background: rgba(255, 255, 255, 0.98);
+    background: #ffffff;
     border-top: 1px solid #e2e8f0;
-    z-index: 999;
 }
 
 .nav-btn {
@@ -387,15 +384,9 @@ html, body {
    Export Bar
    ======================================== */
 #mobilefill-export-bar {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
     padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
-    background: rgba(255, 255, 255, 0.98);
+    background: #ffffff;
     border-top: 1px solid #e2e8f0;
-    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
-    z-index: 1000;
 }
 
 #mobilefill-export-button {
@@ -523,36 +514,25 @@ html, body {
     }
 }
 
-/* Landscape mode adjustments */
-@media (orientation: landscape) {
-    #mobilefill-nav-bar {
-        bottom: 60px;
-    }
-
-    #mobilefill-pdf-container {
-        padding-bottom: 120px;
-    }
-}
+/* Landscape mode disabled - portrait only */
 
 /* ========================================
    Mobile Input Panel (Above Keyboard)
    ======================================== */
 .mobilefill-input-panel {
-    position: fixed;
+    position: sticky;
+    bottom: 0;
     left: 0;
     right: 0;
-    bottom: 0;
     background: #ffffff;
     border-top: 1px solid #e2e8f0;
     box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.12);
     z-index: 2000;
     padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
-    transition: transform 0.2s ease;
 }
 
 .mobilefill-input-panel.is-hidden {
-    transform: translateY(100%);
-    pointer-events: none;
+    display: none;
 }
 
 /* Field label at top of panel */
@@ -674,9 +654,9 @@ html, body {
     background: #e2e8f0;
 }
 
-/* When input panel is open, hide the export bar and nav bar */
-.mobilefill-input-panel:not(.is-hidden) ~ #mobilefill-export-bar,
-.mobilefill-input-panel:not(.is-hidden) ~ #mobilefill-nav-bar {
+/* Nav/export bar hidden state (controlled by JS) */
+#mobilefill-nav-bar.panel-open,
+#mobilefill-export-bar.panel-open {
     display: none !important;
 }
 
@@ -695,17 +675,4 @@ html, body {
     }
 }
 
-@media (orientation: landscape) {
-    .mobilefill-input-panel {
-        padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 8px);
-    }
-
-    .input-panel-input {
-        padding: 10px 14px;
-        font-size: 16px;
-    }
-
-    .input-panel-actions {
-        gap: 16px;
-    }
-}
+/* Landscape panel styles removed - portrait only */
