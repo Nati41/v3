@@ -289,91 +289,14 @@ html, body {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.mobilefill-hotspot.is-editing {
-    z-index: 100;
-    overflow: visible;
-    border-color: rgba(59, 130, 246, 0.6);
-    background: rgba(255, 255, 255, 0.95);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
+/* is-editing style removed - input now in dedicated panel */
 
 .mobilefill-hotspot.has-value {
     border-color: rgba(34, 197, 94, 0.35);
     background: rgba(34, 197, 94, 0.03);
 }
 
-/* ========================================
-   Inline Input (Inside Hotspot)
-   ======================================== */
-.mobilefill-inline-input {
-    width: 100%;
-    height: 100%;
-    min-height: 32px;
-    border: none;
-    border-radius: 3px;
-    padding: 4px 8px;
-    font-size: 16px;
-    font-family: inherit;
-    background: transparent;
-    color: #0f172a;
-    outline: none;
-    text-align: right;
-    direction: rtl;
-}
-
-.mobilefill-inline-input:focus {
-    background: rgba(255, 255, 255, 0.9);
-}
-
-.mobilefill-inline-actions {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 72px; /* Above export bar, same as nav bar */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 14px 16px;
-    background: linear-gradient(to top, rgba(255,255,255,0.99), rgba(255,255,255,0.97));
-    border-top: 1px solid #e2e8f0;
-    z-index: 1001;
-    backdrop-filter: blur(10px);
-}
-
-.mobilefill-inline-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 10px 20px;
-    border-radius: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.mobilefill-inline-btn.done {
-    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-    color: #ffffff;
-    border: none;
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
-}
-
-.mobilefill-inline-btn.done:active {
-    transform: scale(0.97);
-    box-shadow: 0 1px 4px rgba(34, 197, 94, 0.3);
-}
-
-.mobilefill-inline-btn.cancel {
-    background: #f1f5f9;
-    color: #64748b;
-    border: 1px solid #e2e8f0;
-}
-
-.mobilefill-inline-btn.cancel:active {
-    background: #e2e8f0;
-}
+/* Inline Input styles removed - input now happens in dedicated panel */
 
 /* ========================================
    Field Value Preview (Inside Hotspot)
@@ -608,5 +531,181 @@ html, body {
 
     #mobilefill-pdf-container {
         padding-bottom: 120px;
+    }
+}
+
+/* ========================================
+   Mobile Input Panel (Above Keyboard)
+   ======================================== */
+.mobilefill-input-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.12);
+    z-index: 2000;
+    padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    transition: transform 0.2s ease;
+}
+
+.mobilefill-input-panel.is-hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+/* Field label at top of panel */
+.input-panel-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 8px;
+    text-align: right;
+}
+
+/* Input container */
+.input-panel-input-container {
+    margin-bottom: 12px;
+}
+
+.input-panel-input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 18px;
+    font-family: inherit;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #0f172a;
+    direction: rtl;
+    text-align: right;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.input-panel-input:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+}
+
+.input-panel-input::placeholder {
+    color: #94a3b8;
+}
+
+/* Action buttons container */
+.input-panel-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Navigation button group (prev/next) */
+.input-panel-nav-group {
+    display: flex;
+    gap: 8px;
+}
+
+/* Action button group (confirm/cancel) */
+.input-panel-action-group {
+    display: flex;
+    gap: 8px;
+}
+
+/* Panel buttons base style */
+.input-panel-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: none;
+}
+
+.input-panel-btn .btn-icon {
+    font-size: 14px;
+}
+
+.input-panel-btn .btn-text {
+    font-size: 13px;
+}
+
+/* Navigation buttons */
+.input-panel-btn.nav {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.input-panel-btn.nav:active:not(:disabled) {
+    background: #e2e8f0;
+}
+
+.input-panel-btn.nav:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Confirm button */
+.input-panel-btn.confirm {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.input-panel-btn.confirm:active {
+    transform: scale(0.97);
+    box-shadow: 0 1px 4px rgba(34, 197, 94, 0.3);
+}
+
+/* Cancel button */
+.input-panel-btn.cancel {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.input-panel-btn.cancel:active {
+    background: #e2e8f0;
+}
+
+/* When input panel is open, hide the export bar and nav bar */
+.mobilefill-input-panel:not(.is-hidden) ~ #mobilefill-export-bar,
+.mobilefill-input-panel:not(.is-hidden) ~ #mobilefill-nav-bar {
+    display: none !important;
+}
+
+/* Responsive adjustments for input panel */
+@media (max-width: 400px) {
+    .input-panel-btn {
+        padding: 8px 12px;
+    }
+
+    .input-panel-btn .btn-text {
+        display: none;
+    }
+
+    .input-panel-btn .btn-icon {
+        font-size: 18px;
+    }
+}
+
+@media (orientation: landscape) {
+    .mobilefill-input-panel {
+        padding: 10px 16px calc(env(safe-area-inset-bottom, 0px) + 8px);
+    }
+
+    .input-panel-input {
+        padding: 10px 14px;
+        font-size: 16px;
+    }
+
+    .input-panel-actions {
+        gap: 16px;
     }
 }

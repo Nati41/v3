@@ -64,6 +64,11 @@
         window.MobileFillFieldNavigator.init();
     }
 
+    // Input panel (above keyboard for text input)
+    if (window.MobileFillInputPanel && typeof window.MobileFillInputPanel.init === 'function') {
+        window.MobileFillInputPanel.init();
+    }
+
     // QuickFillEditor removed - MobileFill is view/fill only mode
     // Fields come from mapping JSON, not user-drawn
 

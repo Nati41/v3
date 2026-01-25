@@ -6,8 +6,6 @@
     let currentMapping = null;
     let pageViewports = null;
     let canvasSize = null;
-    let activeEditor = null;
-    const KEYBOARD_SAFE_OFFSET_PX = 80;
 
     function init() {
         if (!window.MobileFillEventBus) {
@@ -26,7 +24,8 @@
             renderIfReady();
         });
 
-        document.addEventListener('click', handleDocumentClick, true);
+        // Listen for highlight requests from input panel
+        window.MobileFillEventBus.on('FIELD_HIGHLIGHT', handleFieldHighlight);
     }
 
     function renderIfReady() {
@@ -39,7 +38,6 @@
 
     function clearOverlays() {
         document.querySelectorAll('.mobilefill-hotspot-layer').forEach((layer) => layer.remove());
-        activeEditor = null;
     }
 
     function renderFieldHotspots() {
@@ -88,12 +86,8 @@
                 hotspot.addEventListener('click', (event) => {
                     event.stopPropagation();
                     const fieldType = field.type || 'text';
-                    setActiveHotspot(hotspot);
 
-                    if (activeEditor && activeEditor.hotspot !== hotspot) {
-                        cleanupInlineEdit(activeEditor.hotspot);
-                    }
-
+                    // Checkbox toggle
                     if (fieldType === 'checkbox') {
                         const nextChecked = !getFieldChecked(fieldId);
                         window.MobileFillEventBus.emit('FIELD_UPDATED', {
@@ -105,6 +99,7 @@
                         return;
                     }
 
+                    // Radio toggle
                     if (fieldType === 'radio') {
                         uncheckRadioSiblings(field);
                         window.MobileFillEventBus.emit('FIELD_UPDATED', {
@@ -116,7 +111,11 @@
                         return;
                     }
 
-                    startInlineEdit(field, hotspot);
+                    // Text/number/date fields - emit FIELD_TAP for input panel
+                    window.MobileFillEventBus.emit('FIELD_TAP', {
+                        fieldId,
+                        field
+                    });
                 });
 
                 overlay.appendChild(hotspot);
@@ -159,182 +158,28 @@
         return null;
     }
 
-    function setActiveHotspot(target) {
-        document.querySelectorAll('.mobilefill-hotspot.is-active').forEach((item) => {
-            if (item !== target) item.classList.remove('is-active');
-        });
-        target.classList.add('is-active');
-    }
-
-    function startInlineEdit(field, hotspot) {
-        const fieldId = field.id || field.fieldId;
+    function handleFieldHighlight(payload) {
+        const { fieldId, active } = payload || {};
         if (!fieldId) return;
 
-        if (activeEditor && activeEditor.hotspot !== hotspot) {
-            cleanupInlineEdit(activeEditor.hotspot);
-        }
-
-        hotspot.classList.add('is-editing');
-
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'mobilefill-inline-input';
-        const initialValue = getFieldValue(fieldId) || '';
-        input.value = initialValue;
-
-        const actions = document.createElement('div');
-        actions.className = 'mobilefill-inline-actions';
-
-        const doneBtn = document.createElement('button');
-        doneBtn.type = 'button';
-        doneBtn.className = 'mobilefill-inline-btn done';
-        doneBtn.innerHTML = '<span>אישור</span><span>✓</span>';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.type = 'button';
-        cancelBtn.className = 'mobilefill-inline-btn cancel';
-        cancelBtn.innerHTML = '<span>ביטול</span><span>✕</span>';
-
-        actions.appendChild(doneBtn);
-        actions.appendChild(cancelBtn);
-
-        input.addEventListener('input', () => {
-            window.MobileFillEventBus.emit('FIELD_UPDATED', {
-                fieldId,
-                value: input.value,
-                checked: null,
-                tableContext: null
-            });
+        // Remove highlight from all hotspots
+        document.querySelectorAll('.mobilefill-hotspot.is-active').forEach((hotspot) => {
+            hotspot.classList.remove('is-active');
         });
 
-        input.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                finalizeEdit(fieldId, input.value);
+        // Add highlight to target hotspot if active
+        if (active) {
+            const hotspot = document.querySelector(`.mobilefill-hotspot[data-field-id="${fieldId}"]`);
+            if (hotspot) {
+                hotspot.classList.add('is-active');
             }
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                cancelEdit(fieldId, initialValue);
-            }
-        });
-
-        // Use mousedown instead of click - mousedown fires before blur
-        // This prevents double-emit (blur + click both calling finalizeEdit)
-        doneBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // Prevent blur from firing
-            finalizeEdit(fieldId, input.value);
-        });
-
-        cancelBtn.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // Prevent blur from firing
-            cancelEdit(fieldId, initialValue);
-        });
-
-        // Blur only fires if user clicks outside the buttons
-        input.addEventListener('blur', (e) => {
-            // Small delay to let mousedown handlers run first
-            setTimeout(() => {
-                // Only finalize if editor is still active (wasn't closed by button)
-                if (activeEditor?.fieldId === fieldId) {
-                    finalizeEdit(fieldId, input.value);
-                }
-            }, 10);
-        });
-
-        hotspot.innerHTML = '';
-        hotspot.appendChild(input);
-        // Append actions to body so they're not clipped by overflow
-        document.body.appendChild(actions);
-
-        // Hide nav bar while editing
-        const navBar = document.getElementById('mobilefill-nav-bar');
-        if (navBar) navBar.style.display = 'none';
-
-        input.focus();
-        input.select();
-
-        activeEditor = { hotspot, input, actions, fieldId, initialValue };
-    }
-
-    function cleanupInlineEdit(hotspot) {
-        if (!hotspot) return;
-        hotspot.classList.remove('is-editing');
-        // Remove actions from body
-        if (activeEditor?.actions && activeEditor.actions.parentNode) {
-            activeEditor.actions.remove();
         }
-        // Show nav bar again
-        const navBar = document.getElementById('mobilefill-nav-bar');
-        if (navBar) navBar.style.display = '';
-
-        if (activeEditor?.hotspot === hotspot) {
-            activeEditor = null;
-        }
-    }
-
-    function finalizeEdit(fieldId, value) {
-        // Clean up first so preview renderer won't skip due to is-editing class
-        if (activeEditor?.hotspot) {
-            cleanupInlineEdit(activeEditor.hotspot);
-        }
-        // Then emit update - preview renderer will now render the value
-        window.MobileFillEventBus.emit('FIELD_UPDATED', {
-            fieldId,
-            value,
-            checked: null,
-            tableContext: null
-        });
-    }
-
-    function cancelEdit(fieldId, value) {
-        // Clean up first so preview renderer won't skip due to is-editing class
-        if (activeEditor?.hotspot) {
-            cleanupInlineEdit(activeEditor.hotspot);
-        }
-        // Then emit update - restores original value in preview
-        window.MobileFillEventBus.emit('FIELD_UPDATED', {
-            fieldId,
-            value,
-            checked: null,
-            tableContext: null
-        });
-    }
-
-    function clampHotspotIntoView(hotspot) {
-        const container = document.getElementById('mobilefill-pdf-container');
-        if (!container || !hotspot) return;
-
-        const containerRect = container.getBoundingClientRect();
-        const hotspotRect = hotspot.getBoundingClientRect();
-        const currentScroll = container.scrollTop;
-        const hotspotOffsetTop = hotspotRect.top - containerRect.top + currentScroll;
-        const target = Math.max(
-            0,
-            hotspotOffsetTop - (containerRect.height / 2) + (hotspotRect.height / 2) - KEYBOARD_SAFE_OFFSET_PX
-        );
-        const maxScroll = Math.max(0, container.scrollHeight - containerRect.height);
-        const clamped = Math.min(maxScroll, target);
-
-        container.scrollTo({ top: clamped, behavior: 'smooth' });
-    }
-
-    function handleDocumentClick(event) {
-        if (!activeEditor?.input) return;
-        const editorHotspot = activeEditor.hotspot;
-        if (!editorHotspot || editorHotspot.contains(event.target)) return;
-        finalizeEdit(activeEditor.fieldId, activeEditor.input.value);
     }
 
     function getFieldChecked(fieldId) {
         const state = window.MobileFillStateStore?.state;
         const entry = state?.liveFillState?.liveFillData?.[fieldId];
         return Boolean(entry?.checked);
-    }
-
-    function getFieldValue(fieldId) {
-        const state = window.MobileFillStateStore?.state;
-        const entry = state?.liveFillState?.liveFillData?.[fieldId];
-        return entry?.value ? String(entry.value) : '';
     }
 
     function uncheckRadioSiblings(field) {
