@@ -268,21 +268,6 @@
                 <span id="remaining-count" class="remaining-badge hidden">0</span>
             </div>
 
-            <!-- V3.10: Flow Mode Toggle (Mapping / Quick Fill) -->
-            <div id="flow-mode-toggle" class="toolbar-group flow-mode-toggle" data-mapper-only>
-                <!-- V3.10: Flow mode switcher hidden - QuickFill moved to separate site (?mode=quickfill) -->
-                <div class="flow-mode-switcher" style="display: none;">
-                    <button id="btn-mode-mapping" class="flow-mode-btn active" data-mode="mapping" title="מיפוי רגיל">
-                        <span class="icon">📍</span>
-                        <span class="label">מיפוי</span>
-                    </button>
-                    <button id="btn-mode-quickfill" class="flow-mode-btn" data-mode="quick_fill" title="מילוי מהיר">
-                        <span class="icon">⚡</span>
-                        <span class="label">מילוי מהיר</span>
-                    </button>
-                </div>
-            </div>
-
             <!-- V3.11: Static QuickFill toolbar (shown in QuickFill mode) -->
             <div id="qf-static-toolbar" class="toolbar-group quick-fill-tools hidden">
                 <button id="btn-qf-undo" class="toolbar-btn" title="בטל (Ctrl+Z)" disabled>
@@ -421,37 +406,6 @@
         <button data-action="delete">Delete</button>
     </div>
 
-    <!-- Table Flow Panel (minimal UI) -->
-    <div id="table-flow-panel" class="table-flow-panel hidden">
-        <div class="table-flow-header">
-            <h3 id="table-flow-title">מיפוי טבלה</h3>
-            <button id="table-flow-cancel" class="btn-close">×</button>
-        </div>
-        <div class="table-flow-content">
-            <div id="table-flow-step-info" class="step-info">
-                <span id="table-flow-step-num">שלב 1/6</span>
-                <span id="table-flow-step-desc">סמן את אזור הכותרת</span>
-            </div>
-            <div id="table-flow-message" class="flow-message"></div>
-            <div id="table-flow-row-count" class="row-count-input hidden">
-                <label>מספר שורות:</label>
-                <input type="number" id="table-row-count-input" min="1" max="100" placeholder="הזן מספר">
-            </div>
-            <div id="table-flow-columns" class="columns-list hidden">
-                <h4>עמודות:</h4>
-                <ul id="table-columns-list"></ul>
-                <button id="table-autobox-btn" class="btn-autobox hidden" title="חלק את השורה לעמודות שוות">
-                    📐 חלוקה אוטומטית
-                </button>
-            </div>
-            <div id="table-flow-summary" class="flow-summary hidden"></div>
-        </div>
-        <div class="table-flow-actions">
-            <button id="table-flow-back" class="btn-secondary" disabled>הקודם</button>
-            <button id="table-flow-next" class="btn-primary" disabled>הבא</button>
-        </div>
-    </div>
-
     <!-- Column Details Dialog (for table) -->
     <div id="column-details-dialog" class="dialog-overlay hidden">
         <div class="dialog-box">
@@ -540,6 +494,8 @@
         </div>
     </div>
 
+    <!-- V3.14: Auth Config (must load before AuthManager) -->
+    <script src="./core/auth-config.js"></script>
     <!-- V3.13: Auth Manager -->
     <script src="./core/AuthManager.js"></script>
 
@@ -701,6 +657,7 @@
         window.overlayRenderer = overlayRenderer;
         window.viewportController = viewportController;
         window.drawController = drawController;
+        window.sidebarController = sidebarController; // V3.14: Expose for table flow
         // V3.10: Legacy table system disabled
         // window.tableFlowUI = tableFlowUI;
         // V3.10: New TableRegion system

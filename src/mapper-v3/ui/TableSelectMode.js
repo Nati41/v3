@@ -1,6 +1,7 @@
 /**
  * TableSelectMode.js
  * V3.10: Simple table region selection mode
+ * V3.14: Integrated TableSetupDialog for name + row count
  *
  * User draws a rectangle around the table area.
  * System detects fields inside and asks for confirmation.
@@ -10,6 +11,7 @@ import { eventBus, Events } from '../core/EventBus.js';
 import { state, Tools } from '../core/StateManager.js';
 import { tableRegionManager } from '../core/TableRegionManager.js';
 import { pdfEngine } from '../engines/PDFEngine.js';
+import { tableSetupDialog } from './TableSetupDialog.js';
 
 class TableSelectMode {
     constructor() {
@@ -160,81 +162,78 @@ class TableSelectMode {
 
     /**
      * Confirm the region and proceed to next step
+     * V3.14: Now uses TableSetupDialog for name + row count
      * @param {TableRegion} region
      */
-    _confirmRegion(region) {
+    async _confirmRegion(region) {
         if (this._confirmDialog) {
             this._confirmDialog.remove();
             this._confirmDialog = null;
         }
 
-        // Ask for row count
-        this._showRowCountDialog(region);
+        // V3.14: Use the new TableSetupDialog for name + row count
+        const result = await tableSetupDialog.show({
+            detectedColumns: region.columns || [],
+            suggestedName: this._suggestTableName(region),
+            defaultRowCount: 5
+        });
+
+        if (result) {
+            // User confirmed - update region with name and row count
+            region.name_he = result.name_he;
+            region.name_en = result.name_en;
+            region.rowCount = result.rowCount;
+            this._finishSetup(region);
+        } else {
+            // User cancelled - delete region and stay in mode
+            tableRegionManager.deleteRegion(region.id);
+            this._showToast('נסה שוב - צייר מלבן סביב הטבלה', 'info');
+        }
     }
 
     /**
-     * Show row count input dialog
+     * V3.14: Suggest a table name based on detected columns
      * @param {TableRegion} region
+     * @returns {string}
      */
-    _showRowCountDialog(region) {
-        const dialog = document.createElement('div');
-        dialog.className = 'table-region-confirm-dialog';
-        dialog.innerHTML = `
-            <div class="table-region-dialog-content">
-                <h3>כמה שורות בטבלה?</h3>
-                <p class="row-count-hint">לא כולל כותרת</p>
-                <input type="number" class="row-count-input" min="1" max="100" value="5" />
-                <div class="table-region-dialog-buttons">
-                    <button class="btn-confirm">✓ המשך</button>
-                    <button class="btn-cancel">✗ ביטול</button>
-                </div>
-            </div>
-        `;
+    _suggestTableName(region) {
+        const columns = region.columns || [];
+        if (columns.length === 0) return '';
 
-        const input = dialog.querySelector('.row-count-input');
-        const confirmBtn = dialog.querySelector('.btn-confirm');
-        const cancelBtn = dialog.querySelector('.btn-cancel');
+        // Try to find common patterns in column names
+        const patterns = {
+            'child': 'ילדים',
+            'income': 'הכנסות',
+            'expense': 'הוצאות',
+            'employee': 'עובדים',
+            'asset': 'נכסים',
+            'debt': 'חובות',
+            'payment': 'תשלומים'
+        };
 
-        confirmBtn.addEventListener('click', () => {
-            const rowCount = parseInt(input.value, 10);
-            if (rowCount > 0 && rowCount <= 100) {
-                region.rowCount = rowCount;
-                this._finishSetup(region);
-                dialog.remove();
+        for (const col of columns) {
+            const name = (col.name_en || col.baseName || '').toLowerCase();
+            for (const [pattern, hebrew] of Object.entries(patterns)) {
+                if (name.includes(pattern)) {
+                    return hebrew;
+                }
             }
-        });
+        }
 
-        cancelBtn.addEventListener('click', () => {
-            tableRegionManager.deleteRegion(region.id);
-            dialog.remove();
-            this.cancel();
-        });
-
-        // Position and show
-        dialog.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 10000;
-        `;
-
-        document.body.appendChild(dialog);
-        this._confirmDialog = dialog;
-
-        // Focus input
-        input.focus();
-        input.select();
+        return '';
     }
 
     /**
      * Finish setup and exit mode
+     * V3.14: Updated to show table name
      * @param {TableRegion} region
      */
     _finishSetup(region) {
-        console.log('[TableSelectMode] Region confirmed:', region.id, 'with', region.rowCount, 'rows');
+        const tableName = region.name_he || region.getDisplayName();
+        console.log('[TableSelectMode] Region confirmed:', region.id, 'name:', tableName, 'rows:', region.rowCount);
 
-        this._showToast(`טבלה נוצרה: ${region.columns.length} עמודות, ${region.rowCount} שורות`, 'success');
+        // V3.14: Show table name in success message
+        this._showToast(`טבלה "${tableName}" נוצרה (${region.rowCount} שורות)`, 'success');
 
         // Clean up and exit
         this._cleanup();
@@ -242,9 +241,16 @@ class TableSelectMode {
         eventBus.emit(Events.TABLE_SELECT_MODE_ENDED, { cancelled: false });
         eventBus.emit(Events.TABLE_REGION_UPDATED, { region });
 
+        // V3.14: Force immediate sidebar render with direct call
+        if (window.sidebarController) {
+            // Note: region.id already starts with "table_", sidebar uses "table_" + id for expandedEntities
+            window.sidebarController.expandedEntities.add(`table_${region.id}`);
+            window.sidebarController.render();
+        }
+
         // Show next step hint
         setTimeout(() => {
-            this._showToast('מפה שדה טקסט אחד בשורה הראשונה להגדרת גובה שורה', 'info', 8000);
+            this._showToast('מפה שדה בשורה הראשונה - הוא ישוכפל לכל השורות', 'info', 8000);
         }, 1500);
     }
 

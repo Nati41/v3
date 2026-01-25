@@ -1,11 +1,19 @@
 (function() {
     'use strict';
 
+    // Cache the mapping fields once they're ready
+    let mappingFields = [];
+
     function init() {
         if (!window.MobileFillEventBus || !window.MobileFillStateStore) {
             console.warn('[MobileFill] EventBus or StateStore missing; preview renderer disabled');
             return;
         }
+
+        // Store mapping fields when ready
+        window.MobileFillEventBus.on('MAPPING_READY', (payload) => {
+            mappingFields = payload?.fieldsMapping?.fields || [];
+        });
 
         window.MobileFillEventBus.on('FIELD_UPDATED', (payload) => {
             renderField(payload?.fieldId);
@@ -28,7 +36,8 @@
         }
 
         const state = window.MobileFillStateStore.state;
-        const fields = state.quickFillState?.fields || [];
+        // Use mapping fields instead of quickFillState (which is for editor mode)
+        const fields = mappingFields.length > 0 ? mappingFields : (state.quickFillState?.fields || []);
         const field = fieldOverride || fields.find((item) => (item.id || item.fieldId) === fieldId);
         if (!field) return;
 
@@ -52,7 +61,8 @@
 
     function renderAllFilledFields() {
         const state = window.MobileFillStateStore.state;
-        const fields = state.quickFillState?.fields || [];
+        // Use mapping fields instead of quickFillState
+        const fields = mappingFields.length > 0 ? mappingFields : (state.quickFillState?.fields || []);
         fields.forEach((field) => {
             const fieldId = field.id || field.fieldId;
             if (!fieldId) return;

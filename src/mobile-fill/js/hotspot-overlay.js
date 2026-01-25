@@ -188,12 +188,12 @@
         const doneBtn = document.createElement('button');
         doneBtn.type = 'button';
         doneBtn.className = 'mobilefill-inline-btn done';
-        doneBtn.textContent = '✔';
+        doneBtn.innerHTML = '<span>אישור</span><span>✓</span>';
 
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'mobilefill-inline-btn cancel';
-        cancelBtn.textContent = '✕';
+        cancelBtn.innerHTML = '<span>ביטול</span><span>✕</span>';
 
         actions.appendChild(doneBtn);
         actions.appendChild(cancelBtn);
@@ -218,59 +218,86 @@
             }
         });
 
-        input.addEventListener('blur', () => {
+        // Use mousedown instead of click - mousedown fires before blur
+        // This prevents double-emit (blur + click both calling finalizeEdit)
+        doneBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent blur from firing
             finalizeEdit(fieldId, input.value);
         });
 
-        doneBtn.addEventListener('click', () => {
-            finalizeEdit(fieldId, input.value);
-        });
-
-        cancelBtn.addEventListener('click', () => {
+        cancelBtn.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent blur from firing
             cancelEdit(fieldId, initialValue);
+        });
+
+        // Blur only fires if user clicks outside the buttons
+        input.addEventListener('blur', (e) => {
+            // Small delay to let mousedown handlers run first
+            setTimeout(() => {
+                // Only finalize if editor is still active (wasn't closed by button)
+                if (activeEditor?.fieldId === fieldId) {
+                    finalizeEdit(fieldId, input.value);
+                }
+            }, 10);
         });
 
         hotspot.innerHTML = '';
         hotspot.appendChild(input);
-        hotspot.appendChild(actions);
-        // REMOVED: clampHotspotIntoView(hotspot) - causes document jumps during keyboard open
-        // User controls scroll manually - no auto-scroll during inline edit
+        // Append actions to body so they're not clipped by overflow
+        document.body.appendChild(actions);
+
+        // Hide nav bar while editing
+        const navBar = document.getElementById('mobilefill-nav-bar');
+        if (navBar) navBar.style.display = 'none';
+
         input.focus();
         input.select();
 
-        activeEditor = { hotspot, input, fieldId, initialValue };
+        activeEditor = { hotspot, input, actions, fieldId, initialValue };
     }
 
     function cleanupInlineEdit(hotspot) {
         if (!hotspot) return;
         hotspot.classList.remove('is-editing');
+        // Remove actions from body
+        if (activeEditor?.actions && activeEditor.actions.parentNode) {
+            activeEditor.actions.remove();
+        }
+        // Show nav bar again
+        const navBar = document.getElementById('mobilefill-nav-bar');
+        if (navBar) navBar.style.display = '';
+
         if (activeEditor?.hotspot === hotspot) {
             activeEditor = null;
         }
     }
 
     function finalizeEdit(fieldId, value) {
+        // Clean up first so preview renderer won't skip due to is-editing class
+        if (activeEditor?.hotspot) {
+            cleanupInlineEdit(activeEditor.hotspot);
+        }
+        // Then emit update - preview renderer will now render the value
         window.MobileFillEventBus.emit('FIELD_UPDATED', {
             fieldId,
             value,
             checked: null,
             tableContext: null
         });
-        if (activeEditor?.hotspot) {
-            cleanupInlineEdit(activeEditor.hotspot);
-        }
     }
 
     function cancelEdit(fieldId, value) {
+        // Clean up first so preview renderer won't skip due to is-editing class
+        if (activeEditor?.hotspot) {
+            cleanupInlineEdit(activeEditor.hotspot);
+        }
+        // Then emit update - restores original value in preview
         window.MobileFillEventBus.emit('FIELD_UPDATED', {
             fieldId,
             value,
             checked: null,
             tableContext: null
         });
-        if (activeEditor?.hotspot) {
-            cleanupInlineEdit(activeEditor.hotspot);
-        }
     }
 
     function clampHotspotIntoView(hotspot) {
@@ -300,13 +327,13 @@
 
     function getFieldChecked(fieldId) {
         const state = window.MobileFillStateStore?.state;
-        const entry = state?.liveFillState?.liveFillData?.fields?.[fieldId];
+        const entry = state?.liveFillState?.liveFillData?.[fieldId];
         return Boolean(entry?.checked);
     }
 
     function getFieldValue(fieldId) {
         const state = window.MobileFillStateStore?.state;
-        const entry = state?.liveFillState?.liveFillData?.fields?.[fieldId];
+        const entry = state?.liveFillState?.liveFillData?.[fieldId];
         return entry?.value ? String(entry.value) : '';
     }
 

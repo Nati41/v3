@@ -52,8 +52,7 @@ class QuickFillUIProfile {
             '#welcome-screen-container',
             '#field-loader-screen-container',
 
-            // Table flow panel
-            '#table-flow-panel',
+            // V3.14: table-flow-panel removed from HTML (dead code cleanup)
 
             // Separators after hidden groups
             '.toolbar-separator:nth-of-type(2)',

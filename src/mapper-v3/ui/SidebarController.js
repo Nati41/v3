@@ -126,8 +126,19 @@ export class SidebarController {
         eventBus.on(Events.TABLE_DELETED, debouncedRender);
 
         // V3.10: Table Region changes (new system)
-        eventBus.on(Events.TABLE_REGION_CREATED, debouncedRender);
-        eventBus.on(Events.TABLE_REGION_UPDATED, debouncedRender);
+        // V3.14: Auto-expand tables when created or updated
+        eventBus.on(Events.TABLE_REGION_CREATED, ({ region }) => {
+            if (region?.id) {
+                this.expandedEntities.add(`table_${region.id}`);
+            }
+            debouncedRender();
+        });
+        eventBus.on(Events.TABLE_REGION_UPDATED, ({ region }) => {
+            if (region?.id) {
+                this.expandedEntities.add(`table_${region.id}`);
+            }
+            debouncedRender();
+        });
         eventBus.on(Events.TABLE_REGION_DELETED, debouncedRender);
 
         // Selection changes - update without full re-render
@@ -342,8 +353,9 @@ export class SidebarController {
             `;
         }
 
-        // Empty state
-        const totalItems = allFields.length + allGroups.length + tables.length;
+        // Empty state - V3.14: Also check for table regions (new system)
+        const tableRegionCount = window.tableRegionManager ? window.tableRegionManager.getRegionsForSidebar().length : 0;
+        const totalItems = allFields.length + allGroups.length + tables.length + tableRegionCount;
         if (totalItems === 0 && !templateStore.isLoaded()) {
             html = `
                 <div class="empty-state">
@@ -436,15 +448,17 @@ export class SidebarController {
 
     /**
      * V3.10: Render table regions section with collapsible fields
+     * V3.14: Updated to use getRegionsForSidebar() for better structure
      */
     _renderTableRegionsSection() {
         // Check if tableRegionManager is available
         if (!window.tableRegionManager) return '';
 
-        const regions = window.tableRegionManager.getAllRegions();
-        if (regions.length === 0) return '';
+        // V3.14: Use new sidebar-optimized API
+        const tableSections = window.tableRegionManager.getRegionsForSidebar();
+        if (tableSections.length === 0) return '';
 
-        // Get all fields to find table fields
+        // Get all fields to find table fields (for rendering expanded content)
         const allFields = state.get('fields') || [];
 
         let html = `
@@ -452,49 +466,91 @@ export class SidebarController {
                 <div class="section-header">
                     <span class="section-icon">📊</span>
                     <span class="section-title">טבלאות</span>
-                    <span class="section-count">${regions.length}</span>
+                    <span class="section-count">${tableSections.length}</span>
                 </div>
                 <div class="table-regions-list">
         `;
 
-        for (const region of regions) {
-            // Get fields belonging to this table
-            const tableFields = allFields.filter(f => f.tableRegionId === region.id);
-            const rowCount = region.rowCount || '?';
-            const isLocked = region.isStructureLocked;
+        for (const tableInfo of tableSections) {
+            // Get the actual region for expanded content rendering
+            const region = window.tableRegionManager.getRegion(tableInfo.id);
+            const tableFields = allFields.filter(f => f.tableRegionId === tableInfo.id);
 
-            // Generate smart table name from field names (and save to region)
-            const tableName = this._generateTableName(tableFields, region);
-            if (!region.name && tableFields.length > 0) {
-                region.name = tableName; // Save for persistence
-            }
-
-            // Check if this table is expanded
-            const isExpanded = this.expandedEntities.has(`table_${region.id}`);
-
-            // Count unique columns (fields with tableRow === 0)
-            const columnFields = tableFields.filter(f => f.tableRow === 0);
-            const columnsCount = columnFields.length;
+            // V3.14: Use pre-calculated data from getRegionsForSidebar
+            const expandKey = `table_${tableInfo.id}`;
+            const isExpanded = this.expandedEntities.has(expandKey);
+            const statusIcon = tableInfo.status === 'complete' ? '✓' :
+                              tableInfo.status === 'partial' ? '◐' : '⏳';
+            const statusClass = tableInfo.status === 'complete' ? 'complete' :
+                               tableInfo.status === 'partial' ? 'partial' : 'pending';
 
             html += `
-                <div class="table-region-item ${isLocked ? 'locked' : ''} ${isExpanded ? 'expanded' : ''}" data-region-id="${region.id}">
-                    <div class="table-region-header" data-toggle-table="${region.id}">
+                <div class="table-region-item ${statusClass} ${isExpanded ? 'expanded' : ''}" data-region-id="${tableInfo.id}">
+                    <div class="table-region-header" data-toggle-table="${tableInfo.id}">
                         <span class="table-expand-icon">${isExpanded ? '▼' : '▶'}</span>
-                        <span class="table-region-name">${tableName}</span>
-                        <span class="table-region-stats">${columnsCount} עמודות × ${rowCount} שורות</span>
-                        <span class="table-field-count">(${tableFields.length} שדות)</span>
+                        <span class="table-region-name">${tableInfo.name_he}</span>
+                        <span class="table-region-stats">${tableInfo.totalColumns} עמודות × ${tableInfo.rowCount} שורות</span>
+                        <span class="table-mapped-info">(${tableInfo.mappedColumns}/${tableInfo.totalColumns} ממופות)</span>
                         <div class="table-region-actions">
-                            ${!isLocked ? '<span class="table-pending">⏳</span>' : '<span class="table-ready">✓</span>'}
-                            <button class="btn-delete-region" data-region-id="${region.id}" title="מחק טבלה">🗑</button>
+                            <span class="table-status table-status-${statusClass}">${statusIcon}</span>
+                            <button class="btn-delete-region" data-region-id="${tableInfo.id}" title="מחק טבלה">🗑</button>
                         </div>
                     </div>
-                    ${isExpanded ? this._renderTableFields(tableFields, region) : ''}
+                    ${isExpanded ? this._renderTableColumns(tableInfo, tableFields, region) : ''}
                 </div>
             `;
         }
 
         html += `
                 </div>
+            </div>
+        `;
+
+        return html;
+    }
+
+    /**
+     * V3.14: Render columns inside a table (when expanded)
+     * Shows columns as single items, not individual row fields
+     */
+    _renderTableColumns(tableInfo, tableFields, region) {
+        if (tableInfo.totalColumns === 0) {
+            return `<div class="table-columns-empty">
+                <span class="empty-icon">📝</span>
+                <span class="empty-text">מפה שדה בשורה הראשונה כדי ליצור עמודה</span>
+                <button class="btn-add-column btn-add-first-column" data-region-id="${tableInfo.id}">
+                    ➕ התחל למפות עמודות
+                </button>
+            </div>`;
+        }
+
+        let html = '<div class="table-columns-list">';
+
+        for (const col of tableInfo.columns) {
+            const statusIcon = col.isMapped ? '✓' : '○';
+            const statusClass = col.isMapped ? 'mapped' : 'pending';
+
+            html += `
+                <div class="table-column-item ${statusClass}" data-column-id="${col.id}">
+                    <span class="column-status">${statusIcon}</span>
+                    <span class="column-icon">${this._getFieldTypeIcon(col.type)}</span>
+                    <span class="column-name">${col.name_he || col.name_en || 'עמודה'}</span>
+                    ${col.isMapped ? `<span class="column-rows">(${tableInfo.rowCount} שורות)</span>` : ''}
+                </div>
+            `;
+        }
+
+        html += '</div>';
+
+        // V3.14: Add action buttons for table mapping
+        html += `
+            <div class="table-actions">
+                <button class="btn-add-column" data-region-id="${tableInfo.id}" title="הוסף עמודה נוספת">
+                    ➕ הוסף עמודה
+                </button>
+                <button class="btn-finish-table" data-region-id="${tableInfo.id}" title="סיים מיפוי טבלה">
+                    ✓ סיים מיפוי
+                </button>
             </div>
         `;
 
@@ -1963,6 +2019,50 @@ export class SidebarController {
                         window.tableRegionManager.deleteRegion(regionId);
                         this.render();
                     }
+                }
+            });
+        });
+
+        // V3.14: Add column button - starts Capture Name mode for table
+        this.fieldList.querySelectorAll('.btn-add-column').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const regionId = btn.dataset.regionId;
+                if (regionId && window.tableRegionManager) {
+                    // Set active table region
+                    window.tableRegionManager.setActiveRegion(regionId);
+                    // Start Capture Name mode
+                    eventBus.emit(Events.TOOL_CHANGED, { tool: 'capture_name' });
+                    eventBus.emit(Events.TOAST_SHOW, {
+                        message: 'בחר שם לעמודה החדשה, ואז צייר בשורה הראשונה',
+                        type: 'info',
+                        duration: 5000
+                    });
+                }
+            });
+        });
+
+        // V3.14: Finish table mapping button
+        this.fieldList.querySelectorAll('.btn-finish-table').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const regionId = btn.dataset.regionId;
+                if (regionId && window.tableRegionManager) {
+                    const region = window.tableRegionManager.getRegion(regionId);
+                    const columnCount = region?.columns?.length || 0;
+
+                    // Clear active region
+                    window.tableRegionManager.setActiveRegion(null);
+
+                    // Switch to select tool
+                    eventBus.emit(Events.TOOL_CHANGED, { tool: 'select' });
+
+                    // Show completion message
+                    eventBus.emit(Events.TOAST_SHOW, {
+                        message: `מיפוי טבלה "${region?.name_he || 'טבלה'}" הושלם (${columnCount} עמודות)`,
+                        type: 'success',
+                        duration: 3000
+                    });
                 }
             });
         });

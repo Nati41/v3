@@ -69,6 +69,13 @@
                 state.viewerState.canvasSize = payload?.canvasSize || {};
             });
 
+            on('MAPPING_READY', (payload) => {
+                const mapping = payload?.fieldsMapping;
+                state.mappingState.fields = mapping?.fields || [];
+                state.mappingState.version = mapping?.version || null;
+                state.mappingState.loadedAt = Date.now();
+            });
+
             on('HOTSPOTS_READY', () => {
                 state.uiState.hotspotsReady = true;
             });

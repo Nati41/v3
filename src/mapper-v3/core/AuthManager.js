@@ -4,7 +4,9 @@
  * Manages access levels for the unified tofesPDF tool.
  * Replaces hardcoded password checks with a clean, event-driven system.
  *
- * @version 1.0.0
+ * V3.14: Auth codes moved to auth-config.js for separation of concerns
+ *
+ * @version 1.1.0
  * @since 2025-01-23
  */
 
@@ -28,8 +30,13 @@ const AuthManager = (function() {
         SHOW_LOGIN_DIALOG: 'auth:show_login_dialog'
     };
 
-    const STORAGE_KEY = 'tofespdf_auth';
-    const SESSION_MAX_AGE = 4 * 60 * 60 * 1000; // 4 hours
+    // V3.14: Use AuthConfig for configuration (if available)
+    const STORAGE_KEY = (typeof AuthConfig !== 'undefined')
+        ? AuthConfig.getStorageKey()
+        : 'tofespdf_auth';
+    const SESSION_MAX_AGE = (typeof AuthConfig !== 'undefined')
+        ? AuthConfig.getSessionMaxAge()
+        : 4 * 60 * 60 * 1000;
 
     // ─────────────────────────────────────────────────────────────
     // State
@@ -38,12 +45,6 @@ const AuthManager = (function() {
     let _currentLevel = LEVELS.PUBLIC;
     let _sessionStart = null;
     let _initialized = false;
-
-    // Valid access codes
-    const _validCodes = new Set([
-        'נתנאל3028',
-        'admin2024'
-    ]);
 
     // ─────────────────────────────────────────────────────────────
     // Private Methods
@@ -185,9 +186,12 @@ const AuthManager = (function() {
                 return false;
             }
 
-            const trimmedCode = code.trim();
+            // V3.14: Use AuthConfig for code validation
+            const isValid = (typeof AuthConfig !== 'undefined')
+                ? AuthConfig.isValidCode(code)
+                : false; // Fail-safe if config not loaded
 
-            if (_validCodes.has(trimmedCode)) {
+            if (isValid) {
                 _setLevel(LEVELS.AUTHORIZED);
                 _sessionStart = Date.now();
                 _saveSession();

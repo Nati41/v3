@@ -45,14 +45,19 @@
                 return;
             }
 
+            // Use mapping fields (from loaded JSON) OR quickFillState fields (from editor)
+            const sourceFields = state.mappingState?.fields?.length > 0
+                ? state.mappingState.fields
+                : (state.quickFillState?.fields || []);
+
             // Rebuild mapping from scratch (not clone!)
-            const fieldsMapping = buildFieldsMapping(state.quickFillState?.fields || []);
+            const fieldsMapping = buildFieldsMapping(sourceFields);
 
             // Rebuild liveFillData from scratch (not clone!)
             const liveFillData = rebuildLiveFillData(state.liveFillState.liveFillData);
 
             // Validate we have data
-            if (!fieldsMapping || !fieldsMapping.fields) {
+            if (!fieldsMapping || !fieldsMapping.fields || fieldsMapping.fields.length === 0) {
                 logExportBlocked('Fields mapping unavailable');
                 window.MobileFillEventBus.emit('EXPORT_ERROR', {
                     error: 'Fields mapping unavailable'
@@ -62,23 +67,8 @@
 
             logExportTrace(state);
 
-            // CRITICAL: Validate export dependencies are loaded
-            console.log('EXPORT DEPS', {
-                normalizeField: typeof window.normalizeField,
-                UnifiedCoordinateSystem: typeof window.UnifiedCoordinateSystem,
-                ExportEngine: typeof window.ExportEngine
-            });
-
-            // Verify fieldsMapping contains NEW arrays (not state references)
-            const firstField = fieldsMapping.fields[0];
-            const originalFirstField = state.quickFillState?.fields?.[0];
-            console.log('EXPORT REFS CHECK', {
-                fieldsMappingIsNewArray: fieldsMapping.fields !== state.quickFillState?.fields,
-                bboxIsNewArray: firstField?.bbox !== originalFirstField?.bbox,
-                anchorIsNewArray: firstField?.anchor !== originalFirstField?.anchor,
-                firstFieldBbox: firstField?.bbox,
-                firstFieldAnchor: firstField?.anchor
-            });
+            console.log('[MobileFill] Export using', fieldsMapping.fields.length, 'fields from',
+                state.mappingState?.fields?.length > 0 ? 'mapping' : 'quickFillState');
 
             // Debug logs before ExportEngine call
             console.log('EXPORT DEBUG', {
@@ -132,7 +122,6 @@
         let capturedBlobUrl = null;
         const originalCreateObjectURL = URL.createObjectURL;
         const originalWindowOpen = window.open;
-        const originalLocationAssign = window.location.assign.bind(window.location);
 
         URL.createObjectURL = function(blob) {
             if (blob instanceof Blob) {
@@ -154,15 +143,8 @@
             return originalWindowOpen.call(window, url, ...rest);
         };
 
-        window.location.assign = function(url) {
-            if (shouldBlockUrl(url)) {
-                logNavigationAttempt('location.assign (blocked)', url);
-                return;
-            }
-
-            logNavigationAttempt('location.assign', url);
-            return originalLocationAssign(url);
-        };
+        // Note: location.assign cannot be overridden in modern browsers (read-only)
+        // Export should work without intercepting it
 
         try {
             const exportResult = await exportFn();
@@ -170,7 +152,6 @@
         } finally {
             URL.createObjectURL = originalCreateObjectURL;
             window.open = originalWindowOpen;
-            window.location.assign = originalLocationAssign;
         }
     }
 

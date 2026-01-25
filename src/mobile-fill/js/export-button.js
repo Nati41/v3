@@ -4,6 +4,7 @@
     const WATCH_EVENTS = [
         'PDF_LOADED',
         'PDF_LOAD_ERROR',
+        'MAPPING_READY',
         'VIEWER_RENDER_DONE',
         'HOTSPOTS_READY',
         'FIELD_CREATED',
@@ -47,7 +48,10 @@
 
         const state = window.MobileFillStateStore.state;
         const hasPdf = state.documentState.pdfLoadStatus === 'ready';
-        const fieldsCount = state.quickFillState?.fields?.length || 0;
+        // Check mapping fields (from loaded JSON) OR quickFillState fields (from editor)
+        const mappingFieldsCount = state.mappingState?.fields?.length || 0;
+        const quickFillFieldsCount = state.quickFillState?.fields?.length || 0;
+        const fieldsCount = mappingFieldsCount || quickFillFieldsCount;
         const exportRunning = state.exportState.exportStatus === 'running';
         const shouldDisable = isLocked || exportRunning || !hasPdf || fieldsCount === 0;
         button.classList.toggle('is-disabled', shouldDisable);

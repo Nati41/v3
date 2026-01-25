@@ -10,6 +10,11 @@
             pdfError: null,
             pageCount: null
         },
+        mappingState: {
+            fields: [],
+            version: null,
+            loadedAt: null
+        },
         quickFillState: {
             fields: [],
             activeFieldId: null

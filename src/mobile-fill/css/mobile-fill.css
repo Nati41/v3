@@ -1,4 +1,11 @@
-/* MobileFill base styles (intentionally minimal for foundation stage). */
+/* MobileFill - Mobile-first form filling */
+
+/* ========================================
+   Base Styles
+   ======================================== */
+* {
+    box-sizing: border-box;
+}
 
 html, body {
     margin: 0;
@@ -6,61 +13,146 @@ html, body {
     width: 100%;
     height: 100%;
     overflow-x: hidden;
-    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #f8fafc;
+    direction: rtl;
 }
 
-body.mobilefill-portrait {
-    overflow: hidden;
+.is-hidden {
+    display: none !important;
 }
 
+/* ========================================
+   Main Root
+   ======================================== */
 #mobilefill-root {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
 
+/* ========================================
+   Rotate Overlay (Portrait Warning)
+   ======================================== */
 #mobilefill-rotate-overlay {
     position: fixed;
     inset: 0;
     display: none;
     align-items: center;
     justify-content: center;
-    background: rgba(15, 23, 42, 0.92);
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
     color: #f8fafc;
-    font-size: 16px;
-    text-align: center;
-    padding: 24px;
     z-index: 3000;
 }
 
-#mobilefill-status {
-    margin: 0;
-    padding: 12px;
-    font-family: monospace;
-    white-space: pre-wrap;
+.rotate-content {
+    text-align: center;
+    padding: 24px;
 }
 
-#mobilefill-form-list {
+.rotate-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    animation: rotate-hint 2s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(90deg); }
+}
+
+.rotate-text {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* ========================================
+   Screen Container
+   ======================================== */
+.mobilefill-screen {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
 }
 
-#mobilefill-form-list.is-hidden {
-    display: none;
-}
-
-.mobilefill-form-button {
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+.mobilefill-screen-header {
+    padding: 16px 20px;
     background: #ffffff;
-    text-align: right;
-    font-size: 14px;
-    cursor: pointer;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: center;
 }
 
+.mobilefill-screen-header h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+/* ========================================
+   Form Selector Screen
+   ======================================== */
+#mobilefill-form-selector {
+    background: #f8fafc;
+}
+
+.mobilefill-form-list {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.mobilefill-loading {
+    text-align: center;
+    color: #64748b;
+    padding: 40px 20px;
+    font-size: 16px;
+}
+
+.mobilefill-no-forms {
+    text-align: center;
+    color: #94a3b8;
+    padding: 40px 20px;
+    font-size: 16px;
+}
+
+.mobilefill-form-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    color: #0f172a;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: right;
+}
+
+.mobilefill-form-item:hover,
+.mobilefill-form-item:active {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.form-item-name {
+    flex: 1;
+}
+
+.form-item-arrow {
+    color: #94a3b8;
+    font-size: 20px;
+}
+
+/* ========================================
+   Upload Overlay
+   ======================================== */
 #mobilefill-upload-overlay {
     position: fixed;
     inset: 0;
@@ -72,296 +164,337 @@ body.mobilefill-portrait {
     padding: 24px;
 }
 
-#mobilefill-upload-overlay.is-hidden {
-    display: none;
-}
-
 .mobilefill-upload-card {
     background: #ffffff;
     color: #0f172a;
     border-radius: 16px;
-    padding: 20px 24px;
+    padding: 24px;
     text-align: center;
     width: min(320px, 90vw);
     box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
 }
 
 .mobilefill-upload-title {
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 600;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
 }
 
 .mobilefill-upload-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 16px;
+    padding: 14px 24px;
     background: #0ea5e9;
     color: #ffffff;
-    border-radius: 10px;
-    font-size: 14px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
     cursor: pointer;
+    transition: background 0.2s;
+}
+
+.mobilefill-upload-button:hover {
+    background: #0284c7;
 }
 
 .mobilefill-upload-button input {
     display: none;
 }
 
-.mobilefill-form-button {
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
-    text-align: right;
-    font-size: 14px;
-    cursor: pointer;
+/* ========================================
+   Fill Screen
+   ======================================== */
+#mobilefill-fill-screen {
+    overflow: visible;
 }
 
-#export-blocked-banner {
-    padding: 10px 12px;
-    border: 1px solid #b91c1c;
-    background: #fee2e2;
-    color: #7f1d1d;
-    margin: 0 12px 12px;
-    font-size: 12px;
-    display: none;
-}
-
-#export-blocked-banner.visible {
-    display: block;
-}
-
+/* ========================================
+   PDF Container
+   ======================================== */
 #mobilefill-pdf-container {
-    flex: 1 1 auto;
+    flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
-    padding-bottom: 96px;
+    overflow-x: visible;
+    padding-bottom: 140px; /* Space for nav + export bars */
     touch-action: pan-y;
     overscroll-behavior-x: none;
-    width: 100vw;
-    box-sizing: border-box;
+    width: 100%;
+    background: #e2e8f0;
 }
 
 .mobilefill-page {
     margin: 0;
     position: relative;
     width: 100%;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: visible;
 }
 
-.mobilefill-draw-rect {
-    position: absolute;
-    border: 2px solid rgba(14, 165, 233, 0.9);
-    background: rgba(14, 165, 233, 0.12);
-    pointer-events: none;
-    z-index: 3;
+/* Space between pages to allow buttons to show */
+.mobilefill-page + .mobilefill-page {
+    margin-top: 50px;
 }
 
 .mobilefill-page canvas {
     display: block;
     width: 100%;
-    height: 100%;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    height: auto;
 }
 
+/* ========================================
+   Hotspot Layer (Field Rectangles)
+   ======================================== */
 .mobilefill-hotspot-layer {
     position: absolute;
     inset: 0;
+    pointer-events: none;
+    overflow: visible;
 }
 
 .mobilefill-hotspot {
     position: absolute;
-    border: 1px dashed rgba(37, 99, 235, 0.6);
-    background: rgba(37, 99, 235, 0.05);
+    border: 1px solid rgba(100, 116, 139, 0.25);
+    background: rgba(248, 250, 252, 0.03);
+    border-radius: 3px;
     cursor: pointer;
-    overflow: hidden;
+    pointer-events: auto;
+    transition: all 0.2s ease;
+    overflow: visible;
+    backdrop-filter: blur(0.5px);
+}
+
+.mobilefill-hotspot:hover {
+    border-color: rgba(71, 85, 105, 0.4);
+    background: rgba(241, 245, 249, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .mobilefill-hotspot.is-active {
-    border-color: rgba(14, 165, 233, 0.9);
-    background: rgba(14, 165, 233, 0.12);
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.05);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
+.mobilefill-hotspot.is-editing {
+    z-index: 100;
+    overflow: visible;
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.mobilefill-hotspot.has-value {
+    border-color: rgba(34, 197, 94, 0.35);
+    background: rgba(34, 197, 94, 0.03);
+}
+
+/* ========================================
+   Inline Input (Inside Hotspot)
+   ======================================== */
 .mobilefill-inline-input {
     width: 100%;
     height: 100%;
-    border: 1px solid rgba(14, 165, 233, 0.7);
-    border-radius: 4px;
-    padding: 4px 6px;
+    min-height: 32px;
+    border: none;
+    border-radius: 3px;
+    padding: 4px 8px;
     font-size: 16px;
     font-family: inherit;
-    box-sizing: border-box;
-    background: rgba(255, 255, 255, 0.95);
-}
-
-.mobilefill-inline-actions {
-    position: absolute;
-    bottom: 4px;
-    right: 4px;
-    display: flex;
-    gap: 4px;
-    z-index: 2;
-}
-
-.mobilefill-inline-btn {
-    border: none;
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 12px;
-    line-height: 1;
-    cursor: pointer;
-    background: rgba(15, 23, 42, 0.9);
-    color: #f8fafc;
-}
-
-.mobilefill-inline-btn.cancel {
-    background: rgba(148, 163, 184, 0.95);
-    color: #0f172a;
-}
-
-.mobilefill-type-picker {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    display: flex;
-    gap: 6px;
-    background: rgba(15, 23, 42, 0.85);
-    padding: 4px 6px;
-    border-radius: 6px;
-    z-index: 5;
-}
-
-.mobilefill-type-btn {
-    border: none;
     background: transparent;
-    color: #f8fafc;
-    font-size: 14px;
-    padding: 2px 4px;
-    cursor: pointer;
-}
-
-.field-input-popover {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
-    width: 240px;
-    font-size: 12px;
+    color: #0f172a;
+    outline: none;
+    text-align: right;
     direction: rtl;
 }
 
-.popover-header {
+.mobilefill-inline-input:focus {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.mobilefill-inline-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 72px; /* Above export bar, same as nav bar */
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 8px 10px;
-    border-bottom: 1px solid #e2e8f0;
-    font-weight: 600;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: linear-gradient(to top, rgba(255,255,255,0.99), rgba(255,255,255,0.97));
+    border-top: 1px solid #e2e8f0;
+    z-index: 1001;
+    backdrop-filter: blur(10px);
 }
 
-.popover-close {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-}
-
-.popover-body {
-    padding: 10px;
-}
-
-.popover-input {
-    width: 100%;
-    padding: 6px 8px;
-    border: 1px solid #cbd5f5;
-    border-radius: 6px;
-    font-size: 12px;
-}
-
-.input-hint {
-    display: block;
-    margin-top: 6px;
-    font-size: 11px;
-    color: #64748b;
-}
-
-.popover-footer {
+.mobilefill-inline-btn {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     gap: 6px;
-    padding: 8px 10px 10px;
-}
-
-.popover-btn {
-    flex: 1;
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px solid #cbd5f5;
-    background: #f8fafc;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 12px;
+    transition: all 0.15s ease;
 }
 
-.popover-btn.confirm {
-    background: #0ea5e9;
-    border-color: #0ea5e9;
+.mobilefill-inline-btn.done {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
     color: #ffffff;
+    border: none;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
 }
 
-.mobilefill-choice-option {
+.mobilefill-inline-btn.done:active {
+    transform: scale(0.97);
+    box-shadow: 0 1px 4px rgba(34, 197, 94, 0.3);
+}
+
+.mobilefill-inline-btn.cancel {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.mobilefill-inline-btn.cancel:active {
+    background: #e2e8f0;
+}
+
+/* ========================================
+   Field Value Preview (Inside Hotspot)
+   ======================================== */
+.mobilefill-field-value {
+    position: absolute;
+    inset: 0;
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
+    align-items: flex-end;
+    justify-content: flex-start;
+    padding: 2px 4px;
+    font-size: 14px;
+    color: #0f172a;
+    pointer-events: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.mobilefill-choice-option input {
-    width: 16px;
-    height: 16px;
-}
-
+/* Checkbox/Radio Symbol */
 .mobilefill-choice-symbol {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
     color: #0f172a;
-    font-weight: 600;
-    line-height: 1;
     pointer-events: none;
 }
 
+/* ========================================
+   Navigation Bar (Prev/Next Field)
+   ======================================== */
+#mobilefill-nav-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 72px; /* Above export bar */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.98);
+    border-top: 1px solid #e2e8f0;
+    z-index: 999;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #0f172a;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-btn:hover:not(:disabled) {
+    background: #e2e8f0;
+}
+
+.nav-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.nav-arrow {
+    font-size: 16px;
+}
+
+.nav-counter {
+    font-size: 16px;
+    font-weight: 600;
+    color: #0f172a;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* ========================================
+   Export Bar
+   ======================================== */
 #mobilefill-export-bar {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.98);
     border-top: 1px solid #e2e8f0;
-    box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.1);
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
     z-index: 1000;
 }
 
 #mobilefill-export-button {
     width: 100%;
-    padding: 14px 16px;
-    font-size: 16px;
+    padding: 16px;
+    font-size: 18px;
     font-weight: 600;
     border-radius: 12px;
     border: none;
-    background: #0ea5e9;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
     color: #ffffff;
     cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#mobilefill-export-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+}
+
+#mobilefill-export-button:active {
+    transform: translateY(0);
 }
 
 #mobilefill-export-button.is-disabled {
     background: #94a3b8;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
+/* ========================================
+   Debug Console (Development)
+   ======================================== */
 #mobile-debug-console {
     position: fixed;
     left: 0;
@@ -371,9 +504,14 @@ body.mobilefill-portrait {
     background: rgba(15, 23, 42, 0.95);
     color: #e2e8f0;
     font-size: 11px;
+    font-family: monospace;
     z-index: 2000;
-    display: flex;
+    display: none; /* Hidden by default */
     flex-direction: column;
+}
+
+#mobile-debug-console.visible {
+    display: flex;
 }
 
 #mobile-debug-console.collapsed {
@@ -411,4 +549,52 @@ body.mobilefill-portrait {
 
 .mobile-debug-line.error {
     color: #f87171;
+}
+
+/* ========================================
+   Status Bar (Debug)
+   ======================================== */
+#mobilefill-status {
+    margin: 0;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+@media (max-width: 480px) {
+    .mobilefill-screen-header h1 {
+        font-size: 18px;
+    }
+
+    .mobilefill-form-item {
+        padding: 14px 16px;
+        font-size: 15px;
+    }
+
+    .nav-btn {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    #mobilefill-export-button {
+        padding: 14px;
+        font-size: 16px;
+    }
+}
+
+/* Landscape mode adjustments */
+@media (orientation: landscape) {
+    #mobilefill-nav-bar {
+        bottom: 60px;
+    }
+
+    #mobilefill-pdf-container {
+        padding-bottom: 120px;
+    }
 }

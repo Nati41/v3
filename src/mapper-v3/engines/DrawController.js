@@ -1916,6 +1916,9 @@ export class DrawController {
                 const typeLabel = this._getTypeLabel(this.pendingFieldData.type || fieldType);
                 console.log('[DrawController] Created DRAFT field with label:', field.id, this.pendingFieldData.label_he, 'boxCount:', this.pendingFieldData.boxCount);
 
+                // V3.14: Emit FIELD_MAPPED for table region detection
+                eventBus.emit(Events.FIELD_MAPPED, { fieldId: field.id, source: 'manual' });
+
                 // Show feedback with field name and box count if applicable
                 let toastMsg = `✓ ${this.pendingFieldData.label_he} (${typeLabel})`;
                 if (this.pendingFieldData.boxCount) {
@@ -1949,6 +1952,9 @@ export class DrawController {
 
                 if (field) {
                     console.log('[DrawController] Created DRAFT field (no label):', field.id, 'detected:', detectedStructure);
+
+                    // V3.14: Emit FIELD_MAPPED for table region detection
+                    eventBus.emit(Events.FIELD_MAPPED, { fieldId: field.id, source: 'manual' });
 
                     // Show visual feedback
                     this._showDraftFeedback(field, detectedStructure);

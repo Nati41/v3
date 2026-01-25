@@ -17,6 +17,7 @@
 
 import { state } from './StateManager.js';
 import { templateStore } from './TemplateStore.js';
+import { pdfEngine } from '../engines/PDFEngine.js';
 import { FIELD_INTELLIGENCE_SCHEMA_VERSION, ContextType, FormatType } from '../ai/schemas/field-intelligence-schema.js';
 
 // Export schema version
@@ -178,8 +179,29 @@ function enrichFieldForFillEngine(field, enrichFromTemplate = true) {
         instance: field.instance || null,
 
         // Mapping state
-        isMapped: field.isMapped || false
+        isMapped: field.isMapped || false,
+
+        // V3.14: Table region metadata (for fields inside tables)
+        tableRegionId: field.tableRegionId || null,
+        tableRow: field.tableRow != null ? field.tableRow : null
     };
+
+    // V3.14: Add V2 coordinates (pdfX, pdfY, pdfWidth, pdfHeight) for floor anchoring in export
+    // These are preferred by export-engine over bbox
+    if (field.bbox && Array.isArray(field.bbox) && field.bbox.length === 4) {
+        const pdfDims = pdfEngine.getPdfPageDimensions?.();
+        if (pdfDims) {
+            const dpiScale = pdfEngine.getDpiScale?.() || 1;
+            const pdfW = pdfDims.width / dpiScale;
+            const pdfH = pdfDims.height / dpiScale;
+
+            const [xPct, yPct, wPct, hPct] = field.bbox;
+            enriched.pdfX = xPct * pdfW;
+            enriched.pdfY = yPct * pdfH;
+            enriched.pdfWidth = wPct * pdfW;
+            enriched.pdfHeight = hPct * pdfH;
+        }
+    }
 
     // Add headerHints if not present
     if (!field.headerHints && field.canonical && CANONICAL_DICTIONARY[field.canonical]) {

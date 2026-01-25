@@ -48,7 +48,7 @@
                 };
 
                 migrationCount++;
-                console.log(`✅ Migrated field ${field.id}: bbox(${xPct.toFixed(3)}, ${yPct.toFixed(3)}, ${wPct.toFixed(3)}, ${hPct.toFixed(3)}) → PDF(${pdfX.toFixed(2)}, ${pdfY.toFixed(2)}, ${pdfWidth.toFixed(2)}, ${pdfHeight.toFixed(2)})`);
+                // Removed verbose per-field logging to improve performance
 
                 return migratedField;
             } catch (error) {

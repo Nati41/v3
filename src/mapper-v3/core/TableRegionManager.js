@@ -16,6 +16,7 @@
 
 import { eventBus, Events } from './EventBus.js';
 import { state } from './StateManager.js';
+import { columnSetupDialog } from '../ui/ColumnSetupDialog.js';
 
 /**
  * TableRegion entity structure
@@ -32,6 +33,14 @@ export class TableRegion {
         this.firstMappedFieldId = null;
         this.name = null;              // Auto-generated table name
         this.createdAt = Date.now();
+
+        // V3.14: Sidebar integration properties
+        this.source = 'manual';        // 'manual' | 'json' | 'ai' - where this table came from
+        this.name_he = null;           // Hebrew display name for sidebar
+        this.name_en = null;           // English name for export
+        this._mappedColumns = 0;       // Count of columns that have been mapped
+        this._isExpanded = true;       // Expanded/collapsed state in sidebar
+        this._fieldIds = [];           // All field IDs belonging to this table (for quick lookup)
     }
 
     toJSON() {
@@ -44,7 +53,12 @@ export class TableRegion {
             rowCount: this.rowCount,
             isStructureLocked: this.isStructureLocked,
             firstMappedFieldId: this.firstMappedFieldId,
-            name: this.name
+            name: this.name,
+            // V3.14: Sidebar integration
+            source: this.source,
+            name_he: this.name_he,
+            name_en: this.name_en,
+            _fieldIds: this._fieldIds
         };
     }
 
@@ -56,7 +70,48 @@ export class TableRegion {
         region.isStructureLocked = json.isStructureLocked || false;
         region.firstMappedFieldId = json.firstMappedFieldId;
         region.name = json.name || null;
+        // V3.14: Sidebar integration
+        region.source = json.source || 'manual';
+        region.name_he = json.name_he || null;
+        region.name_en = json.name_en || null;
+        region._fieldIds = json._fieldIds || [];
         return region;
+    }
+
+    // V3.14: Helper methods for sidebar
+
+    /**
+     * Get count of mapped columns
+     * @returns {number}
+     */
+    getMappedColumnCount() {
+        return this.columns.filter(col => col.fieldIds && col.fieldIds.length > 0).length;
+    }
+
+    /**
+     * Get display name (Hebrew preferred)
+     * @returns {string}
+     */
+    getDisplayName() {
+        return this.name_he || this.name || `טבלה ${this.id.slice(-4)}`;
+    }
+
+    /**
+     * Check if all columns are mapped
+     * @returns {boolean}
+     */
+    isFullyMapped() {
+        return this.columns.length > 0 && this.getMappedColumnCount() === this.columns.length;
+    }
+
+    /**
+     * Add a field ID to the table's field list
+     * @param {string} fieldId
+     */
+    addFieldId(fieldId) {
+        if (!this._fieldIds.includes(fieldId)) {
+            this._fieldIds.push(fieldId);
+        }
     }
 }
 
@@ -151,14 +206,14 @@ class TableRegionManager {
     _setupRowPhysics(region, field) {
         region.firstMappedFieldId = field.id;
 
-        // Calculate rowStep from field height
-        // bbox is [x, y, w, h] in normalized coordinates
-        const fieldHeight = field.bbox[3];
-        region.rowStep = fieldHeight * 1.2; // Add 20% padding between rows
+        // V3.14: Calculate rowStep from table height divided by row count
+        // This ensures fields are evenly distributed within the table region
+        const tableHeight = region.bbox[3];
+        region.rowStep = tableHeight / region.rowCount;
 
         region.isStructureLocked = true;
 
-        console.log(`[TableRegionManager] Row physics set from field ${field.id}: rowStep=${region.rowStep}`);
+        console.log(`[TableRegionManager] Row physics set from field ${field.id}: rowStep=${region.rowStep} (tableHeight=${tableHeight}, rows=${region.rowCount})`);
 
         // Update field to mark it as part of this table, row 0
         state.updateField(field.id, {
@@ -174,85 +229,85 @@ class TableRegionManager {
 
     /**
      * Show dialog to replicate column
+     * V3.14: Uses ColumnSetupDialog for naming columns before replication
      * @param {TableRegion} region
      * @param {Object} field
      */
-    _showReplicationDialog(region, field) {
+    async _showReplicationDialog(region, field) {
         const existingDialog = document.querySelector('.table-replicate-dialog');
         if (existingDialog) existingDialog.remove();
 
-        const fieldName = field.label_he || field.label_en || field.name || 'שדה';
+        // V3.14: Get suggested name from field or use default
+        const suggestedName = field.label_he || field.label_en || field.name || '';
+        const suggestedType = field.type || 'text';
+        const tableName = region.name_he || region.getDisplayName();
 
-        const dialog = document.createElement('div');
-        dialog.className = 'table-replicate-dialog';
-        dialog.innerHTML = `
-            <div class="table-replicate-content">
-                <h4>שכפל עמודה בטבלה</h4>
-                <p class="field-name">${fieldName}</p>
-                <div class="replicate-settings">
-                    <div class="setting-row">
-                        <label>מספר שורות בטבלה:</label>
-                        <input type="number" class="row-count-input" value="${region.rowCount || 10}" min="2" max="50" />
-                    </div>
-                </div>
-                <p class="auto-calc-note">גובה שורה יחושב אוטומטית לפי גבולות הטבלה</p>
-                <div class="table-replicate-buttons">
-                    <button class="btn-replicate">✓ שכפל</button>
-                    <button class="btn-skip">דלג</button>
-                </div>
-            </div>
-        `;
+        // Show the ColumnSetupDialog
+        const result = await columnSetupDialog.show({
+            tableName,
+            rowCount: region.rowCount || 5,
+            suggestedName,
+            suggestedType
+        });
 
-        dialog.style.cssText = `
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10000;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            direction: rtl;
-            min-width: 280px;
-        `;
+        if (result) {
+            // User confirmed - update field with the column name
+            const fields = state.get('fields') || [];
+            const fieldIndex = fields.findIndex(f => f.id === field.id);
 
-        const rowCountInput = dialog.querySelector('.row-count-input');
-        const replicateBtn = dialog.querySelector('.btn-replicate');
-        const skipBtn = dialog.querySelector('.btn-skip');
+            if (fieldIndex !== -1) {
+                // Update the original field with the chosen column name
+                fields[fieldIndex].label_he = result.name_he;
+                fields[fieldIndex].label_en = result.name_en;
+                fields[fieldIndex].name = result.name_en;
+                fields[fieldIndex].type = result.type;
+                state.set('fields', [...fields]);
+            }
 
-        replicateBtn.addEventListener('click', () => {
-            const rowCount = parseInt(rowCountInput.value) || 10;
-
-            // Calculate row step from table region height and row count
-            // This ensures fields fit exactly within the table boundaries
-            const tableHeight = region.bbox[3]; // height of table region
-            const calculatedRowStep = tableHeight / rowCount;
-
-            // Update region settings
-            region.rowCount = rowCount;
+            // V3.14: Calculate row step from table height divided by row count
+            // This ensures fields are evenly distributed within the table region
+            const tableHeight = region.bbox[3];
+            const calculatedRowStep = tableHeight / region.rowCount;
             region.rowStep = calculatedRowStep;
 
-            console.log(`[TableRegionManager] Auto-calculated rowStep: ${calculatedRowStep} (tableHeight=${tableHeight}, rowCount=${rowCount})`);
+            console.log(`[TableRegionManager] Column "${result.name_he}" - rowStep: ${calculatedRowStep} (tableHeight=${tableHeight}, rowCount=${region.rowCount})`);
 
+            // Replicate the column
             const created = this.replicateColumn(region.id, field.id);
-            dialog.remove();
-            eventBus.emit('toast:show', {
-                message: `נוצרו ${created.length} שדות`,
+
+            // V3.14: Add column to region.columns for sidebar display
+            const allFieldIds = [field.id, ...created.map(f => f.id)];
+            region.columns.push({
+                name_he: result.name_he,
+                name_en: result.name_en,
+                type: result.type,
+                fieldId: field.id,
+                fieldIds: allFieldIds,
+                x: field.bbox[0] // X position for column ordering
+            });
+
+            // Update region's mapped columns count
+            region._mappedColumns = (region._mappedColumns || 0) + 1;
+
+            // Track this field in the region
+            allFieldIds.forEach(fid => region.addFieldId(fid));
+
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: `עמודה "${result.name_he}" נוצרה (${created.length} שורות)`,
                 type: 'success',
                 duration: 3000
             });
-        });
 
-        skipBtn.addEventListener('click', () => {
-            dialog.remove();
-        });
-
-        document.body.appendChild(dialog);
-
-        // Auto-remove after 30 seconds
-        setTimeout(() => {
-            if (dialog.parentNode) dialog.remove();
-        }, 30000);
+            // Emit update for sidebar refresh
+            eventBus.emit(Events.TABLE_REGION_UPDATED, { region });
+        } else {
+            // User cancelled - keep field but don't replicate
+            eventBus.emit(Events.TOAST_SHOW, {
+                message: 'שכפול עמודה בוטל',
+                type: 'warning',
+                duration: 2000
+            });
+        }
     }
 
     /**
@@ -516,15 +571,14 @@ class TableRegionManager {
         region.firstMappedFieldId = fieldId;
         region.rowCount = rowCount;
 
-        // Calculate rowStep from field position
-        // rowStep = height of one row in normalized coordinates
-        // For now, estimate from bbox height or use a default
-        const fieldHeight = field.bbox[3]; // Height in normalized coords
-        region.rowStep = fieldHeight * 1.2; // Add some padding
+        // V3.14: Calculate rowStep from table height divided by row count
+        // This ensures fields are evenly distributed within the table region
+        const tableHeight = region.bbox[3];
+        region.rowStep = tableHeight / rowCount;
 
         region.isStructureLocked = true;
 
-        console.log(`[TableRegionManager] Row physics set: rowStep=${region.rowStep}, rowCount=${rowCount}`);
+        console.log(`[TableRegionManager] Row physics set: rowStep=${region.rowStep}, rowCount=${rowCount} (tableHeight=${tableHeight})`);
 
         eventBus.emit(Events.TABLE_REGION_UPDATED, { region });
     }
@@ -573,11 +627,19 @@ class TableRegionManager {
                 sh
             ];
 
+            // V3.14: Calculate anchor for fill engine compatibility
+            // Anchor is the center point of the field in normalized coordinates
+            const newAnchor = [
+                sx + sw / 2,  // center X
+                newY + sh / 2  // center Y
+            ];
+
             const newField = state.addField({
                 label_he: `${sourceField.label_he || sourceField.name} ${row + 1}`,
                 label_en: sourceField.label_en ? `${sourceField.label_en}_${row + 1}` : null,
                 type: sourceField.type,
                 bbox: newBbox,
+                anchor: newAnchor,  // V3.14: Add anchor for fill engine
                 page: sourceField.page,
                 isMapped: true,
                 status: 'mapped',
@@ -594,9 +656,15 @@ class TableRegionManager {
         }
 
         // Mark source field as row 0
+        // V3.14: Also add anchor for consistency with replicated fields
+        const sourceAnchor = sourceField.anchor || [
+            sx + sw / 2,  // center X
+            sy + sh / 2   // center Y
+        ];
         state.updateField(fieldId, {
             tableRegionId: regionId,
-            tableRow: 0
+            tableRow: 0,
+            anchor: sourceAnchor
         });
 
         console.log(`[TableRegionManager] Replicated column: ${createdFields.length} rows created`);
@@ -631,6 +699,62 @@ class TableRegionManager {
      */
     getAllRegions() {
         return Array.from(this._regions.values());
+    }
+
+    /**
+     * V3.14: Get regions formatted for sidebar display
+     * Returns array of table sections for SidebarController
+     * @param {number} page - Optional page filter (null = all pages)
+     * @returns {Array<Object>} Sidebar-ready table sections
+     */
+    getRegionsForSidebar(page = null) {
+        const regions = this.getAllRegions();
+        const currentPage = page || state.get('document.currentPage') || 1;
+
+        return regions
+            .filter(r => r.page === currentPage)
+            .map(region => {
+                // Calculate mapped column count
+                const mappedCount = region.getMappedColumnCount();
+                const totalColumns = region.columns.length;
+
+                return {
+                    id: region.id,
+                    type: 'table',
+                    name: region.getDisplayName(),
+                    name_he: region.name_he || region.getDisplayName(),
+                    name_en: region.name_en || region.id,
+                    source: region.source,
+                    isExpanded: region._isExpanded,
+                    rowCount: region.rowCount || 0,
+                    columns: region.columns.map(col => ({
+                        id: col.fieldId || col.id,
+                        name_he: col.name_he,
+                        name_en: col.name_en,
+                        type: col.type,
+                        isMapped: !!(col.fieldIds && col.fieldIds.length > 0),
+                        fieldCount: col.fieldIds ? col.fieldIds.length : 0
+                    })),
+                    // Summary for display
+                    mappedColumns: mappedCount,
+                    totalColumns: totalColumns,
+                    isFullyMapped: region.isFullyMapped(),
+                    status: mappedCount === 0 ? 'pending' :
+                            mappedCount < totalColumns ? 'partial' : 'complete'
+                };
+            });
+    }
+
+    /**
+     * V3.14: Toggle table expanded state in sidebar
+     * @param {string} regionId
+     */
+    toggleSidebarExpanded(regionId) {
+        const region = this._regions.get(regionId);
+        if (region) {
+            region._isExpanded = !region._isExpanded;
+            eventBus.emit(Events.TABLE_REGION_UPDATED, { regionId, property: '_isExpanded' });
+        }
     }
 
     /**

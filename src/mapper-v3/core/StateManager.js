@@ -1417,6 +1417,9 @@ export class StateManager {
         // Clean fields - remove transient UI flags
         const cleanedFields = this.state.fields.map(f => removeTransientFlags(f));
 
+        // V3.14: Include table regions if available
+        const tableRegions = window.tableRegionManager?.toJSON?.() || [];
+
         return {
             version: '3.0',
             exportedAt: new Date().toISOString(),
@@ -1424,6 +1427,7 @@ export class StateManager {
             fields: cleanedFields,
             radioGroups: this.state.radioGroups,
             tables: this.state.tables,
+            tableRegions: tableRegions,
             settings: this.state.settings
         };
     }
@@ -1620,6 +1624,12 @@ export class StateManager {
             // Import tables if present
             if (data.tables && Array.isArray(data.tables)) {
                 tablesToImport = this._normalizeTables(data.tables);
+            }
+
+            // V3.14: Import table regions if present
+            if (data.tableRegions && Array.isArray(data.tableRegions) && window.tableRegionManager) {
+                window.tableRegionManager.fromJSON(data.tableRegions);
+                console.log(`[StateManager] Restored ${data.tableRegions.length} table regions`);
             }
         }
         else {
