@@ -41,7 +41,45 @@
         window.MobileFillEventBus.on('FIELD_NAVIGATE_PREV', () => navigateField(-1));
         window.MobileFillEventBus.on('FIELD_NAVIGATE_NEXT', () => navigateField(1));
 
+        // Counter zoom to keep panel stable
+        setupZoomCompensation();
+
         console.log('[MobileFill] Input panel initialized');
+    }
+
+    function setupZoomCompensation() {
+        if (!window.visualViewport) return;
+
+        const updatePanelPosition = () => {
+            if (!panelEl) return;
+
+            const vv = window.visualViewport;
+            const scale = vv.scale;
+
+            // Calculate the bottom position to stick to keyboard
+            // offsetTop is how much the viewport is scrolled from the top of the layout viewport
+            // When keyboard opens, the visual viewport gets smaller and may scroll
+            const keyboardOffset = window.innerHeight - (vv.height + vv.offsetTop);
+
+            // Counter zoom and position above keyboard
+            if (scale !== 1) {
+                panelEl.style.transform = `scale(${1/scale})`;
+                panelEl.style.transformOrigin = 'bottom left';
+                panelEl.style.width = `${100 * scale}%`;
+            } else {
+                panelEl.style.transform = '';
+                panelEl.style.width = '';
+            }
+
+            // Always position at bottom of visual viewport (above keyboard)
+            panelEl.style.bottom = `${Math.max(0, keyboardOffset)}px`;
+        };
+
+        window.visualViewport.addEventListener('resize', updatePanelPosition);
+        window.visualViewport.addEventListener('scroll', updatePanelPosition);
+
+        // Initial position
+        updatePanelPosition();
     }
 
     function createPanel() {
@@ -49,6 +87,23 @@
         panelEl = document.createElement('div');
         panelEl.id = 'mobilefill-input-panel';
         panelEl.className = 'mobilefill-input-panel is-hidden';
+
+        // Single row layout
+        const row = document.createElement('div');
+        row.className = 'input-panel-row';
+
+        // Navigation buttons (right side in RTL)
+        prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.className = 'input-panel-btn nav';
+        prevBtn.innerHTML = '<span class="btn-icon">▶</span>';
+        prevBtn.title = 'הקודם';
+
+        nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.className = 'input-panel-btn nav';
+        nextBtn.innerHTML = '<span class="btn-icon">◀</span>';
+        nextBtn.title = 'הבא';
 
         // Field label
         labelEl = document.createElement('div');
@@ -62,58 +117,40 @@
         inputEl = document.createElement('input');
         inputEl.type = 'text';
         inputEl.className = 'input-panel-input';
-        inputEl.placeholder = 'הקלד כאן...';
+        inputEl.placeholder = 'הקלד...';
         inputEl.autocomplete = 'off';
         inputEl.autocapitalize = 'off';
         inputEl.spellcheck = false;
 
         inputContainer.appendChild(inputEl);
 
-        // Action buttons container
+        // Action buttons
         const actionsContainer = document.createElement('div');
         actionsContainer.className = 'input-panel-actions';
-
-        // Navigation buttons
-        const navGroup = document.createElement('div');
-        navGroup.className = 'input-panel-nav-group';
-
-        prevBtn = document.createElement('button');
-        prevBtn.type = 'button';
-        prevBtn.className = 'input-panel-btn nav';
-        prevBtn.innerHTML = '<span class="btn-icon">▶</span><span class="btn-text">הקודם</span>';
-
-        nextBtn = document.createElement('button');
-        nextBtn.type = 'button';
-        nextBtn.className = 'input-panel-btn nav';
-        nextBtn.innerHTML = '<span class="btn-text">הבא</span><span class="btn-icon">◀</span>';
-
-        navGroup.appendChild(prevBtn);
-        navGroup.appendChild(nextBtn);
-
-        // Confirm/Cancel buttons
-        const actionGroup = document.createElement('div');
-        actionGroup.className = 'input-panel-action-group';
 
         cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'input-panel-btn cancel';
-        cancelBtn.innerHTML = '<span class="btn-icon">✕</span><span class="btn-text">ביטול</span>';
+        cancelBtn.innerHTML = '<span class="btn-icon">✕</span>';
+        cancelBtn.title = 'ביטול';
 
         confirmBtn = document.createElement('button');
         confirmBtn.type = 'button';
         confirmBtn.className = 'input-panel-btn confirm';
-        confirmBtn.innerHTML = '<span class="btn-icon">✓</span><span class="btn-text">אישור</span>';
+        confirmBtn.innerHTML = '<span class="btn-icon">✓</span>';
+        confirmBtn.title = 'אישור';
 
-        actionGroup.appendChild(cancelBtn);
-        actionGroup.appendChild(confirmBtn);
+        actionsContainer.appendChild(cancelBtn);
+        actionsContainer.appendChild(confirmBtn);
 
-        actionsContainer.appendChild(navGroup);
-        actionsContainer.appendChild(actionGroup);
+        // Assemble row: nav | label | input | actions
+        row.appendChild(prevBtn);
+        row.appendChild(nextBtn);
+        row.appendChild(labelEl);
+        row.appendChild(inputContainer);
+        row.appendChild(actionsContainer);
 
-        // Assemble panel
-        panelEl.appendChild(labelEl);
-        panelEl.appendChild(inputContainer);
-        panelEl.appendChild(actionsContainer);
+        panelEl.appendChild(row);
 
         // Append to body - fixed position at bottom of viewport
         document.body.appendChild(panelEl);
@@ -206,6 +243,10 @@
         setTimeout(() => {
             inputEl.focus();
             inputEl.select();
+            // Trigger position update for keyboard
+            if (window.visualViewport) {
+                window.visualViewport.dispatchEvent(new Event('resize'));
+            }
         }, 50);
     }
 

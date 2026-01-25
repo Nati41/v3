@@ -536,42 +536,56 @@ html, body {
     right: 0;
     background: #ffffff;
     border-top: 1px solid #e2e8f0;
-    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.12);
+    box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.1);
     z-index: 2000;
-    padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    padding: 8px 12px;
+    /* Smooth keyboard tracking */
+    transition: bottom 0.1s ease-out;
+    touch-action: manipulation;
+    /* Ensure it stays on top of everything */
+    will-change: transform, bottom;
 }
 
 .mobilefill-input-panel.is-hidden {
     display: none;
 }
 
-/* Field label at top of panel */
-.input-panel-label {
-    font-size: 14px;
-    font-weight: 600;
-    color: #64748b;
-    margin-bottom: 8px;
-    text-align: right;
+/* Compact single-row layout */
+.input-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
-/* Input container */
+/* Field label - compact inline */
+.input-panel-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    min-width: 60px;
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Input - compact */
 .input-panel-input-container {
-    margin-bottom: 12px;
+    flex: 1;
 }
 
 .input-panel-input {
     width: 100%;
-    padding: 14px 16px;
-    font-size: 18px;
+    padding: 8px 10px;
+    font-size: 16px;
     font-family: inherit;
-    border: 2px solid #e2e8f0;
-    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
     background: #f8fafc;
     color: #0f172a;
     direction: rtl;
     text-align: right;
     outline: none;
-    transition: border-color 0.2s, background 0.2s;
 }
 
 .input-panel-input:focus {
@@ -583,46 +597,29 @@ html, body {
     color: #94a3b8;
 }
 
-/* Action buttons container */
+/* Compact buttons */
 .input-panel-actions {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
+    gap: 6px;
 }
 
-/* Navigation button group (prev/next) */
-.input-panel-nav-group {
-    display: flex;
-    gap: 8px;
-}
-
-/* Action button group (confirm/cancel) */
-.input-panel-action-group {
-    display: flex;
-    gap: 8px;
-}
-
-/* Panel buttons base style */
+/* Panel buttons - icon only for compactness */
 .input-panel-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 10px 16px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 8px;
+    font-size: 16px;
     cursor: pointer;
     transition: all 0.15s ease;
     border: none;
 }
 
-.input-panel-btn .btn-icon {
-    font-size: 14px;
-}
-
 .input-panel-btn .btn-text {
-    font-size: 13px;
+    display: none;
 }
 
 /* Navigation buttons */
@@ -637,20 +634,18 @@ html, body {
 }
 
 .input-panel-btn.nav:disabled {
-    opacity: 0.4;
+    opacity: 0.3;
     cursor: not-allowed;
 }
 
 /* Confirm button */
 .input-panel-btn.confirm {
-    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    background: #22c55e;
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
 }
 
 .input-panel-btn.confirm:active {
-    transform: scale(0.97);
-    box-shadow: 0 1px 4px rgba(34, 197, 94, 0.3);
+    background: #16a34a;
 }
 
 /* Cancel button */
@@ -670,19 +665,9 @@ html, body {
     display: none !important;
 }
 
-/* Responsive adjustments for input panel */
-@media (max-width: 400px) {
-    .input-panel-btn {
-        padding: 8px 12px;
-    }
-
-    .input-panel-btn .btn-text {
+/* Smaller screens - hide label */
+@media (max-width: 360px) {
+    .input-panel-label {
         display: none;
     }
-
-    .input-panel-btn .btn-icon {
-        font-size: 18px;
-    }
 }
-
-/* Landscape panel styles removed - portrait only */
