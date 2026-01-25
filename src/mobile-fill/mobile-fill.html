@@ -62,29 +62,29 @@
         <!-- Screen 3: PDF Viewer + Fill -->
         <div id="mobilefill-fill-screen" class="mobilefill-screen is-hidden">
             <div id="mobilefill-pdf-container"></div>
-
-            <!-- Navigation bar (prev/next field) -->
-            <div id="mobilefill-nav-bar" class="is-hidden">
-                <button id="mobilefill-prev-field" type="button" class="nav-btn">
-                    <span class="nav-arrow">→</span>
-                    <span class="nav-label">קודם</span>
-                </button>
-                <div id="mobilefill-field-counter" class="nav-counter">0 / 0</div>
-                <button id="mobilefill-next-field" type="button" class="nav-btn">
-                    <span class="nav-label">הבא</span>
-                    <span class="nav-arrow">←</span>
-                </button>
-            </div>
-
-            <!-- Export bar -->
-            <div id="mobilefill-export-bar" class="is-hidden">
-                <button id="mobilefill-export-button" type="button">הורד טופס מלא</button>
-            </div>
         </div>
 
         <!-- Status bar (debug) -->
         <pre id="mobilefill-status" class="is-hidden">MobileFill</pre>
     </main>
+
+    <!-- Navigation bar (prev/next field) - fixed at bottom -->
+    <div id="mobilefill-nav-bar" class="is-hidden">
+        <button id="mobilefill-prev-field" type="button" class="nav-btn">
+            <span class="nav-arrow">→</span>
+            <span class="nav-label">קודם</span>
+        </button>
+        <div id="mobilefill-field-counter" class="nav-counter">0 / 0</div>
+        <button id="mobilefill-next-field" type="button" class="nav-btn">
+            <span class="nav-label">הבא</span>
+            <span class="nav-arrow">←</span>
+        </button>
+    </div>
+
+    <!-- Export bar - fixed at bottom -->
+    <div id="mobilefill-export-bar" class="is-hidden">
+        <button id="mobilefill-export-button" type="button">הורד טופס מלא</button>
+    </div>
 
     <!-- Scripts -->
     <script src="js/event-bus.js"></script>

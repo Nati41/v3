@@ -115,13 +115,8 @@
         panelEl.appendChild(inputContainer);
         panelEl.appendChild(actionsContainer);
 
-        // Append to PDF container so it scrolls with content
-        const pdfContainer = document.getElementById('mobilefill-pdf-container');
-        if (pdfContainer) {
-            pdfContainer.appendChild(panelEl);
-        } else {
-            document.body.appendChild(panelEl);
-        }
+        // Append to body - fixed position at bottom of viewport
+        document.body.appendChild(panelEl);
     }
 
     function bindEvents() {
