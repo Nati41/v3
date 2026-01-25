@@ -2,18 +2,11 @@
     'use strict';
 
     function init() {
-        updateOrientation();
-        window.addEventListener('resize', updateOrientation);
-        window.addEventListener('orientationchange', updateOrientation);
-    }
-
-    function updateOrientation() {
+        // Disabled - app works in both portrait and landscape
         const overlay = document.getElementById('mobilefill-rotate-overlay');
-        if (!overlay) return;
-
-        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-        overlay.style.display = isLandscape ? 'none' : 'flex';
-        document.body.classList.toggle('mobilefill-portrait', !isLandscape);
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
     }
 
     window.MobileFillLandscapeGate = { init };
