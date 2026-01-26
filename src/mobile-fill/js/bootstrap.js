@@ -59,15 +59,29 @@
         window.MobileFillHotspotOverlay.init();
     }
 
-    // Field navigator (new)
-    if (window.MobileFillFieldNavigator && typeof window.MobileFillFieldNavigator.init === 'function') {
-        window.MobileFillFieldNavigator.init();
+    // Field navigator removed - users tap fields directly
+
+    // OCR service (for capturing text from images)
+    if (window.MobileFillOCR && typeof window.MobileFillOCR.init === 'function') {
+        window.MobileFillOCR.init();
+    }
+
+    // Smart import service (for auto-filling from documents)
+    if (window.MobileFillSmartImport && typeof window.MobileFillSmartImport.init === 'function') {
+        window.MobileFillSmartImport.init();
     }
 
     // Input panel (above keyboard for text input)
     if (window.MobileFillInputPanel && typeof window.MobileFillInputPanel.init === 'function') {
         window.MobileFillInputPanel.init();
     }
+
+    // Toast manager (notifications)
+    if (window.MobileFillToast && typeof window.MobileFillToast.init === 'function') {
+        window.MobileFillToast.init();
+    }
+
+    // Validation engine is initialized automatically, no init() needed
 
     // QuickFillEditor removed - MobileFill is view/fill only mode
     // Fields come from mapping JSON, not user-drawn
@@ -89,8 +103,41 @@
     // Show/hide UI based on events
     setupScreenTransitions();
 
+    // Setup toolbar buttons
+    setupToolbarButtons();
+
     console.log('[MobileFill] Bootstrap complete');
 })();
+
+/**
+ * Setup toolbar buttons
+ */
+function setupToolbarButtons() {
+    const smartImportBtn = document.getElementById('mobilefill-smart-import-btn');
+
+    if (smartImportBtn) {
+        smartImportBtn.addEventListener('click', () => {
+            if (!window.MobileFillSmartImport) {
+                console.warn('[MobileFill] Smart import service not available');
+                if (window.MobileFillToast) {
+                    window.MobileFillToast.error('ייבוא חכם לא זמין');
+                }
+                return;
+            }
+
+            // Launch smart import - will auto-fill matching fields
+            window.MobileFillSmartImport.openFilePicker()
+                .then((result) => {
+                    if (result.success) {
+                        console.log('[MobileFill] Smart import completed:', result.appliedCount, 'fields');
+                    }
+                })
+                .catch((error) => {
+                    console.error('[MobileFill] Smart import failed:', error);
+                });
+        });
+    }
+}
 
 /**
  * Setup screen transitions based on events
@@ -100,7 +147,6 @@ function setupScreenTransitions() {
 
     const formSelector = document.getElementById('mobilefill-form-selector');
     const fillScreen = document.getElementById('mobilefill-fill-screen');
-    const navBar = document.getElementById('mobilefill-nav-bar');
     const exportBar = document.getElementById('mobilefill-export-bar');
 
     // When PDF is loaded, show fill screen
@@ -110,16 +156,10 @@ function setupScreenTransitions() {
         if (exportBar) exportBar.classList.remove('is-hidden');
     });
 
-    // When hotspots are ready, show nav bar
-    window.MobileFillEventBus.on('HOTSPOTS_READY', () => {
-        if (navBar) navBar.classList.remove('is-hidden');
-    });
-
     // When session resets, go back to form selector
     window.MobileFillEventBus.on('SESSION_RESET', () => {
         if (formSelector) formSelector.classList.remove('is-hidden');
         if (fillScreen) fillScreen.classList.add('is-hidden');
-        if (navBar) navBar.classList.add('is-hidden');
         if (exportBar) exportBar.classList.add('is-hidden');
     });
 }

@@ -27,6 +27,27 @@
 
         const state = window.MobileFillStateStore.state;
 
+        // ========================================
+        // VALIDATION GATE - Check before export
+        // ========================================
+        if (window.MobileFillValidation) {
+            const errors = window.MobileFillValidation.validateBeforeExport();
+
+            if (errors && errors.length > 0) {
+                console.log('[MobileFill] Validation failed with', errors.length, 'errors');
+
+                // Show validation error list
+                showValidationErrors(errors);
+
+                // Emit event for other components
+                window.MobileFillEventBus.emit('VALIDATION_FAILED', { errors });
+
+                return; // Block export
+            }
+
+            console.log('[MobileFill] Validation passed');
+        }
+
         if (!window.ExportEngine || typeof window.ExportEngine.export !== 'function') {
             logExportBlocked('Export engine unavailable');
             window.MobileFillEventBus.emit('EXPORT_ERROR', {
@@ -474,7 +495,101 @@
         return typeof result;
     }
 
+    // ========================================
+    // Validation Error Display
+    // ========================================
+    function showValidationErrors(errors) {
+        // Remove existing error list
+        const existing = document.querySelector('.validation-error-list');
+        if (existing) existing.remove();
+
+        // Create error list container
+        const container = document.createElement('div');
+        container.className = 'validation-error-list';
+
+        // Header
+        const header = document.createElement('div');
+        header.className = 'validation-error-header';
+        header.innerHTML = `
+            <span class="validation-error-title">נמצאו ${errors.length} שגיאות</span>
+            <button class="validation-error-close" type="button">✕</button>
+        `;
+
+        // Close button
+        header.querySelector('.validation-error-close').addEventListener('click', () => {
+            container.remove();
+            clearErrorHighlights();
+        });
+
+        container.appendChild(header);
+
+        // Error items
+        errors.forEach((error) => {
+            const item = document.createElement('div');
+            item.className = 'validation-error-item';
+            item.innerHTML = `
+                <span class="validation-error-icon">⚠</span>
+                <span class="validation-error-text">${error.message}</span>
+            `;
+
+            // Click to navigate to field
+            item.addEventListener('click', () => {
+                navigateToErrorField(error.fieldId);
+                container.remove();
+            });
+
+            container.appendChild(item);
+        });
+
+        document.body.appendChild(container);
+
+        // Highlight all error fields
+        errors.forEach((error) => {
+            highlightErrorField(error.fieldId);
+        });
+
+        // Show toast with summary
+        if (window.MobileFillToast) {
+            window.MobileFillToast.error(`נמצאו ${errors.length} שגיאות - יש לתקן לפני הורדה`);
+        }
+    }
+
+    function highlightErrorField(fieldId) {
+        const hotspot = document.querySelector(`.mobilefill-hotspot[data-field-id="${fieldId}"]`);
+        if (hotspot) {
+            hotspot.classList.add('has-error');
+        }
+    }
+
+    function clearErrorHighlights() {
+        document.querySelectorAll('.mobilefill-hotspot.has-error').forEach((el) => {
+            el.classList.remove('has-error');
+        });
+    }
+
+    function navigateToErrorField(fieldId) {
+        // Clear all error highlights
+        clearErrorHighlights();
+
+        // Find and highlight this field
+        const hotspot = document.querySelector(`.mobilefill-hotspot[data-field-id="${fieldId}"]`);
+        if (hotspot) {
+            // Scroll to field
+            hotspot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Highlight it
+            hotspot.classList.add('has-error');
+
+            // Trigger field tap to open input panel
+            setTimeout(() => {
+                hotspot.click();
+            }, 400);
+        }
+    }
+
     window.MobileFillExportController = {
-        init
+        init,
+        showValidationErrors,
+        clearErrorHighlights
     };
 })();

@@ -11,14 +11,14 @@
     let inputEl = null;
     let confirmBtn = null;
     let cancelBtn = null;
-    let prevBtn = null;
-    let nextBtn = null;
+    let cameraBtn = null;
+    let importBtn = null;
 
     let currentFieldId = null;
+    let currentField = null;
     let currentFieldLabel = null;
     let originalValue = '';
-    let mappingFields = [];
-    let currentFieldIndex = -1;
+    let validationHintEl = null;
 
     function init() {
         if (!window.MobileFillEventBus) {
@@ -29,17 +29,8 @@
         createPanel();
         bindEvents();
 
-        // Cache mapping fields when ready
-        window.MobileFillEventBus.on('MAPPING_READY', (payload) => {
-            mappingFields = payload?.fieldsMapping?.fields || [];
-        });
-
         // Listen for field tap from hotspot overlay
         window.MobileFillEventBus.on('FIELD_TAP', handleFieldTap);
-
-        // Listen for navigation requests
-        window.MobileFillEventBus.on('FIELD_NAVIGATE_PREV', () => navigateField(-1));
-        window.MobileFillEventBus.on('FIELD_NAVIGATE_NEXT', () => navigateField(1));
 
         // Counter zoom to keep panel stable
         setupZoomCompensation();
@@ -57,8 +48,6 @@
             const scale = vv.scale;
 
             // Calculate the bottom position to stick to keyboard
-            // offsetTop is how much the viewport is scrolled from the top of the layout viewport
-            // When keyboard opens, the visual viewport gets smaller and may scroll
             const keyboardOffset = window.innerHeight - (vv.height + vv.offsetTop);
 
             // Counter zoom and position above keyboard
@@ -92,19 +81,6 @@
         const row = document.createElement('div');
         row.className = 'input-panel-row';
 
-        // Navigation buttons (right side in RTL)
-        prevBtn = document.createElement('button');
-        prevBtn.type = 'button';
-        prevBtn.className = 'input-panel-btn nav';
-        prevBtn.innerHTML = '<span class="btn-icon">▶</span>';
-        prevBtn.title = 'הקודם';
-
-        nextBtn = document.createElement('button');
-        nextBtn.type = 'button';
-        nextBtn.className = 'input-panel-btn nav';
-        nextBtn.innerHTML = '<span class="btn-icon">◀</span>';
-        nextBtn.title = 'הבא';
-
         // Field label
         labelEl = document.createElement('div');
         labelEl.className = 'input-panel-label';
@@ -124,9 +100,28 @@
 
         inputContainer.appendChild(inputEl);
 
+        // Validation hint (shows errors in real-time)
+        validationHintEl = document.createElement('div');
+        validationHintEl.className = 'input-panel-validation-hint';
+        inputContainer.appendChild(validationHintEl);
+
         // Action buttons
         const actionsContainer = document.createElement('div');
         actionsContainer.className = 'input-panel-actions';
+
+        // Camera/OCR button (single field)
+        cameraBtn = document.createElement('button');
+        cameraBtn.type = 'button';
+        cameraBtn.className = 'input-panel-btn camera';
+        cameraBtn.innerHTML = '<span class="btn-icon">📷</span>';
+        cameraBtn.title = 'צלם וזהה טקסט';
+
+        // Smart import button (auto-fill from document)
+        importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'input-panel-btn import';
+        importBtn.innerHTML = '<span class="btn-icon">📄</span>';
+        importBtn.title = 'ייבוא חכם ממסמך';
 
         cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
@@ -140,12 +135,12 @@
         confirmBtn.innerHTML = '<span class="btn-icon">✓</span>';
         confirmBtn.title = 'אישור';
 
+        actionsContainer.appendChild(cameraBtn);
+        actionsContainer.appendChild(importBtn);
         actionsContainer.appendChild(cancelBtn);
         actionsContainer.appendChild(confirmBtn);
 
-        // Assemble row: nav | label | input | actions
-        row.appendChild(prevBtn);
-        row.appendChild(nextBtn);
+        // Assemble row: label | input | actions
         row.appendChild(labelEl);
         row.appendChild(inputContainer);
         row.appendChild(actionsContainer);
@@ -157,15 +152,22 @@
     }
 
     function bindEvents() {
-        // Input changes - emit live updates
+        // Input changes - emit live updates + validate
         inputEl.addEventListener('input', () => {
             if (!currentFieldId) return;
+
+            const value = inputEl.value;
+
+            // Emit update
             window.MobileFillEventBus.emit('FIELD_UPDATED', {
                 fieldId: currentFieldId,
-                value: inputEl.value,
+                value: value,
                 checked: null,
                 tableContext: null
             });
+
+            // Real-time validation feedback
+            validateCurrentInput(value);
         });
 
         // Keyboard shortcuts
@@ -179,15 +181,20 @@
             }
         });
 
-        // Button clicks - use touchend for mobile responsiveness
+        // Button clicks
         confirmBtn.addEventListener('click', confirmEdit);
         cancelBtn.addEventListener('click', cancelEdit);
-        prevBtn.addEventListener('click', () => navigateField(-1));
-        nextBtn.addEventListener('click', () => navigateField(1));
+
+        // Camera/OCR button
+        cameraBtn.addEventListener('click', handleCameraClick);
+
+        // Smart import button
+        importBtn.addEventListener('click', handleImportClick);
 
         // Prevent panel touch from propagating to PDF
-        panelEl.addEventListener('touchstart', (e) => e.stopPropagation());
-        panelEl.addEventListener('touchmove', (e) => e.stopPropagation());
+        // Using passive: false because we need to call stopPropagation
+        panelEl.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        panelEl.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
     }
 
     function handleFieldTap(payload) {
@@ -210,10 +217,8 @@
 
     function openForField(fieldId, field) {
         currentFieldId = fieldId;
+        currentField = field;
         currentFieldLabel = field?.label_he || field?.label_en || field?.canonical || fieldId;
-
-        // Find field index in mapping
-        currentFieldIndex = mappingFields.findIndex(f => (f.id || f.fieldId) === fieldId);
 
         // Get current value from state
         const state = window.MobileFillStateStore?.state;
@@ -224,16 +229,11 @@
         labelEl.textContent = currentFieldLabel;
         inputEl.value = originalValue;
 
-        // Update nav button states
-        updateNavButtons();
-
         // Show panel
         panelEl.classList.remove('is-hidden');
 
-        // Hide nav bar and export bar while panel is open
-        const navBar = document.getElementById('mobilefill-nav-bar');
+        // Hide export bar while panel is open
         const exportBar = document.getElementById('mobilefill-export-bar');
-        if (navBar) navBar.classList.add('panel-open');
         if (exportBar) exportBar.classList.add('panel-open');
 
         // Highlight field on PDF
@@ -259,10 +259,8 @@
         // Hide panel
         panelEl.classList.add('is-hidden');
 
-        // Show nav bar and export bar again
-        const navBar = document.getElementById('mobilefill-nav-bar');
+        // Show export bar again
         const exportBar = document.getElementById('mobilefill-export-bar');
-        if (navBar) navBar.classList.remove('panel-open');
         if (exportBar) exportBar.classList.remove('panel-open');
 
         // Blur input
@@ -270,13 +268,31 @@
 
         // Clear state
         currentFieldId = null;
+        currentField = null;
         currentFieldLabel = null;
         originalValue = '';
-        currentFieldIndex = -1;
+
+        // Clear validation hint
+        clearValidationHint();
     }
 
     function confirmEdit() {
         if (!currentFieldId) return;
+
+        // Clear error highlight from this field
+        const hotspot = document.querySelector(`.mobilefill-hotspot[data-field-id="${currentFieldId}"]`);
+        if (hotspot) {
+            hotspot.classList.remove('has-error');
+        }
+
+        // Remove validation error list if exists and clear all error highlights
+        const errorList = document.querySelector('.validation-error-list');
+        if (errorList) {
+            errorList.remove();
+            document.querySelectorAll('.mobilefill-hotspot.has-error').forEach(el => {
+                el.classList.remove('has-error');
+            });
+        }
 
         // Emit final value
         window.MobileFillEventBus.emit('FIELD_UPDATED', {
@@ -315,53 +331,91 @@
         });
     }
 
-    function navigateField(direction) {
-        if (mappingFields.length === 0) return;
+    function validateCurrentInput(value) {
+        if (!validationHintEl || !currentField) return;
 
-        // Commit current value before navigating
-        commitCurrentValue();
+        // Use validation engine if available
+        if (window.MobileFillValidation && typeof window.MobileFillValidation.validateField === 'function') {
+            const error = window.MobileFillValidation.validateField(currentField, value);
 
-        // Filter to navigable fields (text/number/date, skip checkboxes)
-        const navigableFields = mappingFields.filter(f => {
-            const type = (f.type || 'text').toLowerCase();
-            return type === 'text' || type === 'number' || type === 'date';
-        });
-
-        if (navigableFields.length === 0) return;
-
-        // Find current position in navigable fields
-        let navIndex = navigableFields.findIndex(f => (f.id || f.fieldId) === currentFieldId);
-
-        // Calculate next index with wrap-around
-        navIndex += direction;
-        if (navIndex < 0) navIndex = navigableFields.length - 1;
-        if (navIndex >= navigableFields.length) navIndex = 0;
-
-        const nextField = navigableFields[navIndex];
-        const nextFieldId = nextField.id || nextField.fieldId;
-
-        // Scroll to field on PDF
-        const hotspot = document.querySelector(`.mobilefill-hotspot[data-field-id="${nextFieldId}"]`);
-        if (hotspot) {
-            hotspot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (error) {
+                validationHintEl.textContent = error;
+                validationHintEl.classList.add('visible', 'error');
+                inputEl.classList.add('has-error');
+            } else {
+                validationHintEl.textContent = '';
+                validationHintEl.classList.remove('visible', 'error');
+                inputEl.classList.remove('has-error');
+            }
         }
-
-        // Open panel for new field
-        openForField(nextFieldId, nextField);
-
-        // Emit FIELD_FOCUSED so field navigator stays in sync
-        window.MobileFillEventBus.emit('FIELD_FOCUSED', { fieldId: nextFieldId, index: navIndex });
     }
 
-    function updateNavButtons() {
-        const navigableFields = mappingFields.filter(f => {
-            const type = (f.type || 'text').toLowerCase();
-            return type === 'text' || type === 'number' || type === 'date';
-        });
+    function clearValidationHint() {
+        if (validationHintEl) {
+            validationHintEl.textContent = '';
+            validationHintEl.classList.remove('visible', 'error');
+        }
+        if (inputEl) {
+            inputEl.classList.remove('has-error');
+        }
+    }
 
-        const hasMultipleFields = navigableFields.length > 1;
-        prevBtn.disabled = !hasMultipleFields;
-        nextBtn.disabled = !hasMultipleFields;
+    function handleCameraClick() {
+        if (!window.MobileFillOCR) {
+            console.warn('[MobileFill] OCR service not available');
+            if (window.MobileFillToast) {
+                window.MobileFillToast.error('OCR לא זמין');
+            }
+            return;
+        }
+
+        // Launch OCR capture
+        window.MobileFillOCR.captureAndExtract((extractedText) => {
+            if (!extractedText || !currentFieldId) return;
+
+            // Set the extracted text in the input
+            inputEl.value = extractedText;
+
+            // Emit update
+            window.MobileFillEventBus.emit('FIELD_UPDATED', {
+                fieldId: currentFieldId,
+                value: extractedText,
+                checked: null,
+                tableContext: null
+            });
+
+            // Validate
+            validateCurrentInput(extractedText);
+
+            // Focus input for user to review/edit
+            inputEl.focus();
+        });
+    }
+
+    function handleImportClick() {
+        if (!window.MobileFillSmartImport) {
+            console.warn('[MobileFill] Smart import service not available');
+            if (window.MobileFillToast) {
+                window.MobileFillToast.error('ייבוא חכם לא זמין');
+            }
+            return;
+        }
+
+        // Launch smart import - will auto-fill matching fields
+        window.MobileFillSmartImport.openFilePicker()
+            .then((result) => {
+                if (result.success && result.appliedCount > 0) {
+                    // Update current field value if it was filled
+                    if (currentFieldId && result.fieldValues[currentFieldId]) {
+                        inputEl.value = result.fieldValues[currentFieldId];
+                        validateCurrentInput(inputEl.value);
+                    }
+                    inputEl.focus();
+                }
+            })
+            .catch((error) => {
+                console.error('[MobileFill] Smart import failed:', error);
+            });
     }
 
     // Public API
