@@ -1,3 +1,29 @@
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * תיעוד בעברית - UnifiedCoordinateSystem
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * מה הקובץ עושה:
+ *   מערכת קואורדינטות אחידה - המרה בין PDF לקנבס.
+ *   מטפל ב-DPI ו-device pixel ratio.
+ *
+ * איך זה עובד:
+ *   - מקבל pageViewport מ-pdf.js ו-renderScale
+ *   - ממיר: PDF points ↔ Canvas pixels ↔ CSS pixels
+ *   - מתחשב בהיפוך ציר Y (PDF מלמטה, מסך מלמעלה)
+ *
+ * מי משתמש בקובץ:
+ *   - כל מודול שמציב אלמנטים על PDF
+ *   - CoordinateService.js - עוטף את המחלקה הזו
+ *
+ * באיזה מצבים:
+ *   תמיד - בכל חישוב מיקום
+ *
+ * למה הוא קיים:
+ *   "ONE SOURCE OF TRUTH" - מקום אחד לכל המרות קואורדינטות.
+ * ═══════════════════════════════════════════════════════════════
+ */
+
 // ONE SOURCE OF TRUTH – all tools must use this only
 class UnifiedCoordinateSystem {
     constructor(pageViewport, renderScale = 2.0) {

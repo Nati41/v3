@@ -1,4 +1,38 @@
 /**
+ * ═══════════════════════════════════════════════════════════════
+ * תיעוד בעברית - DrawController
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * מה הקובץ עושה:
+ *   מנהל את תהליך ציור שדות על ה-PDF.
+ *   מתרגם אירועי עכבר (mousedown, mousemove, mouseup) לפעולות מיפוי:
+ *   יצירת שדה חדש, לכידת שם, קבוצת רדיו, ועוד.
+ *
+ * איך זה עובד:
+ *   - לחיצה על PDF → _startDraw()
+ *   - AutoBoxer מזהה גבולות → BboxRefiner משפר
+ *   - _finishDraw() → יוצר שדה ב-StateManager + OverlayRenderer
+ *   - במצב ניסיוני: פולט REVERSE_DRAW_COMPLETE במקום יצירת שדה
+ *
+ * מי משתמש בקובץ:
+ *   - MapperCore.js - מאתחל ומחבר אירועי עכבר
+ *   - IntentManager.js - מגדיר מה קורה בלחיצה הבאה
+ *   - ReverseMappingMode.js - מאזין ל-REVERSE_DRAW_COMPLETE
+ *
+ * באיזה מצבים:
+ *   - מצב מיפוי רגיל ומונחה
+ *   - מצב ניסיוני (חיתוך מוקדם ל-REVERSE_DRAW_COMPLETE)
+ *   - מצב רדיו (זרימה רב-שלבית: כותרת → עיגולים → תוויות)
+ *
+ * למה הוא קיים:
+ *   מרכז את כל לוגיקת הציור במקום אחד. משלב בין AutoBoxer,
+ *   BboxRefiner, IntentManager, ו-StateManager.
+ *
+ * אזהרה: מכיל קוד PROTECTED (אינטגרציית BboxRefiner)
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+/**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║                    DRAWCONTROLLER - FIELD DRAWING                          ║
  * ╠═══════════════════════════════════════════════════════════════════════════╣
@@ -1612,6 +1646,22 @@ export class DrawController {
             const bbox = { x, y, width, height };
             window.tableFlowUI.onRectangleDrawn(bbox);
             this.isDrawing = false;
+            return;
+        }
+
+        // ============ REVERSE MAPPING MODE - Raw bbox only, no field creation ============
+        if (window.ReverseMappingMode?.isActive?.()) {
+            console.log('[DrawController] REVERSE MAPPING MODE - emitting raw bbox without field creation');
+            const tool = state.get('tool');
+            // Emit the raw screen bbox directly - ReverseMappingMode will handle visualization
+            eventBus.emit('REVERSE_DRAW_COMPLETE', {
+                bbox: { x, y, width, height },
+                tool: tool,
+                page: state.getState().document.currentPage
+            });
+            this.isDrawing = false;
+            state.setMode(Modes.IDLE);
+            state.setTool(Tools.SELECT);
             return;
         }
 

@@ -1,4 +1,34 @@
 /**
+ * ═══════════════════════════════════════════════════════════════
+ * תיעוד בעברית - IntentManager
+ * ═══════════════════════════════════════════════════════════════
+ *
+ * מה הקובץ עושה:
+ *   ניהול כוונות ציור - "מה צריך לקרות בלחיצה הבאה?"
+ *   מרכז במקום אחד את כל הדגלים שהיו פזורים (pendingFieldId,
+ *   selectedForMapping, activeTemplateTarget, וכו').
+ *
+ * איך זה עובד:
+ *   - setIntent(type, source, data) - קביעת כוונה
+ *   - getIntent() - קריאת כוונה נוכחית
+ *   - clearIntent() - ניקוי
+ *   - סוגי כוונות: CREATE_FIELD, PLACE_FIELD, CAPTURE_GROUP_TITLE,
+ *     DEFINE_TABLE_ROW, ועוד
+ *   - מקורות: SIDEBAR, AI_TEMPLATE, IMPORT, RADIO_GROUP_BUILDER
+ *
+ * מי משתמש בקובץ:
+ *   - DrawController.js - בודק כוונה לפני כל ציור
+ *   - SidebarController.js - מגדיר כוונה בבחירת שדה
+ *   - GuidedMappingUI.js - מגדיר כוונה מתבנית AI
+ *
+ * באיזה מצבים:
+ *   מצב מיפוי - תמיד פעיל
+ *
+ * Singleton: export const intentManager
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+/**
  * IntentManager.js - Unified Intent Management for Drawing Operations
  * Version 1.0
  *
