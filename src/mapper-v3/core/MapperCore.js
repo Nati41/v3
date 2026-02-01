@@ -57,6 +57,11 @@ export class MapperCore {
             return;
         }
 
+        // V3.14: INSTRUMENTATION - Track component load
+        if (typeof window !== 'undefined' && window.DebugInstrumentation) {
+            window.DebugInstrumentation.logComponentLoad('MapperCore', 'init-start');
+        }
+
         console.log('[MapperCore] Initializing...');
 
         // Store options
@@ -78,6 +83,11 @@ export class MapperCore {
         // Mark initialized
         this.initialized = true;
         console.log('[MapperCore] Initialized successfully');
+
+        // V3.14: INSTRUMENTATION - Track component ready
+        if (typeof window !== 'undefined' && window.DebugInstrumentation) {
+            window.DebugInstrumentation.logComponentLoad('MapperCore', 'ready');
+        }
 
         eventBus.emit(Events.STATE_CHANGED, { action: 'init' });
     }

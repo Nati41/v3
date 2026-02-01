@@ -118,16 +118,18 @@ export class BboxRefiner {
      * First click - compute initial bbox and generate candidates
      * @param {number} clickX
      * @param {number} clickY
+     * @param {string} trigger - V3.14: Trigger source for instrumentation
      * @returns {Promise<Object>} { bbox, candidates, problemType }
      */
-    async initFromClick(clickX, clickY) {
+    async initFromClick(clickX, clickY, trigger = 'click') {
         this._clickPoint = { x: clickX, y: clickY };
 
         // V3.2: Pass neighbor fields to AutoBoxer so it treats them as walls
         autoBoxer.setNeighborFields(this._neighborBboxes);
 
         // Get initial bbox from AutoBoxer
-        const initialBbox = await autoBoxer.computeBbox(clickX, clickY);
+        // V3.14: Pass trigger source for instrumentation
+        const initialBbox = await autoBoxer.computeBbox(clickX, clickY, trigger);
 
         if (!initialBbox) {
             return null;

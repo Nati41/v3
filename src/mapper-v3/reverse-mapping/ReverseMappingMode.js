@@ -383,13 +383,18 @@ class ReverseMappingModeController {
             const confirmed = confirmedData.elements[element.number] || element;
 
             // Create field based on type
+            // Convert bbox from screen pixels to normalized [0,1] array using overlayRenderer
+            const normalizedBbox = element.bbox ?
+                overlayRenderer.screenToBbox(element.bbox) : null;
+
             const field = {
                 id: `field_${element.number}_${Date.now()}`,
                 type: this._typeToFieldType(element.type),
-                bbox: element.bbox,
+                bbox: normalizedBbox,
                 page: element.page,
                 label_he: confirmed.label || `שדה ${element.number}`,
-                canonical: confirmed.canonical || `field_${element.number}`
+                canonical: confirmed.canonical || `field_${element.number}`,
+                isMapped: normalizedBbox !== null
             };
 
             // Handle radio groups
@@ -623,14 +628,19 @@ class ReverseMappingModeController {
 
                 // Generate rows
                 for (let row = 0; row < rowCount; row++) {
+                    // field.bbox is already an array [x, y, w, h] from _generateMapping
+                    const newBbox = field.bbox ? [
+                        field.bbox[0],                    // x
+                        field.bbox[1] + (offsetY * row),  // y with row offset
+                        field.bbox[2],                    // width
+                        field.bbox[3]                     // height
+                    ] : null;
+
                     const rowField = {
                         ...field,
                         id: `${field.id}_row${row}`,
                         canonical: `${field.table}.${field.canonical}[${row}]`,
-                        bbox: {
-                            ...field.bbox,
-                            y: field.bbox.y + (offsetY * row)
-                        },
+                        bbox: newBbox,
                         tableRow: row
                     };
                     expanded.push(rowField);
@@ -645,20 +655,21 @@ class ReverseMappingModeController {
 
     /**
      * Calculate row offset for table expansion
+     * @param {Array} tableCells - Fields with bbox as [x, y, w, h] normalized array
      */
     _calculateRowOffset(tableCells) {
         if (tableCells.length < 2) {
-            return 25; // Default row height
+            return 0.03; // Default row height in normalized coords (approx 25px on typical page)
         }
 
-        // Sort by Y position
-        const sorted = [...tableCells].sort((a, b) => a.bbox.y - b.bbox.y);
+        // Sort by Y position (bbox[1] is y in array format)
+        const sorted = [...tableCells].sort((a, b) => (a.bbox?.[1] || 0) - (b.bbox?.[1] || 0));
 
         // Find minimum gap between rows (if user marked multiple rows)
-        let minGap = 25;
+        let minGap = 0.03;
         for (let i = 1; i < sorted.length; i++) {
-            const gap = sorted[i].bbox.y - sorted[i - 1].bbox.y;
-            if (gap > 5) {  // Ignore very small gaps
+            const gap = (sorted[i].bbox?.[1] || 0) - (sorted[i - 1].bbox?.[1] || 0);
+            if (gap > 0.005) {  // Ignore very small gaps (normalized)
                 minGap = Math.min(minGap, gap);
             }
         }

@@ -18,17 +18,20 @@
         id_number: [
             'תעודת זהות', 'ת"ז', 'ת.ז', 'מספר זהות', 'מס זהות', 'תז',
             'מזהה', 'מספר אישי', 'id', 'identity', 'tz', 'id_number',
-            'מספר ת.ז', 'מס ת.ז'
+            'מספר ת.ז', 'מס ת.ז',
+            'מספר הזהות', 'תעודת הזהות'
         ],
 
         first_name: [
             'שם פרטי', 'שם ראשון', 'שם עברי',
-            'first name', 'given name', 'first_name', 'firstname'
+            'first name', 'given name', 'first_name', 'firstname',
+            'השם הפרטי', 'שם הפרטי'
         ],
 
         last_name: [
             'שם משפחה', 'משפחה', 'שם אחרון',
-            'last name', 'surname', 'family name', 'last_name', 'lastname'
+            'last name', 'surname', 'family name', 'last_name', 'lastname',
+            'שם המשפחה', 'המשפחה'
         ],
 
         full_name: [
@@ -38,7 +41,8 @@
 
         birth_date: [
             'תאריך לידה', 'ת.לידה', 'יום הולדת', 'ת לידה',
-            'birth date', 'dob', 'date of birth', 'birth_date', 'birthdate'
+            'birth date', 'dob', 'date of birth', 'birth_date', 'birthdate',
+            'תאריך הלידה'
         ],
 
         // === 📞 CONTACT ===
@@ -228,6 +232,16 @@
         spouse_id: [
             'ת.ז בן/בת זוג', 'ת.ז בן זוג', 'ת.ז בת זוג', 'מספר זהות בן זוג',
             'spouse id', 'spouse_id', 'partner id'
+        ],
+
+        father_name: [
+            'שם האב', 'שם אב', 'אב',
+            'father name', 'father_name'
+        ],
+
+        mother_name: [
+            'שם האם', 'שם אם', 'אם',
+            'mother name', 'mother_name'
         ],
 
         // === 🏥 HEALTH ===

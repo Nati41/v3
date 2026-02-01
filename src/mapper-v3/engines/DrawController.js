@@ -284,6 +284,17 @@ export class DrawController {
             this._cleanupOnPageChange();
         });
 
+        // V3.15: STABILIZATION - Clear AutoBoxer cache on zoom change
+        // Zoom changes invalidate the scale calculation
+        eventBus.on(Events.ZOOM_CHANGED, () => {
+            console.log('[DrawController] Zoom changed - clearing AutoBoxer cache');
+            autoBoxer.clearCache();
+            // Also cancel active refiner since coordinates will be stale
+            if (this._refinerActive) {
+                this._cancelRefiner();
+            }
+        });
+
         // V3.10: Clean up on flow mode change (Mapping ↔ QuickFill)
         eventBus.on(Events.QUICK_FILL_MODE_CHANGED, () => {
             this._cleanupOnModeChange();
@@ -744,7 +755,8 @@ export class DrawController {
         bboxRefiner.setNeighbors(neighborBboxes);
 
         // Initialize refiner with first click
-        const initResult = await bboxRefiner.initFromClick(clickX, clickY);
+        // V3.14: Pass trigger source for instrumentation
+        const initResult = await bboxRefiner.initFromClick(clickX, clickY, 'click');
 
         if (!initResult || !initResult.bbox) {
             console.warn('[DrawController] BboxRefiner returned null, cancelling');
@@ -2115,8 +2127,14 @@ export class DrawController {
     /**
      * V3.4: Handle window resize - cancel active drawing/refiner
      * Prevents coordinate mismatch when viewport changes during operation
+     * V3.15: STABILIZATION - Also clear AutoBoxer cache
      */
     _onWindowResize() {
+        // V3.15: STABILIZATION - Clear AutoBoxer cache on resize
+        // Resize changes the scale calculation
+        console.log('[DrawController] Window resized - clearing AutoBoxer cache');
+        autoBoxer.clearCache();
+
         // Cancel active drawing
         if (this.isDrawing) {
             console.log('[DrawController] Window resized during drawing - cancelling to prevent coordinate mismatch');

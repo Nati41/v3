@@ -78,13 +78,19 @@ export class EventBus {
      * Subscribe to an event
      * @param {string} event - Event name
      * @param {Function} callback - Handler function
+     * @param {string} componentName - V3.14: Optional component name for instrumentation
      * @returns {Function} Unsubscribe function
      */
-    on(event, callback) {
+    on(event, callback, componentName = 'unknown') {
         if (!this.listeners.has(event)) {
             this.listeners.set(event, new Set());
         }
         this.listeners.get(event).add(callback);
+
+        // V3.14: INSTRUMENTATION - Track listener registration
+        if (typeof window !== 'undefined' && window.DebugInstrumentation) {
+            window.DebugInstrumentation.logListenerRegistered(event, componentName);
+        }
 
         // Return unsubscribe function
         return () => this.off(event, callback);
@@ -183,6 +189,12 @@ export class EventBus {
 
         if (this.debugMode) {
             console.log(`[EventBus] ${event}`, data);
+        }
+
+        // V3.14: INSTRUMENTATION - Track message sent
+        if (typeof window !== 'undefined' && window.DebugInstrumentation) {
+            const listenerCount = this.listeners.has(event) ? this.listeners.get(event).size : 0;
+            window.DebugInstrumentation.logMessageSent(event, data, 'EventBus');
         }
 
         if (this.listeners.has(event)) {

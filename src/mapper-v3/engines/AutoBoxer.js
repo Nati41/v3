@@ -89,6 +89,26 @@ import { textExtractor } from './TextExtractor.js';
 import { AUTOBOXER_CONFIG, REFINER_VERSION, REFINER_FEATURES } from './RefinerConfig.js';
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V3.14: INSTRUMENTATION - Validation before fixing
+// Enable via console: window.AUTOBOXER_INSTRUMENTATION = true
+// ═══════════════════════════════════════════════════════════════════════════
+const INSTRUMENTATION_ENABLED = () => typeof window !== 'undefined' && window.AUTOBOXER_INSTRUMENTATION;
+let instrumentationModule = null;
+
+// Lazy load instrumentation module
+async function getInstrumentation() {
+    if (!INSTRUMENTATION_ENABLED()) return null;
+    if (instrumentationModule) return instrumentationModule;
+    try {
+        instrumentationModule = await import('../debug/AutoBoxerInstrumentation.js');
+        return instrumentationModule;
+    } catch (e) {
+        console.warn('[AutoBoxer] Instrumentation module not available:', e.message);
+        return null;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // MODULE VERSION - Must match RefinerConfig version
 // ═══════════════════════════════════════════════════════════════════════════
 const MODULE_VERSION = '1.0.2';
@@ -117,6 +137,30 @@ export class AutoBoxer {
         this._wordBboxPage = null;
         this._neighborFields = [];  // V3.2: Existing fields to treat as walls
         this._loadingPromise = null;  // V3.3: Prevent race condition in parallel calls
+
+        // V3.15: STABILIZATION - Prevent concurrent runs
+        this._isRunning = false;
+        this._lastRunTimestamp = 0;
+    }
+
+    /**
+     * V3.15: STABILIZATION - Hard reset ALL state before every run
+     * This ensures no stale data from previous runs can cause drift
+     */
+    hardReset() {
+        // Clear ALL cached state
+        this._pixelData = null;
+        this._pixelContext = null;
+        this._pixelCanvas = null;
+        this._canvasWidth = 0;
+        this._canvasHeight = 0;
+        this._currentPage = null;
+        this._scale = 1;
+        this._wordBboxes = null;
+        this._wordBboxPage = null;
+        this._neighborFields = [];
+        this._loadingPromise = null;
+        log('[AutoBoxer] HARD RESET - all state cleared');
     }
 
     /**
@@ -174,27 +218,89 @@ export class AutoBoxer {
      *
      * @param {number} clickX - Click X in screen pixels
      * @param {number} clickY - Click Y in screen pixels
+     * @param {string} trigger - V3.14: Trigger source for instrumentation
      * @returns {Promise<Object|null>} { x, y, width, height } in screen pixels, or null
      */
-    async computeBbox(clickX, clickY) {
-        log(`[AutoBoxer] Computing bbox at click (${clickX}, ${clickY}), neighborFields: ${this._neighborFields?.length || 0}`);
+    async computeBbox(clickX, clickY, trigger = 'unknown') {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V3.15: STABILIZATION - STATELESS EXECUTION
+        // Every run starts fresh. No assumptions. No cached state.
+        // ═══════════════════════════════════════════════════════════════════════
 
-        // Load pixel data for current page
+        // V3.15: CONCURRENT RUN PREVENTION - Block if already running
+        if (this._isRunning) {
+            console.warn('[AutoBoxer] ⚠️ BLOCKED: Another run is in progress');
+            return null;
+        }
+
+        // V3.15: HARD RESET - Clear ALL state before every run
+        // This is the ONLY way to guarantee no stale scale/transforms
+        this.hardReset();
+
+        this._isRunning = true;
+        this._lastRunTimestamp = Date.now();
+
+        try {
+            return await this._computeBboxInternal(clickX, clickY, trigger);
+        } finally {
+            this._isRunning = false;
+        }
+    }
+
+    /**
+     * V3.15: Internal computation - separated for clean try/finally in main method
+     */
+    async _computeBboxInternal(clickX, clickY, trigger) {
+        log(`[AutoBoxer] Computing bbox at click (${clickX}, ${clickY})`);
+
+        // V3.14: INSTRUMENTATION - Log run start
+        let runId = null;
+        const instrumentation = await getInstrumentation();
+        if (instrumentation) {
+            runId = instrumentation.logAutoBoxerRunStart({
+                clickX,
+                clickY,
+                trigger,
+                mode: typeof window !== 'undefined' ? window.MapperV3?.state?.get('mode') : null,
+                neighborFieldsCount: this._neighborFields?.length || 0
+            });
+
+            // Check layout stability
+            const snapshot = instrumentation.captureSnapshot();
+            const stabilityCheck = instrumentation.checkLayoutStability(snapshot);
+            if (!stabilityCheck.isStable) {
+                console.warn('[AutoBoxer] Layout not stable:', stabilityCheck.issues);
+            }
+        }
+
+        // V3.15: FRESH LOAD - Always load pixel data fresh (hardReset cleared cache)
         const loaded = await this._loadPixelData();
         if (!loaded) {
             warn('[AutoBoxer] Failed to load pixel data');
+            // V3.14: INSTRUMENTATION - Log failure
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
             return null;
         }
 
         // V3.3: Safety check - ensure scale is valid before any division
         if (!this._scale || this._scale <= 0 || !isFinite(this._scale)) {
             warn('[AutoBoxer] Invalid scale, cannot compute bbox');
+            // V3.14: INSTRUMENTATION - Log failure
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
             return null;
         }
 
         // V3.3: Block clicks inside existing fields (prevents overlap)
         if (this._isClickInsideExistingField(clickX, clickY)) {
             warn('[AutoBoxer] ❌ Click is inside existing field - blocking bbox creation');
+            // V3.14: INSTRUMENTATION - Log failure
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
             return null;
         }
 
@@ -211,6 +317,10 @@ export class AutoBoxer {
         const floor = this._findFloor(canvasX, canvasY);
         if (!floor) {
             log('[AutoBoxer] ❌ No floor found - cannot create field');
+            // V3.14: INSTRUMENTATION - Log failure
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
             return null;  // No floor = no field (mandatory rule)
         }
         log(`[AutoBoxer] ✓ Floor found at Y=${floor.y}, length=${floor.length}, extent=[${floor.leftExtent}, ${floor.rightExtent}]`);
@@ -302,7 +412,42 @@ export class AutoBoxer {
         bbox.x = Math.max(0, Math.min(bbox.x, layerWidth - bbox.width));
         bbox.y = Math.max(0, Math.min(bbox.y, layerHeight - bbox.height));
 
+        // ═══════════════════════════════════════════════════════════════════════
+        // V3.15: COORDINATE SANITY GUARD - Fail fast on impossible results
+        // If bbox deviates wildly from click origin, something is wrong
+        // ═══════════════════════════════════════════════════════════════════════
+        const MAX_DEVIATION = 500; // Maximum pixels from click to bbox center
+        const bboxCenterX = bbox.x + bbox.width / 2;
+        const bboxCenterY = bbox.y + bbox.height / 2;
+        const deviationX = Math.abs(bboxCenterX - clickX);
+        const deviationY = Math.abs(bboxCenterY - clickY);
+
+        if (deviationX > MAX_DEVIATION || deviationY > MAX_DEVIATION) {
+            console.error(`[AutoBoxer] ❌ SANITY CHECK FAILED: bbox center (${bboxCenterX}, ${bboxCenterY}) deviates ${Math.round(deviationX)}px/${Math.round(deviationY)}px from click (${clickX}, ${clickY})`);
+            console.error('[AutoBoxer] Scale was:', this._scale, 'Layer:', layerWidth, 'x', layerHeight);
+            // V3.14: INSTRUMENTATION - Log failure
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
+            return null; // FAIL FAST - do not return garbage bbox
+        }
+
+        // V3.15: Additional sanity - bbox must be within page bounds
+        if (bbox.x < 0 || bbox.y < 0 || bbox.x + bbox.width > layerWidth || bbox.y + bbox.height > layerHeight) {
+            console.error(`[AutoBoxer] ❌ SANITY CHECK FAILED: bbox outside page bounds`);
+            if (instrumentation && runId) {
+                instrumentation.logAutoBoxerRunEnd(runId, null);
+            }
+            return null;
+        }
+
         log('[AutoBoxer] ✓ Computed bbox:', bbox);
+
+        // V3.14: INSTRUMENTATION - Log success
+        if (instrumentation && runId) {
+            instrumentation.logAutoBoxerRunEnd(runId, bbox);
+        }
+
         return bbox;
     }
 
